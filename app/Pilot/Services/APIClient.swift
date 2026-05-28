@@ -118,12 +118,25 @@ final class APIClient: ObservableObject {
         let _: EmptyResponse = try await request("/tasks/\(id)", method: "DELETE")
     }
 
-    func assignTask(taskId: String, agentId: String, apiKey: String) async throws -> AssignResponse {
-        try await request("/tasks/\(taskId)/assign", method: "POST", body: ["agentId": agentId, "apiKey": apiKey])
+    func assignTask(taskId: String, agentId: String) async throws -> AssignResponse {
+        try await request("/tasks/\(taskId)/assign", method: "POST", body: ["agentId": agentId])
     }
 
-    func runQueue(agentApiKeys: [String: String] = [:]) async throws -> QueueRunResponse {
-        try await request("/tasks/queue/run", method: "POST", body: ["agentApiKeys": agentApiKeys])
+    func runQueue() async throws -> QueueRunResponse {
+        try await request("/tasks/queue/run", method: "POST", body: [:] as [String: String])
+    }
+
+    // MARK: Settings
+
+    func fetchCredentialStatus() async throws -> CredentialStatus {
+        try await request("/settings/credentials")
+    }
+
+    func updateCredentials(claude: String?, codex: String?) async throws -> CredentialStatus {
+        var body: [String: String] = [:]
+        if let c = claude { body["claude"] = c }
+        if let c = codex  { body["codex"] = c }
+        return try await request("/settings/credentials", method: "PUT", body: body)
     }
 
     // MARK: Sessions

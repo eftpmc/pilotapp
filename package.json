@@ -1,0 +1,10 @@
+{
+  "name": "pilotapp",
+  "private": true,
+  "scripts": {
+    "dev:server": "cd server && npm run dev",
+    "dev:web":    "cd web && npm run dev",
+    "build":      "cd web && npm run build && cd ../server && npm run build",
+    "start":      "cd server && npm start"
+  }
+}

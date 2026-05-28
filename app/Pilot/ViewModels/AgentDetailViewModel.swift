@@ -13,10 +13,6 @@ final class AgentDetailViewModel: ObservableObject {
         self.agent = agent
     }
 
-    var hasApiKey: Bool {
-        KeychainService.load(for: "apiKey_agent_\(agent.id)") != nil
-    }
-
     func load() async {
         isLoading = true
         defer { isLoading = false }

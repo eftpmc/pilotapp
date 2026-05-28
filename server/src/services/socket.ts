@@ -1,35 +1,31 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { IncomingMessage } from 'http';
 import jwt from 'jsonwebtoken';
-import { runAgent, subscribeToSession, unsubscribeFromAllSessions, isSessionActive } from './agents';
-import { AuthPayload, AgentSession, Task } from '../types';
-import fs from 'fs/promises';
-import path from 'path';
+import { runAgent, subscribeToSession, unsubscribeFromAllSessions, isSessionActive, SessionRef } from './agents';
+import { AuthPayload } from '../types';
+import { db } from '../db';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
-const PROJECTS_ROOT = process.env.PROJECTS_ROOT || './data/projects';
 
-async function readSessions(): Promise<AgentSession[]> {
-  try {
-    const raw = await fs.readFile(path.join(PROJECTS_ROOT, 'sessions.json'), 'utf-8');
-    return JSON.parse(raw);
-  } catch {
-    return [];
-  }
+interface SessionRow {
+  id: string; user_id: string; agent_id: string; project_id: string;
+  work_task_id: string | null; provider: string; branch: string;
+  worktree_path: string; status: string; created_at: string;
 }
 
-async function readTasks(): Promise<Task[]> {
-  try {
-    const raw = await fs.readFile(path.join(PROJECTS_ROOT, 'tasks.json'), 'utf-8');
-    return JSON.parse(raw);
-  } catch {
-    return [];
-  }
+interface TaskRow { id: string; prompt: string; status: string }
+
+function toSessionRef(r: SessionRow): SessionRef {
+  return {
+    id: r.id, agentId: r.agent_id, projectId: r.project_id,
+    workTaskId: r.work_task_id ?? undefined, provider: r.provider as any,
+    branch: r.branch, worktreePath: r.worktree_path, status: r.status, createdAt: r.created_at,
+  };
 }
 
 type ClientMessage =
-  | { type: 'run';       sessionId: string; prompt: string; apiKey: string }
-  | { type: 'subscribe'; sessionId: string; apiKey?: string };
+  | { type: 'run';       sessionId: string; prompt: string }
+  | { type: 'subscribe'; sessionId: string };
 
 function send(ws: WebSocket, type: string, data: string, sessionId?: string): void {
   ws.send(JSON.stringify({ type, data, ...(sessionId ? { sessionId } : {}) }));
@@ -37,12 +33,14 @@ function send(ws: WebSocket, type: string, data: string, sessionId?: string): vo
 
 export function attachWebSocket(wss: WebSocketServer): void {
   wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
-    const url = new URL(req.url || '/', `http://localhost`);
+    const url = new URL(req.url || '/', 'http://localhost');
     const token = url.searchParams.get('token');
 
     if (!token) { ws.close(4001, 'Missing token'); return; }
+
+    let uid: string;
     try {
-      jwt.verify(token, JWT_SECRET) as AuthPayload;
+      uid = (jwt.verify(token, JWT_SECRET) as AuthPayload).userId;
     } catch {
       ws.close(4001, 'Invalid token');
       return;
@@ -50,36 +48,25 @@ export function attachWebSocket(wss: WebSocketServer): void {
 
     ws.on('close', () => unsubscribeFromAllSessions(ws));
 
-    ws.on('message', async (raw) => {
+    ws.on('message', (raw) => {
       let msg: ClientMessage;
-      try {
-        msg = JSON.parse(raw.toString());
-      } catch {
-        send(ws, 'error', 'Invalid JSON');
-        return;
-      }
+      try { msg = JSON.parse(raw.toString()); }
+      catch { send(ws, 'error', 'Invalid JSON'); return; }
 
       if (msg.type === 'subscribe') {
-        // Try to attach to an already-running session
         if (subscribeToSession(msg.sessionId, ws)) return;
 
-        // Session not currently active — check if it's an idle task session we can start
-        if (msg.apiKey) {
-          const [sessions, tasks] = await Promise.all([readSessions(), readTasks()]);
-          const session = sessions.find((s) => s.id === msg.sessionId);
-          if (session?.workTaskId) {
-            const task = tasks.find((t) => t.id === session.workTaskId);
-            if (task && task.status !== 'done' && task.status !== 'failed') {
-              runAgent(session, task.prompt, msg.apiKey);
-              subscribeToSession(msg.sessionId, ws);
-              return;
-            }
+        const session = db.prepare('SELECT * FROM sessions WHERE id = ? AND user_id = ?').get(msg.sessionId, uid) as SessionRow | undefined;
+
+        if (session?.work_task_id && session.status === 'idle') {
+          const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(session.work_task_id) as TaskRow | undefined;
+          if (task && task.status !== 'done' && task.status !== 'failed') {
+            void runAgent(toSessionRef(session), task.prompt, uid);
+            subscribeToSession(msg.sessionId, ws);
+            return;
           }
         }
 
-        // Already finished or no task — send a terminal done so the UI settles
-        const sessions = await readSessions();
-        const session = sessions.find((s) => s.id === msg.sessionId);
         if (session && (session.status === 'done' || session.status === 'error')) {
           send(ws, 'done', '0', msg.sessionId);
         } else {
@@ -89,15 +76,10 @@ export function attachWebSocket(wss: WebSocketServer): void {
       }
 
       if (msg.type === 'run') {
-        // Direct dispatch — client provides prompt + apiKey
-        if (isSessionActive(msg.sessionId)) {
-          subscribeToSession(msg.sessionId, ws);
-          return;
-        }
-        const sessions = await readSessions();
-        const session = sessions.find((s) => s.id === msg.sessionId);
+        if (isSessionActive(msg.sessionId)) { subscribeToSession(msg.sessionId, ws); return; }
+        const session = db.prepare('SELECT * FROM sessions WHERE id = ? AND user_id = ?').get(msg.sessionId, uid) as SessionRow | undefined;
         if (!session) { send(ws, 'error', 'Session not found'); return; }
-        runAgent(session, msg.prompt, msg.apiKey);
+        void runAgent(toSessionRef(session), msg.prompt, uid);
         subscribeToSession(msg.sessionId, ws);
       }
     });

@@ -1,19 +1,14 @@
 import SwiftUI
 
 struct NewAgentView: View {
-    var onCreate: (String, AgentProvider, String) -> Void
+    var onCreate: (String, AgentProvider) -> Void
     @Environment(\.dismiss) private var dismiss
 
     @State private var name = ""
     @State private var provider: AgentProvider = .claude
-    @State private var apiKey = ""
-
-    private var apiKeyPlaceholder: String {
-        provider == .claude ? "Anthropic API key" : "OpenAI API key"
-    }
 
     private var canCreate: Bool {
-        !name.trimmingCharacters(in: .whitespaces).isEmpty && !apiKey.isEmpty
+        !name.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     var body: some View {
@@ -63,17 +58,6 @@ struct NewAgentView: View {
                             }
                         }
 
-                        // API Key
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("API Key")
-                                .sectionLabel()
-                                .padding(.horizontal, 4)
-                            PilotTextField(apiKeyPlaceholder, text: $apiKey, isSecure: true)
-                            Text("Stored securely in your device keychain.")
-                                .font(.caption2)
-                                .foregroundStyle(Theme.muted.opacity(0.7))
-                                .padding(.horizontal, 4)
-                        }
                     }
                     .padding(.horizontal, 24)
                     .padding(.vertical, 24)
@@ -90,7 +74,7 @@ struct NewAgentView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Hire") {
-                        onCreate(name.trimmingCharacters(in: .whitespaces), provider, apiKey)
+                        onCreate(name.trimmingCharacters(in: .whitespaces), provider)
                         dismiss()
                     }
                     .font(.system(.body, weight: .semibold))

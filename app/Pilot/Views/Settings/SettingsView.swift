@@ -5,7 +5,11 @@ struct SettingsView: View {
     @AppStorage("isLoggedIn") private var isLoggedIn = false
     @State private var serverURL = KeychainService.load(for: "serverURL") ?? ""
     @State private var githubPAT = KeychainService.load(for: "githubPAT") ?? ""
+    @State private var anthropicKey = ""
+    @State private var openAIKey = ""
+    @State private var credentialStatus: CredentialStatus?
     @State private var saved = false
+    @State private var credError: String?
 
     var body: some View {
         ZStack {
@@ -16,6 +20,39 @@ struct SettingsView: View {
                     // Server
                     settingsSection(title: "Server") {
                         PilotTextField("http://your-server:3000", text: $serverURL, keyboardType: .URL)
+                    }
+
+                    // API Keys (stored on server)
+                    settingsSection(title: "API Keys") {
+                        VStack(spacing: 12) {
+                            HStack(spacing: 10) {
+                                PilotTextField("Anthropic API key", text: $anthropicKey, isSecure: true)
+                                if credentialStatus?.claude == true && anthropicKey.isEmpty {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(Theme.green)
+                                        .font(.title3)
+                                }
+                            }
+                            HStack(spacing: 10) {
+                                PilotTextField("OpenAI API key", text: $openAIKey, isSecure: true)
+                                if credentialStatus?.codex == true && openAIKey.isEmpty {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(Theme.green)
+                                        .font(.title3)
+                                }
+                            }
+                            if let err = credError {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "exclamationmark.triangle.fill").font(.caption)
+                                    Text(err).font(.caption)
+                                }
+                                .foregroundStyle(Theme.danger)
+                            }
+                            Text("Stored on your server — never sent from the app.")
+                                .font(.caption2)
+                                .foregroundStyle(Theme.muted.opacity(0.7))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
                     }
 
                     // GitHub
@@ -64,7 +101,7 @@ struct SettingsView: View {
                     }
 
                     // Save
-                    Button { save() } label: {
+                    Button { Task { await save() } } label: {
                         Text("Save")
                             .font(.system(.body, weight: .semibold))
                             .foregroundStyle(.black)
@@ -112,6 +149,7 @@ struct SettingsView: View {
             }
         }
         .animation(.spring(duration: 0.3), value: saved)
+        .task { await loadCredentialStatus() }
     }
 
     @ViewBuilder
@@ -125,11 +163,32 @@ struct SettingsView: View {
         .padding(.horizontal, 20)
     }
 
-    private func save() {
+    private func loadCredentialStatus() async {
+        guard KeychainService.load(for: "authToken") != nil else { return }
+        credentialStatus = try? await APIClient.shared.fetchCredentialStatus()
+    }
+
+    private func save() async {
         KeychainService.save(serverURL, for: "serverURL")
         if !githubPAT.isEmpty {
             github.save(token: githubPAT)
         }
+
+        // Push API keys to server if provided
+        let claudeKey = anthropicKey.isEmpty ? nil : anthropicKey
+        let codexKey  = openAIKey.isEmpty    ? nil : openAIKey
+        if claudeKey != nil || codexKey != nil {
+            do {
+                credentialStatus = try await APIClient.shared.updateCredentials(claude: claudeKey, codex: codexKey)
+                anthropicKey = ""
+                openAIKey = ""
+                credError = nil
+            } catch {
+                credError = "Failed to save API keys: \(error.localizedDescription)"
+                return
+            }
+        }
+
         saved = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { saved = false }
     }

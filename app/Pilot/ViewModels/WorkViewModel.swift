@@ -70,14 +70,9 @@ final class WorkViewModel: ObservableObject {
         }
     }
 
-    /// Assign a specific agent to a pending task. Passes the API key so the server auto-starts the agent.
     func assignTask(_ task: WorkTask, to agent: Agent) async -> AgentSession? {
-        guard let apiKey = KeychainService.load(for: "apiKey_agent_\(agent.id)") else {
-            self.error = "No API key configured for \(agent.name)"
-            return nil
-        }
         do {
-            let response = try await APIClient.shared.assignTask(taskId: task.id, agentId: agent.id, apiKey: apiKey)
+            let response = try await APIClient.shared.assignTask(taskId: task.id, agentId: agent.id)
             if let idx = tasks.firstIndex(where: { $0.id == task.id }) {
                 tasks[idx] = response.task
             }
@@ -89,17 +84,9 @@ final class WorkViewModel: ObservableObject {
         }
     }
 
-    /// Auto-dispatch: assign idle agents to pending tasks by role. Passes API keys for auto-start.
     func runQueue() async -> [(task: WorkTask, session: AgentSession)] {
-        // Collect API keys for all ready agents so the server can auto-start them
-        var agentApiKeys: [String: String] = [:]
-        for agent in readyAgents {
-            if let key = KeychainService.load(for: "apiKey_agent_\(agent.id)") {
-                agentApiKeys[agent.id] = key
-            }
-        }
         do {
-            let response = try await APIClient.shared.runQueue(agentApiKeys: agentApiKeys)
+            let response = try await APIClient.shared.runQueue()
             for pair in response.dispatched {
                 if let idx = tasks.firstIndex(where: { $0.id == pair.task.id }) {
                     tasks[idx] = pair.task
@@ -126,10 +113,9 @@ final class WorkViewModel: ObservableObject {
 
     // MARK: - Agents
 
-    func createAgent(name: String, provider: AgentProvider, apiKey: String) async -> Agent? {
+    func createAgent(name: String, provider: AgentProvider) async -> Agent? {
         do {
             let agent = try await APIClient.shared.createAgent(name: name, provider: provider)
-            KeychainService.save(apiKey, for: "apiKey_agent_\(agent.id)")
             agents.append(agent)
             return agent
         } catch {
@@ -141,7 +127,6 @@ final class WorkViewModel: ObservableObject {
     func deleteAgent(_ agent: Agent) async {
         do {
             try await APIClient.shared.deleteAgent(id: agent.id)
-            KeychainService.delete(for: "apiKey_agent_\(agent.id)")
             agents.removeAll { $0.id == agent.id }
             runs.removeAll { $0.agentId == agent.id }
         } catch {
@@ -168,17 +153,10 @@ final class WorkViewModel: ObservableObject {
         return tasks.first { $0.id == workTaskId }
     }
 
-    func hasApiKey(for agent: Agent) -> Bool {
-        KeychainService.load(for: "apiKey_agent_\(agent.id)") != nil
-    }
+    var readyAgents: [Agent] { agents }
 
-    var readyAgents: [Agent] {
-        agents.filter { hasApiKey(for: $0) }
-    }
-
-    /// Agents that can work on tasks for a given project role.
     func eligibleAgents(for project: Project) -> [Agent] {
-        readyAgents.filter { agent in
+        agents.filter { agent in
             project.role == .any || project.role.rawValue == agent.provider.rawValue
         }
     }
@@ -189,6 +167,6 @@ final class WorkViewModel: ObservableObject {
 
     var idleAgentCount: Int {
         let busyIds = Set(runs.filter { $0.status == .running }.map(\.agentId))
-        return readyAgents.filter { !busyIds.contains($0.id) }.count
+        return agents.filter { !busyIds.contains($0.id) }.count
     }
 }

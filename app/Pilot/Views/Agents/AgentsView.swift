@@ -40,8 +40,8 @@ struct AgentsView: View {
                 }
             }
             .sheet(isPresented: $showingNewAgent) {
-                NewAgentView { name, provider, apiKey in
-                    Task { await vm.createAgent(name: name, provider: provider, apiKey: apiKey) }
+                NewAgentView { name, provider in
+                    Task { await vm.createAgent(name: name, provider: provider) }
                 }
             }
             .task { await vm.load() }

@@ -4,8 +4,7 @@ struct AgentDetailView: View {
     let agent: Agent
     @EnvironmentObject var vm: WorkViewModel
     @State private var showingNewTask = false
-    @State private var selectedRun: AgentSession?
-    @State private var pendingPrompt: String?
+    @State private var pendingRun: PendingRun?
 
     private var agentRuns: [AgentSession] {
         vm.runs.filter { $0.agentId == agent.id }
@@ -27,7 +26,7 @@ struct AgentDetailView: View {
                 }
             }
 
-            if vm.hasApiKey(for: agent) {
+            if !vm.agents.isEmpty {
                 Button { showingNewTask = true } label: {
                     Label("New Task", systemImage: "plus.circle.fill")
                         .font(.system(.body, weight: .semibold))
@@ -52,24 +51,20 @@ struct AgentDetailView: View {
         .toolbarColorScheme(.dark, for: .navigationBar)
         .sheet(isPresented: $showingNewTask) {
             NewTaskView(preselectedAgentId: agent.id) { run, prompt in
-                pendingPrompt = prompt
-                selectedRun = run
+                pendingRun = PendingRun(session: run, prompt: prompt)
             }
             .environmentObject(vm)
         }
-        .navigationDestination(item: $selectedRun) { run in
+        .navigationDestination(item: $pendingRun) { pending in
             SessionRunView(
-                session: run,
-                projectName: vm.project(for: run)?.name,
-                initialPrompt: pendingPrompt,
+                session: pending.session,
+                projectName: vm.project(for: pending.session)?.name,
+                initialPrompt: pending.prompt,
                 onDeleted: {
-                    vm.runs.removeAll { $0.id == run.id }
-                    pendingPrompt = nil
+                    vm.runs.removeAll { $0.id == pending.session.id }
+                    pendingRun = nil
                 }
             )
-        }
-        .onChange(of: selectedRun) { _, run in
-            if run == nil { pendingPrompt = nil }
         }
         .refreshable { await vm.load() }
     }
@@ -79,7 +74,10 @@ struct AgentDetailView: View {
             LazyVStack(spacing: 10) {
                 ForEach(agentRuns) { run in
                     RunCard(run: run, projectName: vm.project(for: run)?.name)
-                        .onTapGesture { selectedRun = run }
+                        .onTapGesture {
+                            let prompt = run.status == .idle ? vm.task(for: run)?.prompt : nil
+                            pendingRun = PendingRun(session: run, prompt: prompt)
+                        }
                         .contextMenu {
                             Button(role: .destructive) {
                                 Task { await vm.deleteRun(run) }
@@ -105,10 +103,7 @@ struct AgentDetailView: View {
             VStack(spacing: 6) {
                 Text(agent.name + " has no runs yet")
                     .font(.system(.headline, weight: .semibold)).foregroundStyle(.white)
-                if !vm.hasApiKey(for: agent) {
-                    Text("No API key — re-hire this agent to set one")
-                        .font(.subheadline).foregroundStyle(Theme.danger)
-                } else if vm.projects.isEmpty {
+                if vm.projects.isEmpty {
                     Text("Add a project in Setup first")
                         .font(.subheadline).foregroundStyle(Theme.muted)
                 } else {

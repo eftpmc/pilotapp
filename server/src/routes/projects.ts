@@ -3,33 +3,18 @@ import { v4 as uuid } from 'uuid';
 import path from 'path';
 import fs from 'fs/promises';
 import { z } from 'zod';
-import { Project } from '../types';
+import { db } from '../db';
 import { initRepo, cloneRepo } from '../services/git';
-import { authMiddleware } from '../middleware/auth';
+import { authMiddleware, userId } from '../middleware/auth';
 
 const router = Router();
 router.use(authMiddleware);
 
-const PROJECTS_ROOT = process.env.PROJECTS_ROOT || './data/projects';
-const PROJECTS_FILE = path.join(PROJECTS_ROOT, 'projects.json');
+const DATA_DIR = process.env.DATA_DIR || './data';
 
-async function readProjects(): Promise<Project[]> {
-  try {
-    const raw = await fs.readFile(PROJECTS_FILE, 'utf-8');
-    return JSON.parse(raw);
-  } catch {
-    return [];
-  }
-}
-
-async function writeProjects(projects: Project[]): Promise<void> {
-  await fs.mkdir(PROJECTS_ROOT, { recursive: true });
-  await fs.writeFile(PROJECTS_FILE, JSON.stringify(projects, null, 2));
-}
-
-router.get('/', async (_req: Request, res: Response) => {
-  const projects = await readProjects();
-  res.json(projects);
+router.get('/', (req: Request, res: Response) => {
+  const rows = db.prepare('SELECT * FROM projects WHERE user_id = ? ORDER BY created_at DESC').all(userId(req)) as Row[];
+  res.json(rows.map(toProject));
 });
 
 const CreateSchema = z.object({
@@ -47,40 +32,51 @@ router.post('/', async (req: Request, res: Response) => {
   }
 
   const id = uuid();
-  const repoPath = path.join(PROJECTS_ROOT, id, 'repo.git');
-  const project: Project = {
+  const repoPath = path.join(DATA_DIR, 'repos', userId(req), id);
+  const project = {
     id,
+    user_id: userId(req),
     name: parsed.data.name,
     role: parsed.data.role,
-    repoPath,
-    createdAt: new Date().toISOString(),
+    repo_path: repoPath,
+    created_at: new Date().toISOString(),
   };
 
+  const projectObj = { id: project.id as string, name: project.name as string, repoPath: project.repo_path as string, role: project.role as any, createdAt: project.created_at as string };
   if (parsed.data.githubCloneUrl && parsed.data.githubToken) {
-    await cloneRepo(project, parsed.data.githubCloneUrl, parsed.data.githubToken);
+    await cloneRepo(projectObj, parsed.data.githubCloneUrl, parsed.data.githubToken);
   } else {
-    await initRepo(project);
+    await initRepo(projectObj);
   }
 
-  const projects = await readProjects();
-  projects.push(project);
-  await writeProjects(projects);
+  db.prepare(
+    'INSERT INTO projects (id, user_id, name, repo_path, role, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(project.id, project.user_id, project.name, project.repo_path, project.role, project.created_at);
 
-  res.status(201).json(project);
+  res.status(201).json(toProject(project));
 });
 
 router.delete('/:id', async (req: Request, res: Response) => {
-  const projects = await readProjects();
-  const idx = projects.findIndex((p) => p.id === req.params.id);
-  if (idx === -1) {
-    res.status(404).json({ error: 'Not found' });
-    return;
-  }
+  const row = db.prepare('SELECT * FROM projects WHERE id = ? AND user_id = ?').get(req.params.id, userId(req)) as Row | undefined;
+  if (!row) { res.status(404).json({ error: 'Not found' }); return; }
 
-  const [removed] = projects.splice(idx, 1);
-  await fs.rm(path.join(PROJECTS_ROOT, removed.id), { recursive: true, force: true });
-  await writeProjects(projects);
+  db.prepare('DELETE FROM projects WHERE id = ?').run(req.params.id);
+  await fs.rm(path.join(DATA_DIR, 'repos', userId(req), String(req.params.id)), { recursive: true, force: true });
   res.status(204).send();
 });
+
+// ---------------------------------------------------------------------------
+
+interface Row { id: string; user_id: string; name: string; repo_path: string; role: string; created_at: string }
+
+function toProject(row: Row | Record<string, unknown>) {
+  return {
+    id: row.id,
+    name: row.name,
+    repoPath: row.repo_path,
+    role: row.role,
+    createdAt: row.created_at,
+  };
+}
 
 export default router;

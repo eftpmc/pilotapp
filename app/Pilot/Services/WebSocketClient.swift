@@ -18,21 +18,19 @@ final class WebSocketClient: ObservableObject {
         enum Kind { case assistant, tool, system, stderr }
     }
 
-    func connect(serverURL: String, token: String, sessionId: String, prompt: String, apiKey: String) {
+    func connect(serverURL: String, token: String, sessionId: String, prompt: String) {
         guard let url = wsURL(serverURL: serverURL, token: token) else { return }
         task = URLSession.shared.webSocketTask(with: url)
         task?.resume()
-        sendRun(sessionId: sessionId, prompt: prompt, apiKey: apiKey)
+        sendRun(sessionId: sessionId, prompt: prompt)
         receive()
     }
 
-    /// Connect to a server-side session. Passes apiKey so the server can start it if still idle.
-    func subscribe(serverURL: String, token: String, sessionId: String, apiKey: String) {
+    func subscribe(serverURL: String, token: String, sessionId: String) {
         guard let url = wsURL(serverURL: serverURL, token: token) else { return }
         task = URLSession.shared.webSocketTask(with: url)
         task?.resume()
-        var payload: [String: String] = ["type": "subscribe", "sessionId": sessionId]
-        payload["apiKey"] = apiKey
+        let payload: [String: String] = ["type": "subscribe", "sessionId": sessionId]
         guard let data = try? JSONEncoder().encode(payload) else { return }
         task?.send(.data(data)) { _ in }
         receive()
@@ -52,10 +50,8 @@ final class WebSocketClient: ObservableObject {
         task = nil
     }
 
-    private func sendRun(sessionId: String, prompt: String, apiKey: String) {
-        let payload: [String: String] = [
-            "type": "run", "sessionId": sessionId, "prompt": prompt, "apiKey": apiKey,
-        ]
+    private func sendRun(sessionId: String, prompt: String) {
+        let payload: [String: String] = ["type": "run", "sessionId": sessionId, "prompt": prompt]
         guard let data = try? JSONEncoder().encode(payload) else { return }
         task?.send(.data(data)) { _ in }
     }
@@ -105,7 +101,6 @@ final class WebSocketClient: ObservableObject {
     // MARK: - stream-json parsing
 
     private func parseStreamLine(_ raw: String) {
-        // Claude --output-format stream-json emits one JSON object per line
         for line in raw.components(separatedBy: "\n") {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard !trimmed.isEmpty else { continue }
@@ -113,14 +108,16 @@ final class WebSocketClient: ObservableObject {
             guard let data = trimmed.data(using: .utf8),
                   let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             else {
-                // Not JSON — show raw
-                lines.append(.init(text: trimmed, kind: .tool))
-                return
+                // Plain text (Codex and other non-JSON agents)
+                lines.append(.init(text: trimmed, kind: .assistant))
+                onAssistantText?(trimmed)
+                continue  // was `return` — don't stop processing remaining lines
             }
 
             let type = obj["type"] as? String ?? ""
 
             switch type {
+            // Claude stream-json format
             case "assistant":
                 if let message = obj["message"] as? [String: Any],
                    let content = message["content"] as? [[String: Any]] {
@@ -148,7 +145,8 @@ final class WebSocketClient: ObservableObject {
                 }
 
             default:
-                break
+                // Unknown JSON format — show raw so nothing is silently dropped
+                lines.append(.init(text: trimmed, kind: .tool))
             }
         }
     }

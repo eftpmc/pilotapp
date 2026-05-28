@@ -6,8 +6,7 @@ struct ProjectDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var showingAddTask = false
     @State private var showingDeleteConfirm = false
-    @State private var selectedRun: AgentSession?
-    @State private var pendingPrompt: String?
+    @State private var pendingRun: PendingRun?
 
     private var projectTasks: [WorkTask] {
         vm.tasks(for: project).sorted { $0.createdAt > $1.createdAt }
@@ -66,19 +65,16 @@ struct ProjectDetailView: View {
             }
             .environmentObject(vm)
         }
-        .navigationDestination(item: $selectedRun) { run in
+        .navigationDestination(item: $pendingRun) { pending in
             SessionRunView(
-                session: run,
+                session: pending.session,
                 projectName: project.name,
-                initialPrompt: pendingPrompt,
+                initialPrompt: pending.prompt,
                 onDeleted: {
-                    vm.runs.removeAll { $0.id == run.id }
-                    pendingPrompt = nil
+                    vm.runs.removeAll { $0.id == pending.session.id }
+                    pendingRun = nil
                 }
             )
-        }
-        .onChange(of: selectedRun) { _, run in
-            if run == nil { pendingPrompt = nil }
         }
         .refreshable { await vm.load() }
     }
@@ -107,36 +103,50 @@ struct ProjectDetailView: View {
         ScrollView {
             LazyVStack(spacing: 10) {
                 ForEach(projectTasks) { task in
-                    TaskCard(task: task, agent: vm.agents.first { $0.id == task.agentId })
-                        .onTapGesture {
-                            if let sessionId = task.sessionId,
-                               let run = vm.runs.first(where: { $0.id == sessionId }) {
-                                selectedRun = run
+                    TaskCard(
+                        task: task,
+                        agent: vm.agents.first { $0.id == task.agentId },
+                        eligibleAgents: vm.eligibleAgents(for: project),
+                        onAssign: { agent in
+                            Task {
+                                if let run = await vm.assignTask(task, to: agent) {
+                                    pendingRun = PendingRun(session: run, prompt: task.prompt)
+                                }
+                            }
+                        },
+                        onTap: {
+                            guard let sessionId = task.sessionId,
+                                  let run = vm.runs.first(where: { $0.id == sessionId })
+                            else { return }
+                            let prompt = run.status == .idle ? task.prompt : nil
+                            pendingRun = PendingRun(session: run, prompt: prompt)
+                        }
+                    )
+                    .contextMenu {
+                        if task.status == .pending {
+                            Button(role: .destructive) {
+                                Task { await vm.deleteTask(task) }
+                            } label: {
+                                Label("Delete", systemImage: "trash")
                             }
                         }
-                        .contextMenu {
-                            if task.status == .pending {
-                                Menu("Assign to…") {
-                                    ForEach(vm.eligibleAgents(for: project)) { agent in
-                                        Button(agent.name) {
-                                            Task {
-                                                if let run = await vm.assignTask(task, to: agent) {
-                                                    pendingPrompt = task.prompt
-                                                    selectedRun = run
-                                                }
-                                            }
-                                        }
+                        if task.status == .running || task.status == .done || task.status == .failed {
+                            Button(role: .destructive) {
+                                Task {
+                                    if let sessionId = task.sessionId,
+                                       let run = vm.runs.first(where: { $0.id == sessionId }) {
+                                        await vm.deleteRun(run)
+                                    } else if let sessionId = task.sessionId {
+                                        // Run not in local cache — delete by id directly
+                                        try? await APIClient.shared.deleteSession(sessionId: sessionId)
+                                        vm.tasks.removeAll { $0.id == task.id }
                                     }
                                 }
-                            }
-                            if task.status == .pending {
-                                Button(role: .destructive) {
-                                    Task { await vm.deleteTask(task) }
-                                } label: {
-                                    Label("Delete", systemImage: "trash")
-                                }
+                            } label: {
+                                Label("Discard Run", systemImage: "trash")
                             }
                         }
+                    }
                 }
             }
             .padding(.horizontal, 20).padding(.vertical, 12).padding(.bottom, 80)
@@ -198,6 +208,9 @@ struct ProjectDetailView: View {
 private struct TaskCard: View {
     let task: WorkTask
     let agent: Agent?
+    let eligibleAgents: [Agent]
+    var onAssign: (Agent) -> Void
+    var onTap: () -> Void
 
     private var statusColor: Color {
         switch task.status {
@@ -220,47 +233,70 @@ private struct TaskCard: View {
     }
 
     var body: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 8)
-                    .fill(statusColor.opacity(0.1))
-                    .frame(width: 36, height: 36)
-                Image(systemName: statusIcon)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(statusColor)
-            }
+        Button(action: onTap) {
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(statusColor.opacity(0.1))
+                        .frame(width: 36, height: 36)
+                    Image(systemName: statusIcon)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(statusColor)
+                }
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(task.title)
-                    .font(.system(.subheadline, weight: .semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                HStack(spacing: 6) {
-                    if let agent {
-                        Text(agent.name)
-                            .font(.system(.caption, weight: .medium))
-                            .foregroundStyle(agent.provider.color)
-                    } else {
-                        Text("Unassigned")
-                            .font(.caption)
-                            .foregroundStyle(Theme.muted)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(task.title)
+                        .font(.system(.subheadline, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                    HStack(spacing: 6) {
+                        if let agent {
+                            Text(agent.name)
+                                .font(.system(.caption, weight: .medium))
+                                .foregroundStyle(agent.provider.color)
+                        } else {
+                            Text("Unassigned")
+                                .font(.caption)
+                                .foregroundStyle(Theme.muted)
+                        }
+                        Text("·").foregroundStyle(Theme.border)
+                        Text(task.baseBranch)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(Theme.muted.opacity(0.7))
                     }
-                    Text("·").foregroundStyle(Theme.border)
-                    Text(task.baseBranch)
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundStyle(Theme.muted.opacity(0.7))
+                }
+
+                Spacer()
+
+                // Right-side action
+                if task.status == .pending && !eligibleAgents.isEmpty {
+                    Menu {
+                        ForEach(eligibleAgents) { agent in
+                            Button(agent.name) { onAssign(agent) }
+                        }
+                    } label: {
+                        Text("Assign")
+                            .font(.system(.caption, weight: .semibold))
+                            .foregroundStyle(Theme.green)
+                            .padding(.horizontal, 10).padding(.vertical, 5)
+                            .background(Theme.green.opacity(0.1))
+                            .clipShape(Capsule())
+                            .overlay(Capsule().strokeBorder(Theme.green.opacity(0.3), lineWidth: 0.5))
+                    }
+                    // Stop the button action from firing when tapping the menu
+                    .buttonStyle(.plain)
+                } else if task.status == .running || task.status == .done || task.status == .failed {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Theme.border)
+                } else if task.status == .pending && eligibleAgents.isEmpty {
+                    Text("No agents")
+                        .font(.caption)
+                        .foregroundStyle(Theme.muted)
                 }
             }
-
-            Spacer()
-
-            // tap hint if runnable
-            if task.status == .running || task.status == .done {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Theme.border)
-            }
+            .pilotCard()
         }
-        .pilotCard()
+        .buttonStyle(.plain)
     }
 }

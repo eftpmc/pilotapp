@@ -1,33 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
-import fs from 'fs/promises';
-import path from 'path';
+import { v4 as uuid } from 'uuid';
+import { db } from '../db';
 import { signToken } from '../middleware/auth';
 
 const router = Router();
-const DATA_ROOT = process.env.PROJECTS_ROOT || './data/projects';
-const USERS_FILE = path.join(DATA_ROOT, '../users.json');
-
-interface StoredUser {
-  id: string;
-  email: string;
-  passwordHash: string;
-}
-
-async function readUsers(): Promise<StoredUser[]> {
-  try {
-    const raw = await fs.readFile(USERS_FILE, 'utf-8');
-    return JSON.parse(raw);
-  } catch {
-    return [];
-  }
-}
-
-async function writeUsers(users: StoredUser[]): Promise<void> {
-  await fs.mkdir(path.dirname(USERS_FILE), { recursive: true });
-  await fs.writeFile(USERS_FILE, JSON.stringify(users, null, 2));
-}
 
 const AuthSchema = z.object({
   email: z.string().email(),
@@ -41,23 +19,19 @@ router.post('/register', async (req: Request, res: Response) => {
     return;
   }
 
-  const users = await readUsers();
-  if (users.find((u) => u.email === parsed.data.email)) {
+  const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(parsed.data.email);
+  if (existing) {
     res.status(409).json({ error: 'Email already registered' });
     return;
   }
 
   const passwordHash = await bcrypt.hash(parsed.data.password, 12);
-  const user: StoredUser = {
-    id: crypto.randomUUID(),
-    email: parsed.data.email,
-    passwordHash,
-  };
+  const id = uuid();
+  db.prepare('INSERT INTO users (id, email, password_hash, created_at) VALUES (?, ?, ?, ?)').run(
+    id, parsed.data.email, passwordHash, new Date().toISOString()
+  );
 
-  users.push(user);
-  await writeUsers(users);
-
-  res.status(201).json({ token: signToken(user.id) });
+  res.status(201).json({ token: signToken(id) });
 });
 
 router.post('/login', async (req: Request, res: Response) => {
@@ -67,9 +41,11 @@ router.post('/login', async (req: Request, res: Response) => {
     return;
   }
 
-  const users = await readUsers();
-  const user = users.find((u) => u.email === parsed.data.email);
-  if (!user || !(await bcrypt.compare(parsed.data.password, user.passwordHash))) {
+  const user = db.prepare('SELECT id, password_hash FROM users WHERE email = ?').get(parsed.data.email) as
+    | { id: string; password_hash: string }
+    | undefined;
+
+  if (!user || !(await bcrypt.compare(parsed.data.password, user.password_hash))) {
     res.status(401).json({ error: 'Invalid credentials' });
     return;
   }

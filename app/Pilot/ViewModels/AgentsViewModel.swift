@@ -16,10 +16,9 @@ final class AgentsViewModel: ObservableObject {
         }
     }
 
-    func createAgent(name: String, provider: AgentProvider, apiKey: String) async -> Agent? {
+    func createAgent(name: String, provider: AgentProvider) async -> Agent? {
         do {
             let agent = try await APIClient.shared.createAgent(name: name, provider: provider)
-            KeychainService.save(apiKey, for: "apiKey_agent_\(agent.id)")
             agents.append(agent)
             return agent
         } catch {
@@ -31,7 +30,6 @@ final class AgentsViewModel: ObservableObject {
     func deleteAgent(_ agent: Agent) async {
         do {
             try await APIClient.shared.deleteAgent(id: agent.id)
-            KeychainService.delete(for: "apiKey_agent_\(agent.id)")
             agents.removeAll { $0.id == agent.id }
         } catch {
             self.error = error.localizedDescription

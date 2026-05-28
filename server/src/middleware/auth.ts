@@ -24,3 +24,7 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
 export function signToken(userId: string): string {
   return jwt.sign({ userId } satisfies AuthPayload, JWT_SECRET, { expiresIn: '30d' });
 }
+
+export function userId(req: Request): string {
+  return (req as Request & { userId: string }).userId;
+}

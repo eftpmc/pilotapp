@@ -96,3 +96,8 @@ struct SocketMessage: Codable {
     let sessionId: String?
     let data: String
 }
+
+struct CredentialStatus: Codable {
+    let claude: Bool
+    let codex: Bool
+}

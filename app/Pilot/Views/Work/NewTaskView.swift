@@ -84,18 +84,18 @@ struct NewTaskView: View {
                 .sectionLabel()
                 .padding(.horizontal, 4)
 
-            if vm.readyAgents.isEmpty {
+            if vm.agents.isEmpty {
                 HStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundStyle(Theme.danger).font(.caption)
-                    Text("No agents with API keys — add one in Setup.")
+                    Text("No agents yet — hire one in Setup.")
                         .font(.subheadline).foregroundStyle(Theme.muted)
                 }
                 .padding(.horizontal, 4)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
-                        ForEach(vm.readyAgents) { agent in
+                        ForEach(vm.agents) { agent in
                             Button { selectedAgentId = agent.id } label: {
                                 HStack(spacing: 7) {
                                     Image(systemName: agent.provider.icon)
@@ -274,7 +274,7 @@ struct NewTaskView: View {
         if let pre = preselectedAgentId, !pre.isEmpty {
             selectedAgentId = pre
         } else if selectedAgentId.isEmpty {
-            selectedAgentId = vm.readyAgents.first?.id ?? ""
+            selectedAgentId = vm.agents.first?.id ?? ""
         }
         if selectedProjectId.isEmpty {
             selectedProjectId = vm.projects.first?.id ?? ""

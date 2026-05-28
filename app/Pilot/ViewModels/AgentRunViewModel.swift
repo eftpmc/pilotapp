@@ -14,19 +14,9 @@ final class AgentRunViewModel: ObservableObject {
         socket.error = nil
 
         if session.workTaskId != nil {
-            // Task-based session — server started (or will start) the agent; subscribe with key
-            guard let apiKey = KeychainService.load(for: "apiKey_agent_\(session.agentId)") else {
-                error = "No API key configured for this agent"
-                return
-            }
-            socket.subscribe(serverURL: serverURL, token: token, sessionId: session.id, apiKey: apiKey)
+            socket.subscribe(serverURL: serverURL, token: token, sessionId: session.id)
         } else {
-            // Direct dispatch — client initiates the run
-            guard let apiKey = KeychainService.load(for: "apiKey_agent_\(session.agentId)") else {
-                error = "No API key configured for this agent"
-                return
-            }
-            socket.connect(serverURL: serverURL, token: token, sessionId: session.id, prompt: prompt, apiKey: apiKey)
+            socket.connect(serverURL: serverURL, token: token, sessionId: session.id, prompt: prompt)
         }
     }
 

@@ -35,8 +35,8 @@ struct SetupView: View {
                 }
             }
             .sheet(isPresented: $showingNewAgent) {
-                NewAgentView { name, provider, apiKey in
-                    Task { await vm.createAgent(name: name, provider: provider, apiKey: apiKey) }
+                NewAgentView { name, provider in
+                    Task { await vm.createAgent(name: name, provider: provider) }
                 }
             }
             .sheet(isPresented: $showingRepoPicker) {
@@ -99,7 +99,7 @@ struct SetupView: View {
             } else {
                 ForEach(vm.agents) { agent in
                     NavigationLink(destination: AgentDetailView(agent: agent).environmentObject(vm)) {
-                        AgentSetupRow(agent: agent, hasKey: vm.hasApiKey(for: agent))
+                        AgentSetupRow(agent: agent)
                     }
                     .buttonStyle(.plain)
                     .contextMenu {
@@ -237,7 +237,6 @@ struct SetupView: View {
 
 private struct AgentSetupRow: View {
     let agent: Agent
-    let hasKey: Bool
 
     var body: some View {
         HStack(spacing: 14) {
@@ -257,10 +256,6 @@ private struct AgentSetupRow: View {
                     .font(.caption).foregroundStyle(Theme.muted)
             }
             Spacer()
-            if !hasKey {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.caption).foregroundStyle(Theme.danger)
-            }
             Image(systemName: "chevron.right")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(Theme.border)

@@ -4,8 +4,9 @@ services:
     ports:
       - "3000:3000"
     environment:
-      JWT_SECRET: ${JWT_SECRET:-change-me}
-      PROJECTS_ROOT: /data/projects
+      NODE_ENV: production
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      DATA_DIR: /data
     volumes:
       - pilot_data:/data
     restart: unless-stopped
