@@ -9,14 +9,25 @@ final class AgentRunViewModel: ObservableObject {
     func run(_ session: AgentSession, prompt: String) {
         guard let serverURL = KeychainService.load(for: "serverURL"),
               let token = KeychainService.load(for: "authToken") else { return }
-        guard let apiKey = KeychainService.load(for: "apiKey_agent_\(session.agentId)") else {
-            error = "No API key configured for this agent"
-            return
-        }
         socket.lines = []
         socket.isDone = false
         socket.error = nil
-        socket.connect(serverURL: serverURL, token: token, sessionId: session.id, prompt: prompt, apiKey: apiKey)
+
+        if session.workTaskId != nil {
+            // Task-based session — server started (or will start) the agent; subscribe with key
+            guard let apiKey = KeychainService.load(for: "apiKey_agent_\(session.agentId)") else {
+                error = "No API key configured for this agent"
+                return
+            }
+            socket.subscribe(serverURL: serverURL, token: token, sessionId: session.id, apiKey: apiKey)
+        } else {
+            // Direct dispatch — client initiates the run
+            guard let apiKey = KeychainService.load(for: "apiKey_agent_\(session.agentId)") else {
+                error = "No API key configured for this agent"
+                return
+            }
+            socket.connect(serverURL: serverURL, token: token, sessionId: session.id, prompt: prompt, apiKey: apiKey)
+        }
     }
 
     func loadDiff(sessionId: String) async {

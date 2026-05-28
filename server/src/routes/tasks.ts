@@ -5,6 +5,7 @@ import fs from 'fs/promises';
 import { z } from 'zod';
 import { Task, Agent, Project, AgentSession } from '../types';
 import { createWorktree } from '../services/git';
+import { runAgent } from '../services/agents';
 import { authMiddleware } from '../middleware/auth';
 
 const router = Router();
@@ -144,7 +145,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 });
 
 // POST /tasks/:id/assign — assign a specific agent to a specific task
-const AssignSchema = z.object({ agentId: z.string() });
+const AssignSchema = z.object({ agentId: z.string(), apiKey: z.string() });
 
 router.post('/:id/assign', async (req: Request, res: Response) => {
   const parsed = AssignSchema.safeParse(req.body);
@@ -203,11 +204,22 @@ router.post('/:id/assign', async (req: Request, res: Response) => {
   };
   await writeTasks(tasks);
 
+  // Start agent immediately — output is buffered; WS subscriber can connect any time after
+  runAgent(session, task.prompt, parsed.data.apiKey);
+
   res.status(201).json({ task: tasks[taskIdx], session });
 });
 
 // POST /tasks/queue/run — auto-assign idle agents to pending tasks
+// agentApiKeys: { [agentId]: apiKey } — agents with keys provided are auto-started
+const QueueRunSchema = z.object({
+  agentApiKeys: z.record(z.string(), z.string()).default({}),
+});
+
 router.post('/queue/run', async (req: Request, res: Response) => {
+  const parsed = QueueRunSchema.safeParse(req.body);
+  const apiKeys: Record<string, string> = parsed.success ? parsed.data.agentApiKeys : {};
+
   const [tasks, agents, projects, sessions] = await Promise.all([
     readTasks(), readAgents(), readProjects(), readSessions(),
   ]);
@@ -258,8 +270,13 @@ router.post('/queue/run', async (req: Request, res: Response) => {
       startedAt: new Date().toISOString(),
     };
 
+    // Auto-start if client provided the API key for this agent
+    const apiKey = apiKeys[agent.id];
+    if (apiKey) {
+      runAgent(session, next.prompt, apiKey);
+    }
+
     dispatched.push({ task: tasks[taskIdx], session });
-    // Mark consumed so next agent doesn't double-pick
     pendingTasks.splice(pendingTasks.indexOf(next), 1);
   }
 

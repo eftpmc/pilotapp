@@ -118,12 +118,12 @@ final class APIClient: ObservableObject {
         let _: EmptyResponse = try await request("/tasks/\(id)", method: "DELETE")
     }
 
-    func assignTask(taskId: String, agentId: String) async throws -> AssignResponse {
-        try await request("/tasks/\(taskId)/assign", method: "POST", body: ["agentId": agentId])
+    func assignTask(taskId: String, agentId: String, apiKey: String) async throws -> AssignResponse {
+        try await request("/tasks/\(taskId)/assign", method: "POST", body: ["agentId": agentId, "apiKey": apiKey])
     }
 
-    func runQueue() async throws -> QueueRunResponse {
-        try await request("/tasks/queue/run", method: "POST")
+    func runQueue(agentApiKeys: [String: String] = [:]) async throws -> QueueRunResponse {
+        try await request("/tasks/queue/run", method: "POST", body: ["agentApiKeys": agentApiKeys])
     }
 
     // MARK: Sessions

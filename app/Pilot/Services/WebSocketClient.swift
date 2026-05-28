@@ -19,18 +19,32 @@ final class WebSocketClient: ObservableObject {
     }
 
     func connect(serverURL: String, token: String, sessionId: String, prompt: String, apiKey: String) {
-        guard let base = URL(string: serverURL),
-              var components = URLComponents(url: base.appendingPathComponent("ws"), resolvingAgainstBaseURL: false)
-        else { return }
-
-        components.scheme = base.scheme == "https" ? "wss" : "ws"
-        components.queryItems = [URLQueryItem(name: "token", value: token)]
-        guard let url = components.url else { return }
-
+        guard let url = wsURL(serverURL: serverURL, token: token) else { return }
         task = URLSession.shared.webSocketTask(with: url)
         task?.resume()
         sendRun(sessionId: sessionId, prompt: prompt, apiKey: apiKey)
         receive()
+    }
+
+    /// Connect to a server-side session. Passes apiKey so the server can start it if still idle.
+    func subscribe(serverURL: String, token: String, sessionId: String, apiKey: String) {
+        guard let url = wsURL(serverURL: serverURL, token: token) else { return }
+        task = URLSession.shared.webSocketTask(with: url)
+        task?.resume()
+        var payload: [String: String] = ["type": "subscribe", "sessionId": sessionId]
+        payload["apiKey"] = apiKey
+        guard let data = try? JSONEncoder().encode(payload) else { return }
+        task?.send(.data(data)) { _ in }
+        receive()
+    }
+
+    private func wsURL(serverURL: String, token: String) -> URL? {
+        guard let base = URL(string: serverURL),
+              var components = URLComponents(url: base.appendingPathComponent("ws"), resolvingAgainstBaseURL: false)
+        else { return nil }
+        components.scheme = base.scheme == "https" ? "wss" : "ws"
+        components.queryItems = [URLQueryItem(name: "token", value: token)]
+        return components.url
     }
 
     func disconnect() {

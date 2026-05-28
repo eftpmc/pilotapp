@@ -70,10 +70,14 @@ final class WorkViewModel: ObservableObject {
         }
     }
 
-    /// Assign a specific agent to a pending task. Returns the created session.
+    /// Assign a specific agent to a pending task. Passes the API key so the server auto-starts the agent.
     func assignTask(_ task: WorkTask, to agent: Agent) async -> AgentSession? {
+        guard let apiKey = KeychainService.load(for: "apiKey_agent_\(agent.id)") else {
+            self.error = "No API key configured for \(agent.name)"
+            return nil
+        }
         do {
-            let response = try await APIClient.shared.assignTask(taskId: task.id, agentId: agent.id)
+            let response = try await APIClient.shared.assignTask(taskId: task.id, agentId: agent.id, apiKey: apiKey)
             if let idx = tasks.firstIndex(where: { $0.id == task.id }) {
                 tasks[idx] = response.task
             }
@@ -85,10 +89,17 @@ final class WorkViewModel: ObservableObject {
         }
     }
 
-    /// Auto-dispatch: assign idle agents to pending tasks by role.
+    /// Auto-dispatch: assign idle agents to pending tasks by role. Passes API keys for auto-start.
     func runQueue() async -> [(task: WorkTask, session: AgentSession)] {
+        // Collect API keys for all ready agents so the server can auto-start them
+        var agentApiKeys: [String: String] = [:]
+        for agent in readyAgents {
+            if let key = KeychainService.load(for: "apiKey_agent_\(agent.id)") {
+                agentApiKeys[agent.id] = key
+            }
+        }
         do {
-            let response = try await APIClient.shared.runQueue()
+            let response = try await APIClient.shared.runQueue(agentApiKeys: agentApiKeys)
             for pair in response.dispatched {
                 if let idx = tasks.firstIndex(where: { $0.id == pair.task.id }) {
                     tasks[idx] = pair.task
