@@ -1,0 +1,14 @@
+services:
+  server:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      PROJECTS_ROOT: /data/projects
+    volumes:
+      - pilot_data:/data
+    restart: unless-stopped
+
+volumes:
+  pilot_data:

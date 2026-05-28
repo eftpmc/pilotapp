@@ -1,0 +1,15 @@
+# macOS
+.DS_Store
+
+# iOS / Xcode
+app/*.xcodeproj/xcuserdata/
+app/*.xcworkspace/xcuserdata/
+app/**/*.xcuserstate
+app/DerivedData/
+app/.build/
+
+# Node / Server
+server/node_modules/
+server/dist/
+server/data/
+server/.env
