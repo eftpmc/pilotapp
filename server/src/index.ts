@@ -10,8 +10,16 @@ import agentRoutes from './routes/agents';
 import taskRoutes from './routes/tasks';
 import githubRoutes from './routes/github';
 import settingsRoutes from './routes/settings';
+import connectionsRoutes from './routes/connections';
+import specsRoutes from './routes/specs';
 import { agentHealth } from './services/agents';
 import { attachWebSocket } from './services/socket';
+import { db } from './db';
+
+// On startup: any sessions that were running/idle when the server last died
+// have no live process anymore — mark them as error so they can be retried or discarded.
+db.prepare("UPDATE sessions SET status = 'error' WHERE status = 'running' OR status = 'idle'").run();
+db.prepare("UPDATE tasks SET status = 'failed', completed_at = ? WHERE status = 'running'").run(new Date().toISOString());
 
 const app = express();
 app.use(express.json());
@@ -23,6 +31,8 @@ app.use(express.static(publicDir));
 app.use('/auth', authRoutes);
 app.use('/projects', projectRoutes);
 app.use('/agents', agentRoutes);
+app.use('/connections', connectionsRoutes);
+app.use('/specs', specsRoutes);
 app.use('/tasks', taskRoutes);
 app.use('/sessions', sessionRoutes);
 app.use('/github', githubRoutes);

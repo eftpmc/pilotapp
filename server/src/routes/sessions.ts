@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { v4 as uuid } from 'uuid';
 import { z } from 'zod';
 import { db } from '../db';
-import { createWorktree, removeWorktree, getDiff, mergeWorktree } from '../services/git';
+import { createWorktree, removeWorktree, getDiff, mergeWorktree, commitWorktree } from '../services/git';
 import { killAgent, runAgent } from '../services/agents';
 import { authMiddleware, userId } from '../middleware/auth';
 
@@ -13,7 +13,7 @@ router.use(authMiddleware);
 
 interface SessionRow {
   id: string; user_id: string; agent_id: string; project_id: string;
-  work_task_id: string | null; provider: string; branch: string;
+  work_task_id: string | null; spec_id: string | null; provider: string; branch: string;
   worktree_path: string; status: string; created_at: string;
 }
 interface ProjectRow { id: string; name: string; repo_path: string; role: string; created_at: string }
@@ -23,7 +23,8 @@ interface TaskRow    { id: string; prompt: string; status: string }
 function toSession(r: SessionRow) {
   return {
     id: r.id, agentId: r.agent_id, projectId: r.project_id,
-    workTaskId: r.work_task_id ?? undefined, provider: r.provider as import('../types').AgentProvider,
+    workTaskId: r.work_task_id ?? undefined, specId: r.spec_id ?? undefined,
+    provider: r.provider as import('../types').AgentProvider,
     branch: r.branch, worktreePath: r.worktree_path, status: r.status, createdAt: r.created_at,
   };
 }
@@ -101,6 +102,8 @@ router.post('/:id/merge', async (req: Request, res: Response) => {
   const project = row ? db.prepare('SELECT * FROM projects WHERE id = ?').get(row.project_id) as ProjectRow | undefined : undefined;
   if (!row || !project) { res.status(404).json({ error: 'Not found' }); return; }
 
+  // Commit anything the agent left uncommitted before merging
+  await commitWorktree(row.worktree_path).catch(() => {});
   await mergeWorktree(
     { id: project.id, name: project.name, repoPath: project.repo_path, role: project.role as any, createdAt: project.created_at },
     row.branch
@@ -120,8 +123,16 @@ router.post('/:id/run', (req: Request, res: Response) => {
 
   const uid = userId(req);
   const row = db.prepare('SELECT * FROM sessions WHERE id = ? AND user_id = ?').get(req.params.id, uid) as SessionRow | undefined;
-  if (!row)                    { res.status(404).json({ error: 'Not found' }); return; }
-  if (row.status !== 'idle')   { res.status(400).json({ error: 'Session is not idle' }); return; }
+  if (!row) { res.status(404).json({ error: 'Not found' }); return; }
+  if (row.status !== 'idle' && row.status !== 'error') { res.status(400).json({ error: 'Session cannot be run in its current state' }); return; }
+
+  // Reset errored session back to idle before re-running
+  if (row.status === 'error') {
+    db.prepare("UPDATE sessions SET status = 'idle' WHERE id = ?").run(row.id);
+    if (row.work_task_id) {
+      db.prepare("UPDATE tasks SET status = 'running', completed_at = NULL WHERE id = ?").run(row.work_task_id);
+    }
+  }
 
   let prompt = parsed.data.prompt;
   if (!prompt && row.work_task_id) {
@@ -147,22 +158,24 @@ router.delete('/:id', async (req: Request, res: Response) => {
 
   if (row.work_task_id) {
     const task = db.prepare('SELECT status FROM tasks WHERE id = ?').get(row.work_task_id) as TaskRow | undefined;
-    if (task?.status === 'running') {
+    if (task?.status === 'running' || task?.status === 'failed') {
       db.prepare(
-        "UPDATE tasks SET status = 'pending', agent_id = NULL, session_id = NULL, started_at = NULL WHERE id = ?"
+        "UPDATE tasks SET status = 'pending', agent_id = NULL, session_id = NULL, started_at = NULL, completed_at = NULL WHERE id = ?"
       ).run(row.work_task_id);
     }
   }
 
+  // Delete the session record first so discard always succeeds even if worktree cleanup fails
+  db.prepare('DELETE FROM sessions WHERE id = ?').run(row.id);
+
   const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(row.project_id) as ProjectRow | undefined;
   if (project) {
-    await removeWorktree(
+    removeWorktree(
       { id: project.id, name: project.name, repoPath: project.repo_path, role: project.role as any, createdAt: project.created_at },
       row.worktree_path
     ).catch(() => {});
   }
 
-  db.prepare('DELETE FROM sessions WHERE id = ?').run(row.id);
   res.status(204).send();
 });
 

@@ -15,10 +15,27 @@ function credentialStatus(uid: string) {
   };
 }
 
-export function resolveApiKey(uid: string, provider: string, explicit?: string): string | null {
+export function resolveApiKey(uid: string, provider: string, agentId?: string, explicit?: string): string | null {
   if (explicit) return explicit;
+
+  // If agentId provided, try to look up the connection's api_key
+  if (agentId) {
+    const agentRow = db.prepare('SELECT connection_id FROM agents WHERE id = ?').get(agentId) as
+      | { connection_id: string | null }
+      | undefined;
+    if (agentRow?.connection_id) {
+      const connRow = db.prepare('SELECT api_key FROM connections WHERE id = ?').get(agentRow.connection_id) as
+        | { api_key: string }
+        | undefined;
+      if (connRow?.api_key) return connRow.api_key;
+    }
+  }
+
+  // Fall back to env vars
   const envKey = provider === 'claude' ? process.env.ANTHROPIC_API_KEY : process.env.OPENAI_API_KEY;
   if (envKey) return envKey;
+
+  // Fall back to old credentials table
   const row = db.prepare('SELECT api_key FROM credentials WHERE user_id = ? AND provider = ?').get(uid, provider) as
     | { api_key: string }
     | undefined;

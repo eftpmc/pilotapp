@@ -151,11 +151,6 @@ router.post('/:id/assign', async (req: Request, res: Response) => {
   const project = db.prepare('SELECT * FROM projects WHERE id = ? AND user_id = ?').get(task.project_id, uid) as ProjectRow | undefined;
   if (!project) { res.status(404).json({ error: 'Project not found' }); return; }
 
-  if (project.role !== 'any' && project.role !== agent.provider) {
-    res.status(400).json({ error: `Project role '${project.role}' incompatible with agent provider '${agent.provider}'` });
-    return;
-  }
-
   const sessionId   = uuid();
   const branch      = `agent/${sessionId}`;
   const worktreePath = await createWorktree(
@@ -177,7 +172,7 @@ router.post('/:id/assign', async (req: Request, res: Response) => {
   const updatedTask    = db.prepare('SELECT * FROM tasks WHERE id = ?').get(task.id) as TaskRow;
   const updatedSession = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId) as SessionRow;
 
-  void runAgent(toSession(updatedSession), task.prompt, uid);
+  void runAgent(toSession(updatedSession), task.prompt, uid, agent.id);
 
   res.status(201).json({ task: toTask(updatedTask), session: toSession(updatedSession) });
 });
@@ -207,8 +202,8 @@ router.post('/queue/run', async (req: Request, res: Response) => {
   for (const agent of idleAgents) {
     const next = pendingTasks.find((t) => {
       if (assignedTaskIds.has(t.id)) return false;
-      const proj = db.prepare('SELECT role FROM projects WHERE id = ?').get(t.project_id) as { role: string } | undefined;
-      return proj && (proj.role === 'any' || proj.role === agent.provider);
+      const proj = db.prepare('SELECT id FROM projects WHERE id = ?').get(t.project_id) as { id: string } | undefined;
+      return !!proj;
     });
     if (!next) continue;
 
@@ -233,7 +228,7 @@ router.post('/queue/run', async (req: Request, res: Response) => {
     const updatedTask    = db.prepare('SELECT * FROM tasks WHERE id = ?').get(next.id) as TaskRow;
     const updatedSession = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId) as SessionRow;
 
-    void runAgent(toSession(updatedSession), next.prompt, uid);
+    void runAgent(toSession(updatedSession), next.prompt, uid, agent.id);
 
     dispatched.push({ task: toTask(updatedTask), session: toSession(updatedSession) });
     assignedTaskIds.add(next.id);

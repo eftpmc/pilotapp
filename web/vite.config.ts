@@ -17,6 +17,8 @@ export default defineConfig({
       '/tasks':    'http://localhost:3000',
       '/sessions': 'http://localhost:3000',
       '/settings': 'http://localhost:3000',
+      '/connections': 'http://localhost:3000',
+      '/specs':       'http://localhost:3000',
       '/github':   'http://localhost:3000',
       '/health':   'http://localhost:3000',
       '/ws': { target: 'ws://localhost:3000', ws: true },

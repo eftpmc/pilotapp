@@ -1,4 +1,6 @@
 import { spawn, execSync } from 'child_process';
+import fs from 'fs';
+import path from 'path';
 import { AgentProvider } from '../types';
 import WebSocket from 'ws';
 import { db } from '../db';
@@ -15,6 +17,7 @@ export interface SessionRef {
   agentId: string;
   projectId: string;
   workTaskId?: string;
+  specId?: string;
   provider: AgentProvider;
   branch: string;
   worktreePath: string;
@@ -69,11 +72,22 @@ function findBinary(name: string): string | null {
 // Command builders
 // ---------------------------------------------------------------------------
 
-function buildCommand(provider: AgentProvider, prompt: string): { cmd: string; args: string[] } {
+function resolveModel(agentId: string): string | undefined {
+  const agent = db.prepare('SELECT connection_id FROM agents WHERE id = ?').get(agentId) as { connection_id: string | null } | undefined;
+  if (!agent?.connection_id) return undefined;
+  const conn = db.prepare('SELECT model FROM connections WHERE id = ?').get(agent.connection_id) as { model: string | null } | undefined;
+  return conn?.model ?? undefined;
+}
+
+function buildCommand(provider: AgentProvider, prompt: string, model?: string): { cmd: string; args: string[] } {
   if (provider === 'claude') {
-    return { cmd: 'claude', args: ['-p', prompt, '--dangerously-skip-permissions', '--output-format', 'stream-json'] };
+    const args = ['-p', prompt, '--dangerously-skip-permissions', '--verbose', '--output-format', 'stream-json'];
+    if (model) args.push('--model', model);
+    return { cmd: 'claude', args };
   }
-  return { cmd: 'codex', args: ['--approval-policy', 'auto', '-q', prompt] };
+  const args = ['--approval-policy', 'auto', '-q', prompt];
+  if (model) args.push('--model', model);
+  return { cmd: 'codex', args };
 }
 
 function apiKeyEnv(provider: AgentProvider, apiKey: string): Record<string, string> {
@@ -94,15 +108,32 @@ const active    = new Map<string, ActiveSession>();
 const completed = new Map<string, string[]>();
 
 // ---------------------------------------------------------------------------
+// Spec capture (planning sessions)
+// ---------------------------------------------------------------------------
+
+function captureSpec(specId: string, worktreePath: string): void {
+  const now = new Date().toISOString();
+  try {
+    const content = fs.readFileSync(path.join(worktreePath, 'SPEC.md'), 'utf-8');
+    db.prepare('UPDATE specs SET content = ?, status = ?, updated_at = ? WHERE id = ?')
+      .run(content.trim(), 'draft', now, specId);
+  } catch {
+    db.prepare('UPDATE specs SET status = ?, updated_at = ? WHERE id = ?')
+      .run('draft', now, specId);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Core runner
 // ---------------------------------------------------------------------------
 
-export async function runAgent(session: SessionRef, prompt: string, userId: string, explicitKey?: string): Promise<void> {
+export async function runAgent(session: SessionRef, prompt: string, userId: string, agentId?: string, explicitKey?: string): Promise<void> {
   if (active.has(session.id)) return;
 
-  const resolvedKey = resolveApiKey(userId, session.provider, explicitKey);
+  const resolvedKey = resolveApiKey(userId, session.provider, agentId, explicitKey);
+  const model = resolveModel(session.agentId);
 
-  const { cmd, args } = buildCommand(session.provider, prompt);
+  const { cmd, args } = buildCommand(session.provider, prompt, model);
   const env = resolvedKey
     ? { ...resolvedEnv(process.env as Record<string, string | undefined>), ...apiKeyEnv(session.provider, resolvedKey) }
     : resolvedEnv(process.env as Record<string, string | undefined>);
@@ -118,15 +149,10 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
     }
   };
 
+  // No API key is fine — the CLI will use machine auth (OAuth subscription).
+  // Only warn; don't abort.
   if (!resolvedKey) {
-    broadcast('stderr', `[pilot] No API key configured for provider '${session.provider}'. Set one in Settings.`);
-    broadcast('done', '1');
-    active.delete(session.id);
-    completed.set(session.id, [...entry.buffer]);
-    setTimeout(() => completed.delete(session.id), COMPLETED_TTL_MS);
-    updateSessionStatus(session.id, 'error');
-    updateTaskStatusForSession(session.id, 'failed');
-    return;
+    broadcast('stderr', `[pilot] No API key set — using machine auth (OAuth subscription) for ${session.provider}.`);
   }
 
   const bin = findBinary(cmd);
@@ -146,7 +172,7 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
 
   broadcast('stderr', `[pilot] Starting ${cmd} in ${session.worktreePath}`);
 
-  const proc = spawn(bin, args, { cwd: session.worktreePath, env });
+  const proc = spawn(bin, args, { cwd: session.worktreePath, env, stdio: ['ignore', 'pipe', 'pipe'] });
   entry.proc = proc;
   updateSessionStatus(session.id, 'running');
 
@@ -166,6 +192,7 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
     active.delete(session.id);
     updateSessionStatus(session.id, exitCode === 0 ? 'done' : 'error');
     updateTaskStatusForSession(session.id, exitCode === 0 ? 'done' : 'failed');
+    if (session.specId) captureSpec(session.specId, session.worktreePath);
   };
 
   proc.on('close', (code, signal) => finish(code, signal));

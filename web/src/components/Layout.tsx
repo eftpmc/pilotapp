@@ -1,12 +1,8 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-
-const nav = [
-  { to: '/work',     label: 'Work' },
-  { to: '/agents',   label: 'Agents' },
-  { to: '/projects', label: 'Projects' },
-]
+import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { useTheme } from '../theme'
 
 export default function Layout() {
+  const { T } = useTheme()
   const navigate = useNavigate()
 
   function signOut() {
@@ -15,34 +11,25 @@ export default function Layout() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#0a0a0a] text-white">
-      <header className="border-b border-white/8 px-6 h-12 flex items-center gap-6 shrink-0">
-        <span className="font-semibold text-sm tracking-wide text-white">Pilot</span>
-        <nav className="flex items-center gap-1 flex-1">
-          {nav.map(({ to, label }) => (
-            <NavLink
-              key={to} to={to}
-              className={({ isActive }) =>
-                `px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  isActive ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white/80'
-                }`
-              }
-            >
-              {label}
-            </NavLink>
-          ))}
-        </nav>
-        <NavLink to="/settings" className={({ isActive }) =>
-          `text-sm transition-colors ${isActive ? 'text-white' : 'text-white/40 hover:text-white/70'}`
-        }>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: T.bg, fontFamily: T.sans, color: T.text }}>
+      <header style={{ height: 52, background: T.card, borderBottom: `1px solid ${T.border}`, display: 'flex', alignItems: 'center', gap: 20, padding: '0 20px', flexShrink: 0 }}>
+        <Link to="/" style={{ fontFamily: T.mono, fontWeight: 700, fontSize: 15, letterSpacing: '-0.02em', color: T.text, textDecoration: 'none' }}>
+          pilot
+        </Link>
+        <div style={{ flex: 1 }} />
+        <NavLink to="/settings" style={({ isActive }) => ({
+          fontFamily: T.sans, fontSize: 13, fontWeight: isActive ? 600 : 400,
+          color: isActive ? T.text : T.muted, textDecoration: 'none',
+          background: isActive ? T.surface2 : 'transparent',
+          padding: '4px 10px', borderRadius: 7,
+        })}>
           Settings
         </NavLink>
-        <button onClick={signOut} className="text-sm text-white/30 hover:text-white/60 transition-colors">
+        <button onClick={signOut} style={{ fontFamily: T.sans, fontSize: 13, color: T.faint, background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px 0 4px 4px' }}>
           Sign out
         </button>
       </header>
-
-      <main className="flex-1 overflow-auto">
+      <main style={{ flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         <Outlet />
       </main>
     </div>

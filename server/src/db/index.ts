@@ -27,6 +27,15 @@ db.exec(`
     created_at  TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS connections (
+    id         TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name       TEXT NOT NULL,
+    type       TEXT NOT NULL,
+    api_key    TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS agents (
     id          TEXT PRIMARY KEY,
     user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -63,6 +72,19 @@ db.exec(`
     created_at    TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS specs (
+    id          TEXT PRIMARY KEY,
+    user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    project_id  TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    title       TEXT NOT NULL,
+    brief       TEXT NOT NULL DEFAULT '',
+    content     TEXT NOT NULL DEFAULT '',
+    session_id  TEXT,
+    status      TEXT NOT NULL DEFAULT 'draft',
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS credentials (
     user_id   TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     provider  TEXT NOT NULL,
@@ -70,3 +92,11 @@ db.exec(`
     PRIMARY KEY (user_id, provider)
   );
 `);
+
+// Migrations — safe to re-run, each ALTER is wrapped in try/catch
+try { db.exec('ALTER TABLE agents ADD COLUMN connection_id TEXT REFERENCES connections(id)'); } catch {}
+try { db.exec('ALTER TABLE connections ADD COLUMN model TEXT'); } catch {}
+try { db.exec('ALTER TABLE projects ADD COLUMN remote_url TEXT'); } catch {}
+try { db.exec('ALTER TABLE projects ADD COLUMN github_token TEXT'); } catch {}
+try { db.exec('ALTER TABLE projects ADD COLUMN local_path TEXT'); } catch {}
+try { db.exec('ALTER TABLE sessions ADD COLUMN spec_id TEXT REFERENCES specs(id)'); } catch {}

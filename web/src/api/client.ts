@@ -7,11 +7,17 @@ export type ProjectRole   = 'any' | 'claude' | 'codex';
 export type TaskStatus    = 'pending' | 'running' | 'done' | 'failed';
 export type SessionStatus = 'idle' | 'running' | 'done' | 'error';
 
+export interface Connection {
+  id: string; name: string; type: AgentProvider; model?: string;
+  hasKey: boolean;   // true = API key stored, false = machine auth (subscription)
+  createdAt: string;
+}
 export interface Project {
-  id: string; name: string; repoPath: string; role: ProjectRole; createdAt: string;
+  id: string; name: string; repoPath: string; role: ProjectRole;
+  remoteUrl?: string; localPath?: string; createdAt: string;
 }
 export interface Agent {
-  id: string; name: string; provider: AgentProvider; createdAt: string;
+  id: string; name: string; provider: AgentProvider; connectionId?: string; createdAt: string;
 }
 export interface Task {
   id: string; projectId: string; title: string; prompt: string;
@@ -19,9 +25,16 @@ export interface Task {
   createdAt: string; startedAt?: string; completedAt?: string;
 }
 export interface Session {
-  id: string; agentId: string; projectId: string; workTaskId?: string;
+  id: string; agentId: string; projectId: string; workTaskId?: string; specId?: string;
   provider: AgentProvider; branch: string; worktreePath: string;
   status: SessionStatus; createdAt: string;
+}
+
+export type SpecStatus = 'planning' | 'draft'
+export interface Spec {
+  id: string; projectId: string; title: string; brief: string;
+  content: string; sessionId?: string; status: SpecStatus;
+  createdAt: string; updatedAt: string;
 }
 export interface CredentialStatus { claude: boolean; codex: boolean }
 
@@ -69,9 +82,23 @@ export const auth = {
 
 export const projects = {
   list:   () => req<Project[]>('/projects'),
-  create: (body: { name: string; role?: ProjectRole; githubCloneUrl?: string; githubToken?: string }) =>
+  create: (body: { name: string; githubCloneUrl?: string; githubToken?: string; localPath?: string }) =>
     req<Project>('/projects', { method: 'POST', body: JSON.stringify(body) }),
-  delete: (id: string) => req<void>(`/projects/${id}`, { method: 'DELETE' }),
+  push:    (id: string) => req<{ pushed: boolean }>(`/projects/${id}/push`, { method: 'POST' }),
+  files:   (id: string) => req<{ files: string[] }>(`/projects/${id}/files`),
+  file:    (id: string, path: string) => req<{ content: string }>(`/projects/${id}/file?path=${encodeURIComponent(path)}`),
+  delete:  (id: string) => req<void>(`/projects/${id}`, { method: 'DELETE' }),
+};
+
+// ---------------------------------------------------------------------------
+// Connections
+// ---------------------------------------------------------------------------
+
+export const connections = {
+  list:   () => req<Connection[]>('/connections'),
+  create: (body: { name: string; type: AgentProvider; apiKey?: string; model?: string }) =>
+    req<Connection>('/connections', { method: 'POST', body: JSON.stringify(body) }),
+  delete: (id: string) => req<void>(`/connections/${id}`, { method: 'DELETE' }),
 };
 
 // ---------------------------------------------------------------------------
@@ -80,7 +107,7 @@ export const projects = {
 
 export const agents = {
   list:   () => req<Agent[]>('/agents'),
-  create: (body: { name: string; provider: AgentProvider }) =>
+  create: (body: { name: string; connectionId: string }) =>
     req<Agent>('/agents', { method: 'POST', body: JSON.stringify(body) }),
   delete: (id: string) => req<void>(`/agents/${id}`, { method: 'DELETE' }),
 };
@@ -120,6 +147,20 @@ export const sessions = {
   run:    (id: string, prompt?: string) =>
     req<{ started: boolean }>(`/sessions/${id}/run`, { method: 'POST', body: JSON.stringify({ prompt }) }),
   delete: (id: string) => req<void>(`/sessions/${id}`, { method: 'DELETE' }),
+};
+
+// ---------------------------------------------------------------------------
+// Specs
+// ---------------------------------------------------------------------------
+
+export const specs = {
+  list:    (projectId: string) => req<Spec[]>(`/specs?projectId=${projectId}`),
+  create:  (body: { projectId: string; title: string; brief?: string; agentId?: string }) =>
+    req<Spec>('/specs', { method: 'POST', body: JSON.stringify(body) }),
+  update:  (id: string, body: { title?: string; content?: string }) =>
+    req<Spec>(`/specs/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  delete:  (id: string) => req<void>(`/specs/${id}`, { method: 'DELETE' }),
+  execute: (id: string) => req<{ taskId: string; projectId: string }>(`/specs/${id}/execute`, { method: 'POST' }),
 };
 
 // ---------------------------------------------------------------------------
