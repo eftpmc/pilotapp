@@ -5,7 +5,7 @@
 export type AgentProvider = 'claude' | 'codex';
 export type ProjectRole   = 'any' | 'claude' | 'codex';
 export type TaskStatus    = 'pending' | 'running' | 'done' | 'failed';
-export type SessionStatus = 'idle' | 'running' | 'done' | 'error';
+export type SessionStatus = 'idle' | 'running' | 'done' | 'error' | 'merged';
 
 export interface Connection {
   id: string; name: string; type: AgentProvider; model?: string;
@@ -21,7 +21,7 @@ export interface Agent {
 }
 export interface Task {
   id: string; projectId: string; title: string; prompt: string;
-  baseBranch: string; status: TaskStatus; agentId?: string; sessionId?: string;
+  baseBranch: string; status: TaskStatus; priority: number; agentId?: string; sessionId?: string;
   createdAt: string; startedAt?: string; completedAt?: string;
 }
 export interface Session {
@@ -123,7 +123,7 @@ export const tasks = {
   },
   create: (body: { projectId: string; title: string; prompt: string; baseBranch?: string }) =>
     req<Task>('/tasks', { method: 'POST', body: JSON.stringify(body) }),
-  update: (id: string, body: { title?: string; prompt?: string; baseBranch?: string }) =>
+  update: (id: string, body: { title?: string; prompt?: string; baseBranch?: string; priority?: number }) =>
     req<Task>(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   delete: (id: string) => req<void>(`/tasks/${id}`, { method: 'DELETE' }),
   assign: (taskId: string, agentId: string) =>
@@ -140,10 +140,12 @@ export const sessions = {
     const qs = new URLSearchParams(params as Record<string, string>).toString();
     return req<Session[]>(`/sessions${qs ? `?${qs}` : ''}`);
   },
+  get:    (id: string) => req<Session>(`/sessions/${id}`),
   create: (body: { agentId: string; projectId: string; baseBranch?: string }) =>
     req<Session>('/sessions', { method: 'POST', body: JSON.stringify(body) }),
   diff:   (id: string) => req<{ diff: string }>(`/sessions/${id}/diff`),
   merge:  (id: string) => req<{ merged: boolean }>(`/sessions/${id}/merge`, { method: 'POST' }),
+  stop:   (id: string) => req<{ stopped: boolean }>(`/sessions/${id}/stop`, { method: 'POST' }),
   run:    (id: string, prompt?: string) =>
     req<{ started: boolean }>(`/sessions/${id}/run`, { method: 'POST', body: JSON.stringify({ prompt }) }),
   delete: (id: string) => req<void>(`/sessions/${id}`, { method: 'DELETE' }),

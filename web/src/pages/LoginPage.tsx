@@ -1,16 +1,17 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { auth } from '../api/client'
-import { useTheme } from '../theme'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { cn } from '@/lib/utils'
 
 export default function LoginPage() {
-  const { T } = useTheme()
-  const navigate = useNavigate()
-  const [email, setEmail]       = useState('')
+  const navigate  = useNavigate()
+  const [email,    setEmail]    = useState('')
   const [password, setPassword] = useState('')
-  const [mode, setMode]         = useState<'login' | 'register'>('login')
-  const [error, setError]       = useState('')
-  const [loading, setLoading]   = useState(false)
+  const [mode,     setMode]     = useState<'login' | 'register'>('login')
+  const [error,    setError]    = useState('')
+  const [loading,  setLoading]  = useState(false)
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -28,51 +29,83 @@ export default function LoginPage() {
     }
   }
 
-  const inputStyle: React.CSSProperties = {
-    width: '100%', boxSizing: 'border-box', background: T.surface,
-    border: `1px solid ${T.border}`, borderRadius: 10, padding: '11px 14px',
-    fontFamily: T.sans, fontSize: 14, color: T.text, outline: 'none',
-  }
-
   return (
-    <div style={{ minHeight: '100vh', background: T.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, fontFamily: T.sans }}>
-      <div style={{ width: '100%', maxWidth: 360 }}>
+    <div className="min-h-screen bg-background flex items-center justify-center p-4 relative overflow-hidden">
 
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <span style={{ fontFamily: T.mono, fontWeight: 700, fontSize: 22, color: T.text, letterSpacing: '-0.02em' }}>pilot</span>
+      {/* Dot grid */}
+      <div className="absolute inset-0 opacity-100" style={{
+        backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.055) 1px, transparent 1px)',
+        backgroundSize: '28px 28px',
+      }} />
+
+      {/* Ambient glow */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[500px] pointer-events-none" style={{
+        background: 'radial-gradient(ellipse at center, var(--primary) 0%, transparent 65%)',
+        opacity: 0.06,
+      }} />
+
+      <div className="relative w-full max-w-[360px] flex flex-col items-center gap-8">
+
+        {/* Wordmark */}
+        <div className="text-center">
+          <h1 className="font-mono font-bold text-4xl tracking-tight text-foreground">pilot</h1>
+          <p className="text-sm text-muted-foreground mt-2">AI coding agents, under your control</p>
         </div>
 
-        <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: '24px 22px' }}>
-          <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <input
-              type="email" value={email} onChange={e => setEmail(e.target.value)}
-              placeholder="Email" required autoFocus style={inputStyle}
+        {/* Card */}
+        <div className="w-full bg-card border border-border/80 rounded-2xl overflow-hidden"
+          style={{ boxShadow: '0 0 0 1px rgba(255,255,255,0.04), 0 24px 60px rgba(0,0,0,0.5)' }}>
+
+          {/* Mode tabs */}
+          <div className="flex border-b border-border/60">
+            {(['login', 'register'] as const).map(m => (
+              <button key={m} onClick={() => { setMode(m); setError('') }}
+                className={cn(
+                  'flex-1 py-3 text-sm font-medium transition-colors cursor-pointer bg-transparent border-none capitalize',
+                  mode === m
+                    ? 'text-foreground border-b-2 border-primary -mb-px'
+                    : 'text-muted-foreground hover:text-foreground'
+                )}>
+                {m === 'login' ? 'Sign in' : 'Register'}
+              </button>
+            ))}
+          </div>
+
+          <form onSubmit={submit} className="flex flex-col gap-3 p-6">
+            <Input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="Email address"
+              required
+              autoFocus
+              className="h-10 bg-muted/40 border-border/60 focus:border-primary/60"
             />
-            <input
-              type="password" value={password} onChange={e => setPassword(e.target.value)}
-              placeholder="Password" required minLength={8} style={inputStyle}
+            <Input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="Password"
+              required
+              minLength={8}
+              className="h-10 bg-muted/40 border-border/60 focus:border-primary/60"
             />
 
             {error && (
-              <p style={{ fontFamily: T.sans, fontSize: 13, color: T.danger, margin: 0 }}>{error}</p>
+              <p className="text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">
+                {error}
+              </p>
             )}
 
-            <button type="submit" disabled={loading} style={{
-              width: '100%', padding: '11px 0', fontFamily: T.sans, fontSize: 14, fontWeight: 600,
-              color: '#FFFFFF', background: T.tint, border: 'none', borderRadius: 10,
-              cursor: loading ? 'default' : 'pointer', opacity: loading ? 0.6 : 1, marginTop: 4,
-            }}>
+            <Button type="submit" disabled={loading} className="h-10 mt-1 font-semibold">
               {loading ? '…' : mode === 'login' ? 'Sign in' : 'Create account'}
-            </button>
+            </Button>
           </form>
         </div>
 
-        <button
-          onClick={() => setMode(m => m === 'login' ? 'register' : 'login')}
-          style={{ marginTop: 16, width: '100%', background: 'transparent', border: 'none', fontFamily: T.sans, fontSize: 13, color: T.muted, cursor: 'pointer' }}
-        >
-          {mode === 'login' ? "Don't have an account? Register" : 'Already have an account? Sign in'}
-        </button>
+        <p className="text-xs text-muted-foreground/50 text-center">
+          Self-hosted · Your keys stay on your server
+        </p>
       </div>
     </div>
   )

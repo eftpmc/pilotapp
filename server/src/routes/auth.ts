@@ -19,6 +19,13 @@ router.post('/register', async (req: Request, res: Response) => {
     return;
   }
 
+  // Allow registration only for the first user, or when explicitly enabled via env
+  const existingCount = (db.prepare('SELECT COUNT(*) as c FROM users').get() as { c: number }).c;
+  if (existingCount > 0 && process.env.ALLOW_REGISTRATION !== 'true') {
+    res.status(403).json({ error: 'Registration is disabled' });
+    return;
+  }
+
   const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(parsed.data.email);
   if (existing) {
     res.status(409).json({ error: 'Email already registered' });

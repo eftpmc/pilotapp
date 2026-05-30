@@ -2,7 +2,10 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { AuthPayload } from '../types';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
+export const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
+if (!process.env.JWT_SECRET && process.env.NODE_ENV !== 'development') {
+  console.warn('[pilot] WARNING: JWT_SECRET is not set. Using insecure default. Set JWT_SECRET in production.');
+}
 
 export function authMiddleware(req: Request, res: Response, next: NextFunction): void {
   const header = req.headers.authorization;

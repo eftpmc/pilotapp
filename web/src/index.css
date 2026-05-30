@@ -1,17 +1,165 @@
 @import "tailwindcss";
 
-* { box-sizing: border-box; }
+@custom-variant dark (&:is(.dark *));
 
-body {
-  margin: 0;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@theme inline {
+  --color-background:           var(--background);
+  --color-foreground:           var(--foreground);
+  --color-card:                 var(--card);
+  --color-card-foreground:      var(--card-foreground);
+  --color-muted:                var(--muted);
+  --color-muted-foreground:     var(--muted-foreground);
+  --color-accent:               var(--accent);
+  --color-accent-foreground:    var(--accent-foreground);
+  --color-border:               var(--border);
+  --color-input:                var(--input);
+  --color-ring:                 var(--ring);
+  --color-primary:              var(--primary);
+  --color-primary-foreground:   var(--primary-foreground);
+  --color-secondary:            var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-destructive:          var(--destructive);
+  --radius-sm:  calc(var(--radius) - 4px);
+  --radius-md:  calc(var(--radius) - 2px);
+  --radius-lg:  var(--radius);
+  --radius-xl:  calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --shadow-card:        var(--_shadow-card);
+  --shadow-card-hover:  var(--_shadow-card-hover);
+  --shadow-dialog:      var(--_shadow-dialog);
+  --glow-green:         var(--_glow-green);
+  --glow-red:           var(--_glow-red);
+  --glow-amber:         var(--_glow-amber);
 }
 
-#root {
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
+/* ─── Dark (Railway-inspired default) ───────────────────────────────────── */
+/* Hex values first — fallback for browsers without oklch support (Chrome <111) */
+
+:root {
+  --radius: 0.75rem;
+
+  --background:           #0d0e12;
+  --foreground:           #e8eaee;
+  --card:                 #15181f;
+  --card-foreground:      #e8eaee;
+  --muted:                #1c1f28;
+  --muted-foreground:     #6e7487;
+  --accent:               #1c1f28;
+  --accent-foreground:    #e8eaee;
+  --border:               rgba(255,255,255,0.09);
+  --input:                rgba(255,255,255,0.09);
+  --ring:                 #555870;
+  --primary:              #6b8ef0;
+  --primary-foreground:   #ffffff;
+  --secondary:            #1c1f28;
+  --secondary-foreground: #e8eaee;
+  --destructive:          #e05252;
+  --green:                #22c55e;
+  --amber:                #f59e0b;
+
+  --_shadow-card:        0 1px 0 rgba(255,255,255,0.05), 0 2px 8px rgba(0,0,0,0.4);
+  --_shadow-card-hover:  0 1px 0 rgba(255,255,255,0.07), 0 8px 24px rgba(0,0,0,0.55);
+  --_shadow-dialog:      0 32px 80px rgba(0,0,0,0.65), 0 8px 32px rgba(0,0,0,0.4);
+  --_glow-green:         0 0 0 1px rgba(34,197,94,0.25), 0 4px 20px rgba(34,197,94,0.10);
+  --_glow-red:           0 0 0 1px rgba(239,68,68,0.30), 0 4px 20px rgba(239,68,68,0.10);
+  --_glow-amber:         0 0 0 1px rgba(245,158,11,0.30), 0 4px 20px rgba(245,158,11,0.08);
 }
+
+/* Modern browsers get the richer oklch values */
+@supports (color: oklch(0 0 0)) {
+  :root {
+    --background:           oklch(0.095 0.006 264);
+    --foreground:           oklch(0.93  0.005 264);
+    --card:                 oklch(0.135 0.007 264);
+    --card-foreground:      oklch(0.93  0.005 264);
+    --muted:                oklch(0.175 0.007 264);
+    --muted-foreground:     oklch(0.48  0.012 264);
+    --accent:               oklch(0.175 0.007 264);
+    --accent-foreground:    oklch(0.93  0.005 264);
+    --border:               oklch(1 0 0 / 0.09);
+    --input:                oklch(1 0 0 / 0.09);
+    --ring:                 oklch(0.40  0.01  264);
+    --primary:              oklch(0.65  0.18  254);
+    --primary-foreground:   oklch(1 0 0);
+    --secondary:            oklch(0.175 0.007 264);
+    --secondary-foreground: oklch(0.93  0.005 264);
+    --destructive:          oklch(0.63  0.22  22);
+    --_shadow-card:        0 1px 0 oklch(1 0 0 / 0.05), 0 2px 8px oklch(0 0 0 / 0.4);
+    --_shadow-card-hover:  0 1px 0 oklch(1 0 0 / 0.07), 0 8px 24px oklch(0 0 0 / 0.55);
+    --_shadow-dialog:      0 32px 80px oklch(0 0 0 / 0.65), 0 8px 32px oklch(0 0 0 / 0.4);
+  }
+}
+
+/* ─── Light override ────────────────────────────────────────────────────── */
+
+.light {
+  --background:           #f8f6f3;
+  --foreground:           #191b23;
+  --card:                 #ffffff;
+  --card-foreground:      #191b23;
+  --muted:                #f1ede8;
+  --muted-foreground:     #727485;
+  --accent:               #f1ede8;
+  --accent-foreground:    #191b23;
+  --border:               rgba(0,0,0,0.12);
+  --input:                rgba(0,0,0,0.08);
+  --ring:                 #abafc0;
+  --primary:              #5b7ce4;
+  --primary-foreground:   #ffffff;
+  --secondary:            #f1ede8;
+  --secondary-foreground: #191b23;
+  --destructive:          #dc4f4f;
+
+  --_shadow-card:        0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04);
+  --_shadow-card-hover:  0 6px 16px rgba(0,0,0,0.09), 0 2px 4px rgba(0,0,0,0.05);
+  --_shadow-dialog:      0 24px 64px rgba(0,0,0,0.18), 0 8px 24px rgba(0,0,0,0.10);
+  --_glow-green:         0 0 0 1px rgba(34,197,94,0.20), 0 2px 12px rgba(34,197,94,0.08);
+  --_glow-red:           0 0 0 1px rgba(239,68,68,0.25), 0 2px 12px rgba(239,68,68,0.08);
+  --_glow-amber:         0 0 0 1px rgba(245,158,11,0.25), 0 2px 12px rgba(245,158,11,0.06);
+}
+
+@supports (color: oklch(0 0 0)) {
+  .light {
+    --background:           oklch(0.975 0.008 90);
+    --foreground:           oklch(0.16  0.010 264);
+    --card:                 oklch(1 0 0);
+    --card-foreground:      oklch(0.16  0.010 264);
+    --muted:                oklch(0.955 0.008 90);
+    --muted-foreground:     oklch(0.50  0.014 264);
+    --accent:               oklch(0.955 0.008 90);
+    --accent-foreground:    oklch(0.16  0.010 264);
+    --border:               oklch(0.88  0.008 90 / 0.7);
+    --input:                oklch(0.91  0.006 286);
+    --ring:                 oklch(0.72  0.01  264);
+    --primary:              oklch(0.52  0.18  254);
+    --primary-foreground:   oklch(1 0 0);
+    --secondary:            oklch(0.955 0.008 90);
+    --secondary-foreground: oklch(0.16  0.010 264);
+    --destructive:          oklch(0.58  0.22  27);
+  }
+}
+
+/* ─── Base ──────────────────────────────────────────────────────────────── */
+
+@layer base {
+  * { box-sizing: border-box; }
+  html {
+    background: var(--background);
+    /* Prevent elastic overscroll from revealing black behind the app */
+    overscroll-behavior: none;
+  }
+  body {
+    @apply bg-background text-foreground;
+    margin: 0;
+    overscroll-behavior: none;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-family: "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  }
+  #root { height: 100dvh; display: flex; flex-direction: column; }
+}
+
+@keyframes pulse { 0%,100%{ opacity:1 } 50%{ opacity:.4 } }
+@keyframes blink { 0%,100%{ opacity:1 } 50%{ opacity:0  } }

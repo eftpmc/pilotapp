@@ -1,69 +1,97 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
-import { tasks, agents, projects, sessions, specs } from '../api/client'
-import type { Task, Agent, Session, Spec } from '../api/client'
-import { useTheme, KNOWN_FACES } from '../theme'
+import { tasks, agents, sessions, projects } from '../api/client'
+import type { Task, Agent, Session } from '../api/client'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { EmptyState } from '@/components/EmptyState'
+import { CardSkeleton } from '@/components/Skeleton'
+import { AgentAvatar } from '@/components/AgentAvatar'
+import { fmtSecs, useElapsed } from '@/lib/time'
+import { cn } from '@/lib/utils'
+import { ListTodo, Loader2, GitMerge, Upload } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
-// Shared avatar
+// Column header
 // ---------------------------------------------------------------------------
 
-function AgentAvatar({ agent, size = 34 }: { agent?: Agent; size?: number }) {
-  const { T } = useTheme()
-  const [failed, setFailed] = useState(false)
-  const name = agent?.name ?? ''
-  const colors: Record<string, string> = { claude: '#F0820B', codex: '#0A84FF' }
-  const color = agent ? (colors[agent.provider] ?? T.tint) : T.faint
-  const r = Math.round(size * 0.28)
+const COL_DOT: Record<string, string> = {
+  Queue: 'bg-muted-foreground/40',
+  Working: 'bg-green-500',
+  Review: 'bg-amber-400',
+}
 
-  if (KNOWN_FACES.includes(name.toLowerCase()) && !failed) {
-    return (
-      <div style={{ width: size, height: size, borderRadius: r, background: color + '18', border: `1px solid ${T.border}`, overflow: 'hidden', flexShrink: 0, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-        <img src={`/faces/face_${name.toLowerCase()}.png`} alt={name} onError={() => setFailed(true)}
-          style={{ width: '88%', imageRendering: 'pixelated', display: 'block', marginBottom: -1 }} />
-      </div>
-    )
-  }
+function ColHead({ title, count }: { title: string; count: number }) {
   return (
-    <div style={{ width: size, height: size, borderRadius: r, background: color + '18', border: `1px solid ${T.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-      <span style={{ fontFamily: 'ui-monospace,monospace', fontSize: Math.round(size * 0.38), fontWeight: 700, color }}>{name[0] ?? '?'}</span>
+    <div className="flex items-center gap-2 pb-3 shrink-0">
+      <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', COL_DOT[title] ?? 'bg-muted-foreground/40')} />
+      <span className="text-xs font-semibold text-foreground">{title}</span>
+      <span className="font-mono text-xs text-muted-foreground">{count}</span>
     </div>
   )
 }
 
 // ---------------------------------------------------------------------------
-// Kanban card components
+// Kanban cards
 // ---------------------------------------------------------------------------
 
-function ColHead({ title, count, color }: { title: string; count: number; color: string }) {
-  const { T } = useTheme()
+function AgentPicker({ agentList, onAssign }: { agentList: Agent[]; onAssign: (id: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    function down(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', down)
+    return () => document.removeEventListener('mousedown', down)
+  }, [open])
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingBottom: 12 }}>
-      <span style={{ width: 7, height: 7, borderRadius: 2, background: color, flexShrink: 0 }} />
-      <span style={{ fontFamily: T.sans, fontSize: 13, fontWeight: 600, color: T.text }}>{title}</span>
-      <span style={{ fontFamily: T.mono, fontSize: 11, color: T.faint }}>{count}</span>
+    <div ref={ref} className="relative">
+      <button onClick={() => setOpen(o => !o)}
+        className="text-[11px] font-semibold text-primary hover:text-primary/80 cursor-pointer bg-transparent border-none transition-colors">
+        Assign ›
+      </button>
+      {open && (
+        <div className="absolute right-0 top-[calc(100%+4px)] z-30 bg-card border border-border rounded-xl shadow-xl overflow-hidden min-w-[130px]">
+          {agentList.map(a => (
+            <button key={a.id} onClick={() => { onAssign(a.id); setOpen(false) }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors cursor-pointer bg-transparent border-none text-left">
+              <AgentAvatar agent={a} size={18} />
+              {a.name}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
 
-function QueueCard({ task, agentList, onAssign, onDelete }: {
+function QueueCard({ task, agentList, onAssign, onDelete, onMoveUp, onMoveDown, isFirst, isLast }: {
   task: Task; agentList: Agent[]; onAssign: (id: string) => void; onDelete: () => void
+  onMoveUp: () => void; onMoveDown: () => void; isFirst: boolean; isLast: boolean
 }) {
-  const { T } = useTheme()
   return (
-    <div style={{ background: T.card, border: `1px dashed ${T.border}`, borderRadius: 12, padding: '11px 13px', display: 'flex', flexDirection: 'column', gap: 9 }}>
-      <div style={{ fontFamily: T.sans, fontSize: 13, fontWeight: 500, lineHeight: 1.35, color: T.text }}>{task.title}</div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ fontFamily: T.mono, fontSize: 10.5, color: T.faint, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.baseBranch || 'main'}</span>
-        {agentList.length > 0 ? (
-          <select defaultValue="" onChange={e => { if (e.target.value) onAssign(e.target.value) }}
-            style={{ fontFamily: T.sans, fontSize: 11, fontWeight: 600, color: T.tint, background: 'transparent', border: 'none', cursor: 'pointer', outline: 'none', padding: 0 }}>
-            <option value="" disabled>Assign ›</option>
-            {agentList.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
-        ) : <span style={{ fontFamily: T.sans, fontSize: 11, color: T.faint }}>No agents</span>}
-        <button onClick={onDelete} style={{ background: 'transparent', border: 'none', color: T.faint, cursor: 'pointer', fontSize: 13, padding: '0 2px', lineHeight: 1 }}>×</button>
+    <div className="bg-card rounded-xl p-3.5 flex flex-col gap-2.5 [box-shadow:var(--shadow-card)] border border-dashed border-border/50">
+      <p className="text-sm font-medium text-foreground leading-snug">{task.title}</p>
+      <div className="flex items-center gap-2">
+        <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-[11px] font-mono truncate max-w-[120px]">{task.baseBranch || 'main'}</span>
+        <div className="flex gap-0.5">
+          <button onClick={onMoveUp} disabled={isFirst}
+            className="text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-25 cursor-pointer disabled:cursor-default bg-transparent border-none px-0.5 leading-none">↑</button>
+          <button onClick={onMoveDown} disabled={isLast}
+            className="text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-25 cursor-pointer disabled:cursor-default bg-transparent border-none px-0.5 leading-none">↓</button>
+        </div>
+        <div className="flex-1" />
+        {agentList.length > 0
+          ? <AgentPicker agentList={agentList} onAssign={onAssign} />
+          : <span className="text-[11px] text-muted-foreground">No agents</span>}
+        <button onClick={onDelete}
+          className="text-muted-foreground hover:text-destructive transition-colors cursor-pointer bg-transparent border-none text-base leading-none ml-0.5">×</button>
       </div>
     </div>
   )
@@ -72,218 +100,64 @@ function QueueCard({ task, agentList, onAssign, onDelete }: {
 function WorkingCard({ session, agent, task, onClick }: {
   session: Session; agent?: Agent; task?: Task; onClick: () => void
 }) {
-  const { T } = useTheme()
+  const secs = useElapsed(session.createdAt, true)
   return (
-    <button onClick={onClick} style={{ width: '100%', textAlign: 'left', background: T.card, border: `1px solid ${T.border}`, borderRadius: 12, padding: '12px 13px', display: 'flex', flexDirection: 'column', gap: 9, cursor: 'pointer' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-        <AgentAvatar agent={agent} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: T.sans, fontSize: 13.5, fontWeight: 600, color: T.text }}>{agent?.name ?? '—'}</div>
-          <div style={{ fontFamily: T.mono, fontSize: 10, color: T.faint, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{session.branch}</div>
-        </div>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontFamily: T.sans, fontSize: 11, fontWeight: 600, color: T.green, background: T.green + '18', border: `1px solid ${T.green}30`, padding: '2px 8px', borderRadius: 999 }}>
-          <span style={{ width: 5, height: 5, borderRadius: '50%', background: T.green, display: 'inline-block', animation: 'pulse 1.6s ease-out infinite' }} />
+    <button onClick={onClick}
+      className="w-full text-left bg-card rounded-xl p-3.5 flex flex-col gap-2 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.99] [box-shadow:var(--shadow-card)] border border-green-500/20">
+      <div className="flex items-center gap-2">
+        <AgentAvatar agent={agent} size={26} />
+        <span className="text-sm font-semibold text-foreground">{agent?.name ?? '—'}</span>
+        <div className="flex-1" />
+        <span className="font-mono text-[11px] text-green-500 tabular-nums">{fmtSecs(secs)}</span>
+        <Badge variant="success" className="gap-1 shrink-0 text-[10px] px-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-[pulse_1.6s_ease-out_infinite]" />
           Working
-        </span>
+        </Badge>
       </div>
-      {task && <div style={{ fontFamily: T.sans, fontSize: 12.5, color: T.text, lineHeight: 1.3 }}>{task.title}</div>}
+      {task && <p className="text-[12.5px] text-muted-foreground leading-snug line-clamp-2">{task.title}</p>}
+      <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-[11px] font-mono self-start truncate max-w-full">{session.branch}</span>
     </button>
   )
 }
 
-function ReviewCard({ session, agent, task, onMerge, onClick }: {
-  session: Session; agent?: Agent; task?: Task; onMerge: () => void; onClick: () => void
+function ReviewCard({ session, agent, task, hasRemote, onMerge, onMergePush, onClick }: {
+  session: Session; agent?: Agent; task?: Task
+  hasRemote: boolean; onMerge: () => void; onMergePush: () => void; onClick: () => void
 }) {
-  const { T } = useTheme()
   const isError = session.status === 'error'
   return (
-    <div onClick={onClick} style={{ background: T.card, border: `1px solid ${isError ? T.danger + '44' : T.border}`, borderRadius: 12, padding: '12px 13px', display: 'flex', flexDirection: 'column', gap: 9, cursor: 'pointer' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-        <AgentAvatar agent={agent} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontFamily: T.sans, fontSize: 13.5, fontWeight: 600, color: T.text }}>{agent?.name ?? '—'}</div>
-          {task && <div style={{ fontFamily: T.mono, fontSize: 10.5, color: T.faint, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.title}</div>}
-        </div>
-        <span style={{ fontFamily: T.sans, fontSize: 11, fontWeight: 600, color: isError ? T.danger : T.green, background: (isError ? T.danger : T.green) + '18', border: `1px solid ${(isError ? T.danger : T.green)}30`, padding: '2px 8px', borderRadius: 999 }}>
+    <div onClick={onClick}
+      className={cn(
+        'bg-card rounded-xl p-3.5 flex flex-col gap-1.5 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 [box-shadow:var(--shadow-card)]',
+        isError ? 'border border-red-500/25' : 'border border-amber-400/20'
+      )}>
+      <div className="flex items-center gap-2">
+        <AgentAvatar agent={agent} size={28} />
+        <span className="text-sm font-semibold text-foreground">{agent?.name ?? '—'}</span>
+        <div className="flex-1" />
+        <Badge variant={isError ? 'destructive' : 'success'} className="shrink-0 text-[10px]">
           {isError ? 'Error' : 'Ready'}
-        </span>
+        </Badge>
       </div>
-      <div style={{ fontFamily: T.mono, fontSize: 10.5, color: T.faint, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{session.branch}</div>
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }} onClick={e => e.stopPropagation()}>
-        <button onClick={onClick} style={{ fontFamily: T.sans, fontSize: 11, fontWeight: 600, color: T.text, background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 7, padding: '5px 11px', cursor: 'pointer' }}>Log</button>
-        {isError
-          ? <button onClick={onClick} style={{ fontFamily: T.sans, fontSize: 11, fontWeight: 600, color: '#fff', background: T.tint, border: 'none', borderRadius: 7, padding: '5px 11px', cursor: 'pointer' }}>Retry</button>
-          : <button onClick={onMerge} style={{ fontFamily: T.sans, fontSize: 11, fontWeight: 600, color: '#fff', background: T.tint, border: 'none', borderRadius: 7, padding: '5px 11px', cursor: 'pointer' }}>Merge ✓</button>}
+      {task && <p className="text-sm text-muted-foreground leading-snug line-clamp-2 mt-1">{task.title}</p>}
+      <div className="flex items-center gap-2 mt-1" onClick={e => e.stopPropagation()}>
+        <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-[11px] font-mono truncate max-w-[120px]">{session.branch}</span>
+        <div className="flex-1" />
+        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={onClick}>Log</Button>
+        {isError ? (
+          <Button size="sm" className="h-7 px-2.5 text-xs" onClick={onClick}>Retry</Button>
+        ) : hasRemote ? (
+          <>
+            <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={onMerge}>Merge</Button>
+            <Button size="sm" className="h-7 px-2.5 text-xs gap-1" onClick={onMergePush}>
+              <Upload className="h-3 w-3" />Push
+            </Button>
+          </>
+        ) : (
+          <Button size="sm" className="h-7 px-2.5 text-xs" onClick={onMerge}>Merge ✓</Button>
+        )}
       </div>
     </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Bottom sheet — plans + files
-// ---------------------------------------------------------------------------
-
-function BottomSheet({ projectId, specCount, onExecuteSpec }: {
-  projectId: string; specCount: number; onExecuteSpec: () => void
-}) {
-  const { T } = useTheme()
-  const qc = useQueryClient()
-  const navigate = useNavigate()
-  const [open, setOpen] = useState(false)
-  const [tab, setTab] = useState<'plans' | 'files'>('plans')
-  const [expandedSpec, setExpandedSpec] = useState<string | null>(null)
-  const [selectedFile, setSelectedFile] = useState<string | null>(null)
-
-  const anyPlanning = (list: Spec[]) => list.some(s => s.status === 'planning')
-
-  const { data: specList = [] } = useQuery({
-    queryKey: ['specs', projectId],
-    queryFn: () => specs.list(projectId),
-    refetchInterval: q => anyPlanning(q.state.data ?? []) ? 3000 : false,
-  })
-  const { data: fileData } = useQuery({
-    queryKey: ['files', projectId],
-    queryFn: () => projects.files(projectId),
-    enabled: open && tab === 'files',
-  })
-  const { data: fileContent } = useQuery({
-    queryKey: ['file', projectId, selectedFile],
-    queryFn: () => projects.file(projectId, selectedFile!),
-    enabled: !!selectedFile,
-  })
-
-  const updateSpec = useMutation({
-    mutationFn: ({ id, body }: { id: string; body: { title?: string; content?: string } }) => specs.update(id, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['specs', projectId] }),
-  })
-  const deleteSpec = useMutation({
-    mutationFn: (id: string) => specs.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['specs', projectId] }),
-  })
-  const executeSpec = useMutation({
-    mutationFn: (id: string) => specs.execute(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['tasks', projectId] }); setOpen(false); onExecuteSpec() },
-  })
-
-  const fileList = fileData?.files ?? []
-
-  // group files by directory for a simple tree feel
-  function fileIcon(f: string) {
-    const ext = f.split('.').pop() ?? ''
-    const icons: Record<string, string> = { ts: '⬡', tsx: '⬡', js: '⬡', jsx: '⬡', json: '{}', md: '¶', css: '◈', py: '⬡', go: '⬡', rs: '⬡', html: '<>' }
-    return icons[ext] ?? '·'
-  }
-
-  return (
-    <div style={{ flexShrink: 0, background: T.card, borderTop: `1px solid ${T.border}`, transition: 'height .22s ease', height: open ? '42vh' : 44, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-
-      {/* handle */}
-      <div onClick={() => setOpen(o => !o)} style={{ height: 44, display: 'flex', alignItems: 'center', gap: 12, padding: '0 20px', cursor: 'pointer', flexShrink: 0 }}>
-        <div style={{ width: 32, height: 3, borderRadius: 2, background: T.border, margin: '0 auto', position: 'absolute', left: '50%', transform: 'translateX(-50%)' }} />
-        <span style={{ fontFamily: T.sans, fontSize: 12.5, fontWeight: 600, color: T.muted }}>Plans</span>
-        {specCount > 0 && <span style={{ fontFamily: T.mono, fontSize: 11, color: T.tint, background: T.tint + '18', borderRadius: 999, padding: '1px 7px' }}>{specCount}</span>}
-        <span style={{ fontFamily: T.sans, fontSize: 12.5, color: T.faint, marginLeft: 4 }}>·</span>
-        <span style={{ fontFamily: T.sans, fontSize: 12.5, fontWeight: 600, color: T.muted }}>Files</span>
-        <div style={{ flex: 1 }} />
-        <span style={{ fontFamily: T.sans, fontSize: 12, color: T.faint, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s', display: 'inline-block' }}>⌃</span>
-      </div>
-
-      {/* content */}
-      {open && (
-        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-          {/* tabs */}
-          <div style={{ display: 'flex', gap: 2, padding: '0 16px 10px', flexShrink: 0 }}>
-            {(['plans', 'files'] as const).map(t => (
-              <button key={t} onClick={() => setTab(t)} style={{ fontFamily: T.sans, fontSize: 12, fontWeight: tab === t ? 600 : 500, color: tab === t ? T.text : T.muted, background: tab === t ? T.surface2 : 'transparent', border: 'none', borderRadius: 6, padding: '4px 12px', cursor: 'pointer', textTransform: 'capitalize' }}>{t}</button>
-            ))}
-          </div>
-
-          <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px 12px' }}>
-
-            {/* Plans tab */}
-            {tab === 'plans' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {specList.length === 0 && (
-                  <div style={{ fontFamily: T.mono, fontSize: 12, color: T.faint, textAlign: 'center', paddingTop: 24 }}>No plans yet — create one via "+ New task" → Plan.</div>
-                )}
-                {specList.map(spec => {
-                  const exp = expandedSpec === spec.id
-                  return (
-                    <div key={spec.id} style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, overflow: 'hidden' }}>
-                      <div onClick={() => setExpandedSpec(exp ? null : spec.id)} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', cursor: 'pointer' }}>
-                        <span style={{ fontFamily: T.sans, fontSize: 13, fontWeight: 600, color: T.text, flex: 1 }}>{spec.title}</span>
-                        {spec.status === 'planning'
-                          ? <span style={{ fontFamily: T.sans, fontSize: 11, color: T.amber, background: T.amber + '18', borderRadius: 999, padding: '2px 8px' }}>Planning…</span>
-                          : spec.content && <span style={{ fontFamily: T.sans, fontSize: 11, color: T.green, background: T.green + '18', borderRadius: 999, padding: '2px 8px' }}>Ready</span>}
-                        <span style={{ color: T.faint, fontSize: 12, transform: exp ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}>›</span>
-                      </div>
-                      {exp && (
-                        <div style={{ borderTop: `1px solid ${T.border}`, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                          {spec.status === 'planning' ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontFamily: T.sans, fontSize: 12, color: T.muted }}>
-                              <span style={{ width: 6, height: 6, borderRadius: '50%', background: T.amber, animation: 'pulse 1.6s ease-out infinite', display: 'inline-block' }} />
-                              Agent is writing the spec…
-                              {spec.sessionId && <button onClick={() => navigate(`/sessions/${spec.sessionId}`)} style={{ fontFamily: T.sans, fontSize: 12, color: T.tint, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline', textUnderlineOffset: 2 }}>Watch</button>}
-                            </div>
-                          ) : (
-                            <SpecEditor spec={spec} onUpdate={body => updateSpec.mutate({ id: spec.id, body })} />
-                          )}
-                          <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                            <button onClick={() => deleteSpec.mutate(spec.id)} style={{ fontFamily: T.sans, fontSize: 11, color: T.faint, background: 'transparent', border: `1px solid ${T.border}`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>Delete</button>
-                            <button onClick={() => executeSpec.mutate(spec.id)} disabled={!spec.content.trim() || executeSpec.isPending || spec.status === 'planning'}
-                              style={{ fontFamily: T.sans, fontSize: 11, fontWeight: 600, color: '#fff', background: T.tint, border: 'none', borderRadius: 6, padding: '4px 12px', cursor: 'pointer', opacity: spec.content.trim() && spec.status !== 'planning' ? 1 : 0.4 }}>
-                              Execute →
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-
-            {/* Files tab */}
-            {tab === 'files' && (
-              <div style={{ display: 'flex', gap: 12, height: '100%' }}>
-                <div style={{ width: 220, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
-                  {fileList.length === 0 && <div style={{ fontFamily: T.mono, fontSize: 12, color: T.faint, paddingTop: 16 }}>No files committed yet.</div>}
-                  {fileList.map(f => (
-                    <button key={f} onClick={() => setSelectedFile(f === selectedFile ? null : f)}
-                      style={{ width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 7, fontFamily: T.mono, fontSize: 11, color: selectedFile === f ? T.tint : T.text, background: selectedFile === f ? T.tint + '12' : 'transparent', border: 'none', borderRadius: 6, padding: '4px 8px', cursor: 'pointer' }}>
-                      <span style={{ color: T.faint, flexShrink: 0, width: 14 }}>{fileIcon(f)}</span>
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f}</span>
-                    </button>
-                  ))}
-                </div>
-                {selectedFile && (
-                  <div style={{ flex: 1, minWidth: 0, background: T.surface, borderRadius: 8, padding: '10px 12px', overflow: 'auto' }}>
-                    {fileContent
-                      ? <pre style={{ fontFamily: T.mono, fontSize: 11, lineHeight: 1.6, color: T.text, margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{fileContent.content}</pre>
-                      : <div style={{ fontFamily: T.mono, fontSize: 12, color: T.faint }}>Loading…</div>}
-                  </div>
-                )}
-              </div>
-            )}
-
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function SpecEditor({ spec, onUpdate }: { spec: Spec; onUpdate: (b: { title?: string; content?: string }) => void }) {
-  const { T } = useTheme()
-  const [content, setContent] = useState(spec.content)
-  if (content !== spec.content && document.activeElement?.tagName !== 'TEXTAREA') {
-    setContent(spec.content)
-  }
-  return (
-    <textarea value={content} onChange={e => setContent(e.target.value)}
-      onBlur={() => content !== spec.content && onUpdate({ content })}
-      placeholder="Spec content — edit freely…"
-      style={{ fontFamily: T.mono, fontSize: 11, lineHeight: 1.65, color: T.text, background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: '8px 10px', resize: 'vertical', outline: 'none', minHeight: 120 }} />
   )
 }
 
@@ -291,126 +165,247 @@ function SpecEditor({ spec, onUpdate }: { spec: Spec; onUpdate: (b: { title?: st
 // Main page
 // ---------------------------------------------------------------------------
 
+type MobileCol = 'Queue' | 'Working' | 'Review'
+
 export default function ProjectDetailPage() {
-  const { T } = useTheme()
   const { id: projectId } = useParams<{ id: string }>()
   const qc = useQueryClient()
   const navigate = useNavigate()
-  const [showNew, setShowNew] = useState(false)
+  const [showNew,   setShowNew]   = useState(false)
+  const [mobileCol, setMobileCol] = useState<MobileCol>('Queue')
 
-  const { data: project }         = useQuery({ queryKey: ['project', projectId], queryFn: () => projects.list().then(l => l.find(p => p.id === projectId)) })
-  const { data: taskList    = [] } = useQuery({ queryKey: ['tasks',    projectId], queryFn: () => tasks.list({ projectId }),    refetchInterval: 4000 })
-  const { data: agentList   = [] } = useQuery({ queryKey: ['agents'],              queryFn: () => agents.list() })
-  const { data: sessionList = [] } = useQuery({ queryKey: ['sessions', projectId], queryFn: () => sessions.list({ projectId }), refetchInterval: 4000 })
-  const { data: specList    = [] } = useQuery({ queryKey: ['specs',    projectId], queryFn: () => specs.list(projectId!), enabled: !!projectId })
+  const { data: taskList    = [], isLoading: tasksLoading   } = useQuery({ queryKey: ['tasks',    projectId], queryFn: () => tasks.list({ projectId }),    refetchInterval: 4000 })
+  const { data: agentList   = []                             } = useQuery({ queryKey: ['agents'],              queryFn: () => agents.list() })
+  const { data: sessionList = [], isLoading: sessionsLoading } = useQuery({ queryKey: ['sessions', projectId], queryFn: () => sessions.list({ projectId }), refetchInterval: 4000 })
+  const { data: projectList = []                             } = useQuery({ queryKey: ['projects'],             queryFn: () => projects.list() })
+  const isLoading = tasksLoading || sessionsLoading
+  const project   = projectList.find(p => p.id === projectId)
 
-  const runQueue = useMutation({
-    mutationFn: () => tasks.runQueue(),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['tasks', projectId] }); qc.invalidateQueries({ queryKey: ['sessions', projectId] }) },
-  })
-  const deleteTask = useMutation({
-    mutationFn: (id: string) => tasks.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks', projectId] }),
-  })
-  const assignTask = useMutation({
+  const runQueue    = useMutation({ mutationFn: () => tasks.runQueue(), onSuccess: () => { qc.invalidateQueries({ queryKey: ['tasks', projectId] }); qc.invalidateQueries({ queryKey: ['sessions', projectId] }) } })
+  const deleteTask  = useMutation({ mutationFn: (id: string) => tasks.delete(id), onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks', projectId] }) })
+  const assignTask  = useMutation({
     mutationFn: ({ taskId, agentId }: { taskId: string; agentId: string }) => tasks.assign(taskId, agentId),
     onSuccess: ({ session }) => { qc.invalidateQueries({ queryKey: ['tasks', projectId] }); qc.invalidateQueries({ queryKey: ['sessions', projectId] }); navigate(`/sessions/${session.id}`) },
   })
+  const setPriority = useMutation({ mutationFn: ({ taskId, priority }: { taskId: string; priority: number }) => tasks.update(taskId, { priority }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks', projectId] }) })
   const mergeSession = useMutation({
     mutationFn: (id: string) => sessions.merge(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['sessions', projectId] }),
+  })
+  const mergePushSession = useMutation({
+    mutationFn: async (id: string) => { await sessions.merge(id); await projects.push(projectId!) },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['sessions', projectId] }),
   })
 
   const codeSessions = sessionList.filter(s => !s.specId)
   const busyIds      = new Set(codeSessions.filter(s => s.status === 'running').map(s => s.agentId))
   const idleAgents   = agentList.filter(a => !busyIds.has(a.id))
-  const queue        = taskList.filter(t => t.status === 'pending').sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+  const queue        = taskList.filter(t => t.status === 'pending').sort((a, b) => {
+    if ((b.priority ?? 0) !== (a.priority ?? 0)) return (b.priority ?? 0) - (a.priority ?? 0)
+    return a.createdAt.localeCompare(b.createdAt)
+  })
   const working      = codeSessions.filter(s => s.status === 'running' || s.status === 'idle')
   const review       = codeSessions.filter(s => s.status === 'done' || s.status === 'error')
 
   function agentFor(s: Session) { return agentList.find(a => a.id === s.agentId) }
   function taskFor(s: Session)  { return taskList.find(t => t.id === s.workTaskId) }
 
+  // Real-time: one stable WS per project, subscribe new sessions as they appear
+  const invalidateRef = useRef<() => void>(() => {})
+  invalidateRef.current = () => {
+    qc.invalidateQueries({ queryKey: ['sessions', projectId] })
+    qc.invalidateQueries({ queryKey: ['tasks', projectId] })
+  }
+  const wsRef = useRef<WebSocket | null>(null)
+  const subscribedRef = useRef(new Set<string>())
+  const currentIdsRef = useRef<string[]>([])
+  currentIdsRef.current = working.map(s => s.id)
+
+  useEffect(() => {
+    let dead = false
+    let retryDelay = 2000
+
+    function connect() {
+      if (dead) return
+      const token = localStorage.getItem('token')
+      if (!token) return
+      const proto = location.protocol === 'https:' ? 'wss' : 'ws'
+      const ws = new WebSocket(`${proto}://${location.host}/ws?token=${token}`)
+      wsRef.current = ws
+      subscribedRef.current = new Set()
+
+      ws.onopen = () => {
+        retryDelay = 2000
+        for (const id of currentIdsRef.current) {
+          ws.send(JSON.stringify({ type: 'subscribe', sessionId: id }))
+          subscribedRef.current.add(id)
+        }
+      }
+      ws.onmessage = (e) => { try { if (JSON.parse(e.data).type === 'done') invalidateRef.current() } catch {} }
+      ws.onclose = () => {
+        if (!dead) { setTimeout(connect, retryDelay); retryDelay = Math.min(retryDelay * 2, 30_000) }
+      }
+      ws.onerror = () => ws.close()
+    }
+
+    connect()
+    return () => { dead = true; wsRef.current?.close(); wsRef.current = null }
+  }, [projectId]) // stable — only recreates on project change
+
+  // Subscribe newly-appeared sessions without tearing down the connection
+  const runningKey = working.map(s => s.id).join(',')
+  useEffect(() => {
+    const ws = wsRef.current
+    if (!ws || ws.readyState !== WebSocket.OPEN) return
+    for (const id of currentIdsRef.current) {
+      if (!subscribedRef.current.has(id)) {
+        ws.send(JSON.stringify({ type: 'subscribe', sessionId: id }))
+        subscribedRef.current.add(id)
+      }
+    }
+  }, [runningKey]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keyboard shortcuts: n = new task, r = run queue
+  useEffect(() => {
+    function handler(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement).tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || e.metaKey || e.ctrlKey || e.altKey) return
+      if (e.key === 'n' && !showNew && agentList.length > 0) { e.preventDefault(); setShowNew(true) }
+      if (e.key === 'r' && queue.length > 0 && idleAgents.length > 0 && !runQueue.isPending) { e.preventDefault(); runQueue.mutate() }
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [showNew, queue.length, idleAgents.length, agentList.length, runQueue.isPending])
+
   const stats = [
-    { label: 'Queue',   value: queue.length,     color: T.text  },
-    { label: 'Working', value: working.length,    color: T.green },
-    { label: 'Review',  value: review.length,     color: T.amber },
-    { label: 'Free',    value: idleAgents.length, color: T.muted },
+    { label: 'Queue',   value: queue.length,     cls: 'text-foreground'       },
+    { label: 'Working', value: working.length,    cls: 'text-green-500'        },
+    { label: 'Review',  value: review.length,     cls: 'text-amber-400'        },
+    { label: 'Free',    value: idleAgents.length, cls: 'text-muted-foreground' },
   ]
 
-  const col: React.CSSProperties = { flex: '1 1 0', display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }
-  const colInner: React.CSSProperties = { flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 8 }
+  const COLS: { title: MobileCol; count: number }[] = [
+    { title: 'Queue',   count: queue.length   },
+    { title: 'Working', count: working.length },
+    { title: 'Review',  count: review.length  },
+  ]
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: T.bg }}>
-      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }`}</style>
+    <div className="flex-1 min-h-0 flex flex-col bg-background">
 
-      {/* stat strip */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 22, padding: '12px 22px 10px', flexShrink: 0 }}>
-        <button onClick={() => navigate('/')} style={{ background: 'transparent', border: 'none', fontFamily: T.sans, fontSize: 13, color: T.muted, cursor: 'pointer', padding: 0 }}>←</button>
-        {project && <span style={{ fontFamily: T.sans, fontSize: 14, fontWeight: 600, color: T.text }}>{project.name}</span>}
-        <div style={{ width: 1, height: 16, background: T.border }} />
-        {stats.map(({ label, value, color }) => (
-          <div key={label} style={{ display: 'flex', flexDirection: 'column' }}>
-            <span style={{ fontFamily: T.sans, fontSize: 20, fontWeight: 600, color, letterSpacing: '-.02em', lineHeight: 1.1 }}>{value}</span>
-            <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.faint, textTransform: 'uppercase', letterSpacing: '.07em', marginTop: 1 }}>{label}</span>
+      {/* Top bar */}
+      <div className="h-14 shrink-0 flex items-center gap-4 px-4 md:px-6 border-b border-border/60">
+        <div className="flex items-center gap-3">
+          {stats.map(({ label, value, cls }) => (
+            <div key={label} className="flex items-center gap-1.5">
+              <span className={cn('text-sm font-semibold tabular-nums', cls)}>{value}</span>
+              <span className="text-xs text-muted-foreground hidden sm:inline">{label}</span>
+            </div>
+          ))}
+        </div>
+        <div className="flex-1" />
+        <div className="flex items-center gap-2">
+          {queue.length > 0 && idleAgents.length > 0 && (
+            <Button variant="outline" size="sm" onClick={() => runQueue.mutate()} disabled={runQueue.isPending}
+              className="hidden sm:flex">
+              {runQueue.isPending ? '…' : '▶ Run'}
+            </Button>
+          )}
+          <Button size="sm" disabled={agentList.length === 0} onClick={() => setShowNew(true)}>
+            + New task <span className="hidden md:inline ml-1 opacity-40 font-mono text-[10px]">n</span>
+          </Button>
+        </div>
+      </div>
+
+      {/* Mobile column tabs */}
+      <div className="md:hidden flex shrink-0 border-b border-border/40">
+        {COLS.map(col => (
+          <button key={col.title} onClick={() => setMobileCol(col.title)}
+            className={cn(
+              'flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors cursor-pointer bg-transparent border-none border-b-2 -mb-px',
+              mobileCol === col.title ? 'text-foreground border-primary' : 'text-muted-foreground border-transparent'
+            )}>
+            <span className={cn('w-1.5 h-1.5 rounded-full', COL_DOT[col.title])} />
+            {col.title}
+            {col.count > 0 && <span className="font-mono text-[10px] text-muted-foreground">({col.count})</span>}
+          </button>
+        ))}
+      </div>
+
+      {/* Kanban */}
+      <div className="flex-1 min-h-0 flex gap-3 px-3 md:px-4 pt-4 pb-2 overflow-hidden">
+        {COLS.map(({ title, count }) => (
+          <div key={title} className={cn(
+            'min-w-0 flex-col overflow-hidden',
+            title === mobileCol ? 'flex flex-1' : 'hidden',
+            'md:flex md:flex-1'
+          )}>
+            <ColHead title={title} count={count} />
+            <ScrollArea className="flex-1">
+              <div className="flex flex-col gap-2.5 pb-3">
+                {isLoading ? (
+                  Array.from({ length: 2 }).map((_, i) => <CardSkeleton key={i} />)
+                ) : title === 'Queue' ? (
+                  queue.length === 0
+                    ? <EmptyState icon={ListTodo} title="Queue is empty" description="Add a task to get started." />
+                    : queue.map((task, idx) => (
+                        <QueueCard key={task.id} task={task} agentList={idleAgents}
+                          onAssign={agentId => assignTask.mutate({ taskId: task.id, agentId })}
+                          onDelete={() => deleteTask.mutate(task.id)}
+                          isFirst={idx === 0} isLast={idx === queue.length - 1}
+                          onMoveUp={() => setPriority.mutate({ taskId: task.id, priority: (queue[idx - 1]?.priority ?? 0) + 1 })}
+                          onMoveDown={() => setPriority.mutate({ taskId: task.id, priority: Math.max(0, (queue[idx + 1]?.priority ?? 0) - 1) })} />
+                      ))
+                ) : title === 'Working' ? (
+                  working.length === 0
+                    ? <EmptyState icon={Loader2} title="Nobody working" description="Assign a task from the Queue to an agent." />
+                    : working.map(s => <WorkingCard key={s.id} session={s} agent={agentFor(s)} task={taskFor(s)} onClick={() => navigate(`/sessions/${s.id}`)} />)
+                ) : (
+                  review.length === 0
+                    ? <EmptyState icon={GitMerge} title="Nothing to review" description="Completed sessions will appear here." />
+                    : review.map(s => (
+                        <ReviewCard key={s.id} session={s} agent={agentFor(s)} task={taskFor(s)}
+                          hasRemote={!!project?.remoteUrl}
+                          onMerge={() => mergeSession.mutate(s.id)}
+                          onMergePush={() => mergePushSession.mutate(s.id)}
+                          onClick={() => navigate(`/sessions/${s.id}`)} />
+                      ))
+                )}
+              </div>
+            </ScrollArea>
           </div>
         ))}
-        <div style={{ flex: 1 }} />
-        {queue.length > 0 && idleAgents.length > 0 && (
-          <button onClick={() => runQueue.mutate()} disabled={runQueue.isPending}
-            style={{ fontFamily: T.sans, fontSize: 12, fontWeight: 600, color: T.text, background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 9, padding: '7px 12px', cursor: 'pointer', opacity: runQueue.isPending ? 0.5 : 1 }}>
-            {runQueue.isPending ? '…' : '▶ Run queue'}
+      </div>
+
+      {/* Error banners */}
+      {(mergeSession.isError || mergePushSession.isError || assignTask.isError) && (
+        <div className="shrink-0 border-t border-destructive/30 bg-destructive/5 px-5 py-2.5 flex items-center gap-3">
+          <span className="text-xs text-destructive flex-1">
+            {(mergeSession.error ?? mergePushSession.error ?? assignTask.error)?.message}
+          </span>
+          <button
+            className="text-xs text-muted-foreground hover:text-foreground cursor-pointer bg-transparent border-none"
+            onClick={() => { mergeSession.reset(); mergePushSession.reset(); assignTask.reset() }}
+          >
+            Dismiss
           </button>
-        )}
-        <button onClick={() => setShowNew(true)} disabled={agentList.length === 0}
-          style={{ fontFamily: T.sans, fontSize: 12.5, fontWeight: 600, color: '#fff', background: T.tint, border: 'none', borderRadius: 9, padding: '8px 16px', cursor: 'pointer', opacity: agentList.length === 0 ? 0.4 : 1 }}>
-          + New task
-        </button>
-      </div>
-
-      {/* kanban */}
-      <div style={{ display: 'flex', gap: 16, padding: '4px 22px 8px', flex: 1, minHeight: 0 }}>
-        <div style={col}>
-          <ColHead title="Queue" count={queue.length} color={T.faint} />
-          <div style={colInner}>
-            {queue.map(task => (
-              <QueueCard key={task.id} task={task} agentList={idleAgents}
-                onAssign={agentId => assignTask.mutate({ taskId: task.id, agentId })}
-                onDelete={() => deleteTask.mutate(task.id)} />
-            ))}
-            {queue.length === 0 && <div style={{ fontFamily: T.mono, fontSize: 11, color: T.faint, padding: '6px 2px' }}>queue empty ✦</div>}
-          </div>
         </div>
-        <div style={col}>
-          <ColHead title="Working" count={working.length} color={T.green} />
-          <div style={colInner}>
-            {working.map(s => <WorkingCard key={s.id} session={s} agent={agentFor(s)} task={taskFor(s)} onClick={() => navigate(`/sessions/${s.id}`)} />)}
-            {working.length === 0 && <div style={{ fontFamily: T.mono, fontSize: 11, color: T.faint, padding: '6px 2px' }}>nobody's coding yet</div>}
-          </div>
-        </div>
-        <div style={col}>
-          <ColHead title="Review" count={review.length} color={T.amber} />
-          <div style={colInner}>
-            {review.map(s => <ReviewCard key={s.id} session={s} agent={agentFor(s)} task={taskFor(s)} onMerge={() => mergeSession.mutate(s.id)} onClick={() => navigate(`/sessions/${s.id}`)} />)}
-            {review.length === 0 && <div style={{ fontFamily: T.mono, fontSize: 11, color: T.faint, padding: '6px 2px' }}>nothing to review</div>}
-          </div>
-        </div>
-      </div>
-
-      {/* bottom sheet */}
-      {projectId && (
-        <BottomSheet projectId={projectId} specCount={specList.length} onExecuteSpec={() => {}} />
       )}
 
-      {/* new task modal */}
       {showNew && projectId && (
-        <UnifiedNewTaskModal
+        <NewTaskDialog
           projectId={projectId}
-          agentList={agentList}
+          hasIdleAgent={idleAgents.length > 0}
           onClose={() => setShowNew(false)}
-          onCreateTask={async body => { await tasks.create(body); qc.invalidateQueries({ queryKey: ['tasks', projectId] }); setShowNew(false) }}
-          onCreateSpec={async body => { await specs.create(body); qc.invalidateQueries({ queryKey: ['specs', projectId] }); setShowNew(false) }}
+          onCreate={async body => { await tasks.create(body); qc.invalidateQueries({ queryKey: ['tasks', projectId] }); setShowNew(false) }}
+          onCreateAndRun={async body => {
+            await tasks.create(body)
+            await tasks.runQueue()
+            qc.invalidateQueries({ queryKey: ['tasks', projectId] })
+            qc.invalidateQueries({ queryKey: ['sessions', projectId] })
+            setShowNew(false)
+          }}
         />
       )}
     </div>
@@ -418,109 +413,60 @@ export default function ProjectDetailPage() {
 }
 
 // ---------------------------------------------------------------------------
-// Unified new task modal — Work / Plan
+// New task dialog
 // ---------------------------------------------------------------------------
 
-type TaskMode = 'work' | 'plan'
-
-function UnifiedNewTaskModal({ projectId, agentList, onClose, onCreateTask, onCreateSpec }: {
+function NewTaskDialog({ projectId, hasIdleAgent, onClose, onCreate, onCreateAndRun }: {
   projectId: string
-  agentList: Agent[]
+  hasIdleAgent: boolean
   onClose: () => void
-  onCreateTask: (body: { projectId: string; title: string; prompt: string; baseBranch: string }) => Promise<void>
-  onCreateSpec: (body: { projectId: string; title: string; brief?: string; agentId?: string }) => Promise<void>
+  onCreate: (body: { projectId: string; title: string; prompt: string; baseBranch: string }) => Promise<void>
+  onCreateAndRun: (body: { projectId: string; title: string; prompt: string; baseBranch: string }) => Promise<void>
 }) {
-  const { T } = useTheme()
-  const [mode, setMode]           = useState<TaskMode>('work')
-  const [title, setTitle]         = useState('')
-  const [prompt, setPrompt]       = useState('')
+  const [title,      setTitle]      = useState('')
+  const [prompt,     setPrompt]     = useState('')
   const [baseBranch, setBaseBranch] = useState('main')
-  const [brief, setBrief]         = useState('')
-  const [agentId, setAgentId]     = useState('')
-  const [loading, setLoading]     = useState(false)
+  const [loading,    setLoading]    = useState(false)
+  const isValid = title.trim().length > 2
 
-  const validWork = title.trim().length > 2
-  const validPlan = title.trim().length > 1
-
-  async function submit() {
+  async function submit(fn: typeof onCreate) {
+    if (!isValid) return
     setLoading(true)
-    try {
-      if (mode === 'work') {
-        await onCreateTask({ projectId, title: title.trim(), prompt, baseBranch })
-      } else {
-        await onCreateSpec({ projectId, title: title.trim(), brief: brief.trim() || undefined, agentId: agentId || undefined })
-      }
-    } finally {
-      setLoading(false)
-    }
+    try { await fn({ projectId, title: title.trim(), prompt, baseBranch }) }
+    finally { setLoading(false) }
   }
 
-  const inp: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 9, padding: '9px 11px', fontFamily: T.sans, fontSize: 13, color: T.text, outline: 'none' }
-  const lbl = (t: string) => <div style={{ fontFamily: T.mono, fontSize: 9.5, color: T.faint, textTransform: 'uppercase' as const, letterSpacing: '.1em', marginBottom: 6 }}>{t}</div>
-  const isValid = mode === 'work' ? validWork : validPlan
-
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.38)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60 }}>
-      <div onClick={e => e.stopPropagation()} style={{ width: 460, background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: '20px 22px 18px', boxShadow: '0 24px 60px rgba(0,0,0,.18)' }}>
-
-        {/* header + mode toggle */}
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 18, gap: 12 }}>
-          <span style={{ fontFamily: T.sans, fontSize: 17, fontWeight: 600, color: T.text }}>New task</span>
-          <div style={{ display: 'flex', gap: 2, background: T.surface2, borderRadius: 8, padding: 2 }}>
-            {(['work', 'plan'] as TaskMode[]).map(m => (
-              <button key={m} onClick={() => setMode(m)} style={{ fontFamily: T.sans, fontSize: 12, fontWeight: mode === m ? 600 : 500, color: mode === m ? T.text : T.muted, background: mode === m ? T.card : 'transparent', border: 'none', borderRadius: 6, padding: '5px 14px', cursor: 'pointer', boxShadow: mode === m ? '0 1px 2px rgba(0,0,0,.1)' : 'none', textTransform: 'capitalize' }}>{m}</button>
-            ))}
+    <Dialog open onOpenChange={o => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>New task</DialogTitle></DialogHeader>
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label>Title</Label>
+            <Input autoFocus value={title} onChange={e => setTitle(e.target.value)}
+              placeholder="What should the agent do?"
+              onKeyDown={e => { if (e.key === 'Enter' && isValid) void submit(onCreate) }} />
           </div>
-          <div style={{ flex: 1 }} />
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: T.muted, fontSize: 18, cursor: 'pointer', lineHeight: 1, padding: 4 }}>×</button>
+          <div className="flex flex-col gap-1.5">
+            <Label>Prompt <span className="text-muted-foreground font-normal">(optional)</span></Label>
+            <Textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={3}
+              placeholder="Additional context, requirements, or constraints…" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label>Base branch</Label>
+            <Input value={baseBranch} onChange={e => setBaseBranch(e.target.value)} className="font-mono text-xs" />
+          </div>
+          <div className="flex gap-2 pt-1">
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+            <Button variant="outline" className="flex-1" disabled={!isValid || loading} onClick={() => void submit(onCreate)}>
+              {loading ? '…' : 'Queue'}
+            </Button>
+            <Button className="flex-1" disabled={!isValid || loading || !hasIdleAgent} onClick={() => void submit(onCreateAndRun)}>
+              {loading ? '…' : 'Dispatch ↗'}
+            </Button>
+          </div>
         </div>
-
-        <div style={{ marginBottom: 14 }}>
-          {lbl('Title')}
-          <input autoFocus value={title} onChange={e => setTitle(e.target.value)}
-            placeholder={mode === 'work' ? 'What should the agent do?' : 'e.g. Refactor auth middleware'}
-            onKeyDown={e => { if (e.key === 'Enter' && isValid) submit() }}
-            style={inp} />
-        </div>
-
-        {mode === 'work' && <>
-          <div style={{ marginBottom: 14 }}>
-            {lbl('Prompt')}
-            <textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={3}
-              placeholder="Additional context for the agent…"
-              style={{ ...inp, resize: 'vertical', lineHeight: 1.5 }} />
-          </div>
-          <div style={{ marginBottom: 20 }}>
-            {lbl('Base branch')}
-            <input value={baseBranch} onChange={e => setBaseBranch(e.target.value)} style={{ ...inp, fontFamily: T.mono, fontSize: 12 }} />
-          </div>
-        </>}
-
-        {mode === 'plan' && <>
-          <div style={{ marginBottom: 14 }}>
-            {lbl('Brief')}
-            <textarea value={brief} onChange={e => setBrief(e.target.value)} rows={2}
-              placeholder="Describe the goal — agent will read the codebase and write the plan."
-              style={{ ...inp, resize: 'vertical', lineHeight: 1.5 }} />
-          </div>
-          <div style={{ marginBottom: 20 }}>
-            {lbl('Write with agent')}
-            <select value={agentId} onChange={e => setAgentId(e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
-              <option value="">Write manually (I'll fill in the plan)</option>
-              {agentList.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-            </select>
-            {agentId && <div style={{ fontFamily: T.sans, fontSize: 12, color: T.muted, marginTop: 5 }}>Agent reads the codebase and writes a SPEC.md — appears in Plans once done.</div>}
-          </div>
-        </>}
-
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={onClose} style={{ flex: '0 0 auto', fontFamily: T.sans, fontSize: 13, fontWeight: 600, color: T.muted, background: 'transparent', border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 16px', cursor: 'pointer' }}>Cancel</button>
-          <button onClick={submit} disabled={!isValid || loading}
-            style={{ flex: 1, fontFamily: T.sans, fontSize: 13, fontWeight: 700, color: '#fff', background: T.tint, border: 'none', borderRadius: 10, padding: '10px 0', cursor: isValid && !loading ? 'pointer' : 'default', opacity: isValid && !loading ? 1 : 0.4 }}>
-            {loading ? '…' : mode === 'plan' ? (agentId ? 'Create & plan' : 'Create plan') : 'Add to queue'}
-          </button>
-        </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }

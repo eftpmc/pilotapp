@@ -63,7 +63,7 @@ export async function removeWorktree(project: Project, worktreePath: string): Pr
   await git.raw(['worktree', 'remove', '--force', worktreePath]);
 }
 
-export async function getDiff(worktreePath: string, baseBranch = 'main'): Promise<string> {
+export async function getDiff(worktreePath: string, baseBranch: string): Promise<string> {
   const git = simpleGit(worktreePath);
   const [committed, staged, unstaged] = await Promise.all([
     git.diff([`${baseBranch}..HEAD`]).catch(() => ''),  // committed on this branch
@@ -76,7 +76,7 @@ export async function getDiff(worktreePath: string, baseBranch = 'main'): Promis
 export async function mergeWorktree(
   project: Project,
   sessionBranch: string,
-  targetBranch = 'main'
+  targetBranch: string
 ): Promise<void> {
   const git    = simpleGit(project.repoPath);
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pilot-merge-'));
@@ -96,5 +96,5 @@ export async function commitWorktree(worktreePath: string): Promise<void> {
   const status = await git.status();
   if (status.files.length === 0) return;
   await git.add('.');
-  await git.commit('agent work', ['--allow-empty']);
+  await git.commit('agent work');
 }

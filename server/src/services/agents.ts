@@ -7,6 +7,12 @@ import { db } from '../db';
 import { resolveApiKey } from '../routes/settings';
 
 const COMPLETED_TTL_MS = 30 * 60 * 1000;
+const MAX_BUFFER = 200;
+const DATA_DIR = process.env.DATA_DIR ?? './data';
+
+function sessionLogPath(sessionId: string): string {
+  return path.join(DATA_DIR, `${sessionId}.log`);
+}
 
 // ---------------------------------------------------------------------------
 // Session shape expected by this service
@@ -47,10 +53,17 @@ function updateTaskStatusForSession(sessionId: string, status: string): void {
 // Binary resolution
 // ---------------------------------------------------------------------------
 
+function nvmBinPaths(): string[] {
+  const nvmDir = path.join(process.env.HOME ?? '', '.nvm', 'versions', 'node');
+  try {
+    return fs.readdirSync(nvmDir).map(v => path.join(nvmDir, v, 'bin'));
+  } catch { return []; }
+}
+
 const EXTRA_PATHS = [
   '/usr/local/bin',
   '/opt/homebrew/bin',
-  `${process.env.HOME}/.nvm/versions/node/*/bin`,
+  ...nvmBinPaths(),
   `${process.env.HOME}/.npm-global/bin`,
   `${process.env.HOME}/.local/bin`,
 ].join(':');
@@ -141,9 +154,13 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
   const entry: ActiveSession = { proc: null as any, buffer: [], subs: new Set() };
   active.set(session.id, entry);
 
+  fs.writeFileSync(sessionLogPath(session.id), '');
+
   const broadcast = (type: string, data: string) => {
     const msg = JSON.stringify({ type, sessionId: session.id, data });
     entry.buffer.push(msg);
+    if (entry.buffer.length > MAX_BUFFER) entry.buffer.shift();
+    fs.appendFileSync(sessionLogPath(session.id), msg + '\n');
     for (const ws of entry.subs) {
       if (ws.readyState === WebSocket.OPEN) ws.send(msg);
     }
@@ -212,8 +229,16 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
 export function subscribeToSession(sessionId: string, ws: WebSocket): boolean {
   const entry = active.get(sessionId);
   if (entry) {
-    for (const msg of entry.buffer) {
-      if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+    // Replay from the persisted log for complete history (buffer is capped)
+    try {
+      const lines = fs.readFileSync(sessionLogPath(sessionId), 'utf-8').split('\n').filter(Boolean);
+      for (const line of lines) {
+        if (ws.readyState === WebSocket.OPEN) ws.send(line);
+      }
+    } catch {
+      for (const msg of entry.buffer) {
+        if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+      }
     }
     entry.subs.add(ws);
     return true;
@@ -225,7 +250,14 @@ export function subscribeToSession(sessionId: string, ws: WebSocket): boolean {
     }
     return true;
   }
-  return false;
+  // Fall back to persisted log for sessions not in memory (e.g. after server restart)
+  try {
+    const lines = fs.readFileSync(sessionLogPath(sessionId), 'utf-8').split('\n').filter(Boolean);
+    for (const line of lines) {
+      if (ws.readyState === WebSocket.OPEN) ws.send(line);
+    }
+    return lines.length > 0;
+  } catch { return false; }
 }
 
 export function unsubscribeFromAllSessions(ws: WebSocket): void {
@@ -242,8 +274,10 @@ export function killAgent(sessionId: string): void {
 }
 
 export function agentHealth(): Record<string, { available: boolean; path: string | null }> {
+  const claudePath = findBinary('claude');
+  const codexPath  = findBinary('codex');
   return {
-    claude: { available: !!findBinary('claude'), path: findBinary('claude') },
-    codex:  { available: !!findBinary('codex'),  path: findBinary('codex') },
+    claude: { available: !!claudePath, path: claudePath },
+    codex:  { available: !!codexPath,  path: codexPath  },
   };
 }

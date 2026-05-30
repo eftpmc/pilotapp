@@ -18,17 +18,12 @@ function credentialStatus(uid: string) {
 export function resolveApiKey(uid: string, provider: string, agentId?: string, explicit?: string): string | null {
   if (explicit) return explicit;
 
-  // If agentId provided, try to look up the connection's api_key
+  // If agentId provided, try to look up the connection's api_key via a single join
   if (agentId) {
-    const agentRow = db.prepare('SELECT connection_id FROM agents WHERE id = ?').get(agentId) as
-      | { connection_id: string | null }
-      | undefined;
-    if (agentRow?.connection_id) {
-      const connRow = db.prepare('SELECT api_key FROM connections WHERE id = ?').get(agentRow.connection_id) as
-        | { api_key: string }
-        | undefined;
-      if (connRow?.api_key) return connRow.api_key;
-    }
+    const row = db.prepare(
+      'SELECT c.api_key FROM agents a JOIN connections c ON c.id = a.connection_id WHERE a.id = ?'
+    ).get(agentId) as { api_key: string } | undefined;
+    if (row?.api_key) return row.api_key;
   }
 
   // Fall back to env vars

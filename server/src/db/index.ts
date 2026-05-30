@@ -93,6 +93,17 @@ db.exec(`
   );
 `);
 
+// Indexes — safe to re-run
+db.exec(`
+  CREATE INDEX IF NOT EXISTS idx_tasks_user_id       ON tasks (user_id);
+  CREATE INDEX IF NOT EXISTS idx_tasks_project_id    ON tasks (project_id);
+  CREATE INDEX IF NOT EXISTS idx_tasks_status        ON tasks (status);
+  CREATE INDEX IF NOT EXISTS idx_sessions_user_id    ON sessions (user_id);
+  CREATE INDEX IF NOT EXISTS idx_sessions_project_id ON sessions (project_id);
+  CREATE INDEX IF NOT EXISTS idx_sessions_status     ON sessions (status);
+  CREATE INDEX IF NOT EXISTS idx_specs_project_id    ON specs (project_id);
+`);
+
 // Migrations — safe to re-run, each ALTER is wrapped in try/catch
 try { db.exec('ALTER TABLE agents ADD COLUMN connection_id TEXT REFERENCES connections(id)'); } catch {}
 try { db.exec('ALTER TABLE connections ADD COLUMN model TEXT'); } catch {}
@@ -100,3 +111,4 @@ try { db.exec('ALTER TABLE projects ADD COLUMN remote_url TEXT'); } catch {}
 try { db.exec('ALTER TABLE projects ADD COLUMN github_token TEXT'); } catch {}
 try { db.exec('ALTER TABLE projects ADD COLUMN local_path TEXT'); } catch {}
 try { db.exec('ALTER TABLE sessions ADD COLUMN spec_id TEXT REFERENCES specs(id)'); } catch {}
+try { db.exec('ALTER TABLE tasks ADD COLUMN priority INTEGER NOT NULL DEFAULT 0'); } catch {}

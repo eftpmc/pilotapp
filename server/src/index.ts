@@ -22,7 +22,7 @@ db.prepare("UPDATE sessions SET status = 'error' WHERE status = 'running' OR sta
 db.prepare("UPDATE tasks SET status = 'failed', completed_at = ? WHERE status = 'running'").run(new Date().toISOString());
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '4mb' }));
 
 // Serve web UI static files in production
 const publicDir = path.join(__dirname, '../public');

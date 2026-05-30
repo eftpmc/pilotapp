@@ -1,33 +1,24 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuid } from 'uuid';
 import { z } from 'zod';
+import fs from 'fs';
+import path from 'path';
 import { db } from '../db';
 import { createWorktree, removeWorktree, getDiff, mergeWorktree, commitWorktree } from '../services/git';
 import { killAgent, runAgent } from '../services/agents';
 import { authMiddleware, userId } from '../middleware/auth';
+import { SessionRow, toSession } from './_helpers';
+
+const DATA_DIR = process.env.DATA_DIR ?? './data';
 
 const router = Router();
 router.use(authMiddleware);
 
 // ---------------------------------------------------------------------------
 
-interface SessionRow {
-  id: string; user_id: string; agent_id: string; project_id: string;
-  work_task_id: string | null; spec_id: string | null; provider: string; branch: string;
-  worktree_path: string; status: string; created_at: string;
-}
 interface ProjectRow { id: string; name: string; repo_path: string; role: string; created_at: string }
 interface AgentRow   { id: string; provider: string }
-interface TaskRow    { id: string; prompt: string; status: string }
-
-function toSession(r: SessionRow) {
-  return {
-    id: r.id, agentId: r.agent_id, projectId: r.project_id,
-    workTaskId: r.work_task_id ?? undefined, specId: r.spec_id ?? undefined,
-    provider: r.provider as import('../types').AgentProvider,
-    branch: r.branch, worktreePath: r.worktree_path, status: r.status, createdAt: r.created_at,
-  };
-}
+interface TaskRow    { id: string; prompt: string; status: string; base_branch: string }
 
 // ---------------------------------------------------------------------------
 // GET /sessions
@@ -42,6 +33,16 @@ router.get('/', (req: Request, res: Response) => {
   sql += ' ORDER BY created_at DESC';
   const rows = db.prepare(sql).all(...params) as SessionRow[];
   res.json(rows.map(toSession));
+});
+
+// ---------------------------------------------------------------------------
+// GET /sessions/:id
+// ---------------------------------------------------------------------------
+
+router.get('/:id', (req: Request, res: Response) => {
+  const row = db.prepare('SELECT * FROM sessions WHERE id = ? AND user_id = ?').get(req.params.id, userId(req)) as SessionRow | undefined;
+  if (!row) { res.status(404).json({ error: 'Not found' }); return; }
+  res.json(toSession(row));
 });
 
 // ---------------------------------------------------------------------------
@@ -88,8 +89,23 @@ router.post('/', async (req: Request, res: Response) => {
 router.get('/:id/diff', async (req: Request, res: Response) => {
   const row = db.prepare('SELECT * FROM sessions WHERE id = ? AND user_id = ?').get(req.params.id, userId(req)) as SessionRow | undefined;
   if (!row) { res.status(404).json({ error: 'Not found' }); return; }
-  const diff = await getDiff(row.worktree_path);
+  const task = row.work_task_id
+    ? db.prepare('SELECT base_branch FROM tasks WHERE id = ?').get(row.work_task_id) as { base_branch: string } | undefined
+    : undefined;
+  const diff = await getDiff(row.worktree_path, task?.base_branch ?? 'main');
   res.json({ diff });
+});
+
+// ---------------------------------------------------------------------------
+// POST /sessions/:id/stop
+// ---------------------------------------------------------------------------
+
+router.post('/:id/stop', (req: Request, res: Response) => {
+  const row = db.prepare('SELECT * FROM sessions WHERE id = ? AND user_id = ?').get(req.params.id, userId(req)) as SessionRow | undefined;
+  if (!row) { res.status(404).json({ error: 'Not found' }); return; }
+  if (row.status !== 'running') { res.status(400).json({ error: 'Session is not running' }); return; }
+  killAgent(row.id);
+  res.json({ stopped: true });
 });
 
 // ---------------------------------------------------------------------------
@@ -102,12 +118,16 @@ router.post('/:id/merge', async (req: Request, res: Response) => {
   const project = row ? db.prepare('SELECT * FROM projects WHERE id = ?').get(row.project_id) as ProjectRow | undefined : undefined;
   if (!row || !project) { res.status(404).json({ error: 'Not found' }); return; }
 
-  // Commit anything the agent left uncommitted before merging
+  const task = row.work_task_id
+    ? db.prepare('SELECT base_branch FROM tasks WHERE id = ?').get(row.work_task_id) as { base_branch: string } | undefined
+    : undefined;
+  const targetBranch = task?.base_branch ?? 'main';
+
+  const projectObj = { id: project.id, name: project.name, repoPath: project.repo_path, role: project.role as any, createdAt: project.created_at };
   await commitWorktree(row.worktree_path).catch(() => {});
-  await mergeWorktree(
-    { id: project.id, name: project.name, repoPath: project.repo_path, role: project.role as any, createdAt: project.created_at },
-    row.branch
-  );
+  await mergeWorktree(projectObj, row.branch, targetBranch);
+  removeWorktree(projectObj, row.worktree_path).catch(() => {});
+  db.prepare("UPDATE sessions SET status = 'merged' WHERE id = ?").run(row.id);
   res.json({ merged: true });
 });
 
@@ -165,7 +185,8 @@ router.delete('/:id', async (req: Request, res: Response) => {
     }
   }
 
-  // Delete the session record first so discard always succeeds even if worktree cleanup fails
+  // Delete log file and session record first so discard always succeeds even if worktree cleanup fails
+  fs.unlink(path.join(DATA_DIR, `${row.id}.log`), () => {});
   db.prepare('DELETE FROM sessions WHERE id = ?').run(row.id);
 
   const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(row.project_id) as ProjectRow | undefined;

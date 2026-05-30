@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuid } from 'uuid';
 import { z } from 'zod';
+import simpleGit from 'simple-git';
 import { db } from '../db';
 import { authMiddleware, userId } from '../middleware/auth';
 import { createWorktree } from '../services/git';
@@ -169,6 +170,9 @@ router.patch('/:id', (req: Request, res: Response) => {
 router.delete('/:id', (req: Request, res: Response) => {
   const row = db.prepare('SELECT id FROM specs WHERE id = ? AND user_id = ?').get(req.params.id, userId(req));
   if (!row) { res.status(404).json({ error: 'Not found' }); return; }
+  // Null out spec_id on any sessions referencing this spec before deleting
+  // (FK constraint: sessions.spec_id → specs.id with foreign_keys = ON)
+  db.prepare('UPDATE sessions SET spec_id = NULL WHERE spec_id = ?').run(req.params.id);
   db.prepare('DELETE FROM specs WHERE id = ?').run(req.params.id);
   res.status(204).send();
 });
@@ -177,21 +181,24 @@ router.delete('/:id', (req: Request, res: Response) => {
 // POST /specs/:id/execute — create a task from this spec
 // ---------------------------------------------------------------------------
 
-router.post('/:id/execute', (req: Request, res: Response) => {
+router.post('/:id/execute', async (req: Request, res: Response) => {
   const uid = userId(req);
   const row = db.prepare('SELECT * FROM specs WHERE id = ? AND user_id = ?').get(req.params.id, uid) as SpecRow | undefined;
   if (!row) { res.status(404).json({ error: 'Not found' }); return; }
   if (!row.content.trim()) { res.status(400).json({ error: 'Spec has no content yet' }); return; }
 
-  const project = db.prepare('SELECT id FROM projects WHERE id = ? AND user_id = ?').get(row.project_id, uid);
+  const project = db.prepare('SELECT repo_path FROM projects WHERE id = ? AND user_id = ?').get(row.project_id, uid) as { repo_path: string } | undefined;
   if (!project) { res.status(404).json({ error: 'Project not found' }); return; }
+
+  let baseBranch = 'main';
+  try { baseBranch = (await simpleGit(project.repo_path).raw(['symbolic-ref', '--short', 'HEAD'])).trim(); } catch {}
 
   const taskId = uuid();
   const now    = new Date().toISOString();
 
   db.prepare(
     'INSERT INTO tasks (id, user_id, project_id, title, prompt, base_branch, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(taskId, uid, row.project_id, row.title, row.content, 'main', 'pending', now);
+  ).run(taskId, uid, row.project_id, row.title, row.content, baseBranch, 'pending', now);
 
   res.status(201).json({ taskId, projectId: row.project_id });
 });

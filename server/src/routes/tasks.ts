@@ -5,6 +5,7 @@ import { db } from '../db';
 import { createWorktree } from '../services/git';
 import { runAgent } from '../services/agents';
 import { authMiddleware, userId } from '../middleware/auth';
+import { SessionRow, toSession } from './_helpers';
 
 const router = Router();
 router.use(authMiddleware);
@@ -15,14 +16,8 @@ router.use(authMiddleware);
 
 interface TaskRow {
   id: string; user_id: string; project_id: string; title: string; prompt: string;
-  base_branch: string; status: string; agent_id: string | null; session_id: string | null;
+  base_branch: string; status: string; priority: number; agent_id: string | null; session_id: string | null;
   created_at: string; started_at: string | null; completed_at: string | null;
-}
-
-interface SessionRow {
-  id: string; user_id: string; agent_id: string; project_id: string;
-  work_task_id: string | null; provider: string; branch: string;
-  worktree_path: string; status: string; created_at: string;
 }
 
 interface ProjectRow { id: string; user_id: string; name: string; repo_path: string; role: string; created_at: string }
@@ -31,17 +26,10 @@ interface AgentRow   { id: string; user_id: string; name: string; provider: stri
 function toTask(r: TaskRow) {
   return {
     id: r.id, projectId: r.project_id, title: r.title, prompt: r.prompt,
-    baseBranch: r.base_branch, status: r.status, agentId: r.agent_id ?? undefined,
+    baseBranch: r.base_branch, status: r.status, priority: r.priority ?? 0,
+    agentId: r.agent_id ?? undefined,
     sessionId: r.session_id ?? undefined, createdAt: r.created_at,
     startedAt: r.started_at ?? undefined, completedAt: r.completed_at ?? undefined,
-  };
-}
-
-function toSession(r: SessionRow) {
-  return {
-    id: r.id, agentId: r.agent_id, projectId: r.project_id,
-    workTaskId: r.work_task_id ?? undefined, provider: r.provider as import('../types').AgentProvider,
-    branch: r.branch, worktreePath: r.worktree_path, status: r.status, createdAt: r.created_at,
   };
 }
 
@@ -81,7 +69,7 @@ router.post('/', (req: Request, res: Response) => {
   const task: TaskRow = {
     id: uuid(), user_id: userId(req), project_id: parsed.data.projectId,
     title: parsed.data.title, prompt: parsed.data.prompt,
-    base_branch: parsed.data.baseBranch, status: 'pending',
+    base_branch: parsed.data.baseBranch, status: 'pending', priority: 0,
     agent_id: null, session_id: null,
     created_at: new Date().toISOString(), started_at: null, completed_at: null,
   };
@@ -94,6 +82,62 @@ router.post('/', (req: Request, res: Response) => {
 });
 
 // ---------------------------------------------------------------------------
+// POST /tasks/queue/run  — must be before /:id to avoid matching "queue"
+// ---------------------------------------------------------------------------
+
+router.post('/queue/run', async (req: Request, res: Response) => {
+  const uid = userId(req);
+
+  const pendingTasks = db.prepare(
+    "SELECT * FROM tasks WHERE user_id = ? AND status = 'pending' ORDER BY priority DESC, created_at ASC"
+  ).all(uid) as TaskRow[];
+
+  const busyAgentIds = new Set(
+    (db.prepare("SELECT agent_id FROM sessions WHERE user_id = ? AND status = 'running'").all(uid) as { agent_id: string }[])
+      .map((r) => r.agent_id)
+  );
+
+  const idleAgents = (db.prepare('SELECT * FROM agents WHERE user_id = ?').all(uid) as AgentRow[])
+    .filter((a) => !busyAgentIds.has(a.id));
+
+  const dispatched: { task: ReturnType<typeof toTask>; session: ReturnType<typeof toSession> }[] = [];
+  const assignedTaskIds = new Set<string>();
+
+  for (const agent of idleAgents) {
+    const next = pendingTasks.find(t => !assignedTaskIds.has(t.id));
+    if (!next) continue;
+
+    const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(next.project_id) as ProjectRow;
+    const sessionId    = uuid();
+    const branch       = `agent/${sessionId}`;
+    const worktreePath = await createWorktree(
+      { id: project.id, name: project.name, repoPath: project.repo_path, role: project.role as any, createdAt: project.created_at },
+      sessionId,
+      next.base_branch
+    );
+
+    const now = new Date().toISOString();
+    db.prepare(
+      'INSERT INTO sessions (id, user_id, agent_id, project_id, work_task_id, provider, branch, worktree_path, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(sessionId, uid, agent.id, project.id, next.id, agent.provider, branch, worktreePath, 'idle', now);
+
+    db.prepare(
+      'UPDATE tasks SET status = ?, agent_id = ?, session_id = ?, started_at = ? WHERE id = ?'
+    ).run('running', agent.id, sessionId, now, next.id);
+
+    const updatedTask    = db.prepare('SELECT * FROM tasks WHERE id = ?').get(next.id) as TaskRow;
+    const updatedSession = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId) as SessionRow;
+
+    void runAgent(toSession(updatedSession), next.prompt, uid, agent.id);
+
+    dispatched.push({ task: toTask(updatedTask), session: toSession(updatedSession) });
+    assignedTaskIds.add(next.id);
+  }
+
+  res.json({ dispatched });
+});
+
+// ---------------------------------------------------------------------------
 // PATCH /tasks/:id
 // ---------------------------------------------------------------------------
 
@@ -101,6 +145,7 @@ const UpdateSchema = z.object({
   title:      z.string().min(1).optional(),
   prompt:     z.string().min(1).optional(),
   baseBranch: z.string().optional(),
+  priority:   z.number().int().min(0).optional(),
 });
 
 router.patch('/:id', (req: Request, res: Response) => {
@@ -108,12 +153,16 @@ router.patch('/:id', (req: Request, res: Response) => {
   if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
 
   const row = db.prepare('SELECT * FROM tasks WHERE id = ? AND user_id = ?').get(req.params.id, userId(req)) as TaskRow | undefined;
-  if (!row)                    { res.status(404).json({ error: 'Not found' }); return; }
+  if (!row) { res.status(404).json({ error: 'Not found' }); return; }
   if (row.status !== 'pending') { res.status(400).json({ error: 'Only pending tasks can be edited' }); return; }
 
-  if (parsed.data.title)      db.prepare('UPDATE tasks SET title = ? WHERE id = ?').run(parsed.data.title, row.id);
-  if (parsed.data.prompt)     db.prepare('UPDATE tasks SET prompt = ? WHERE id = ?').run(parsed.data.prompt, row.id);
-  if (parsed.data.baseBranch) db.prepare('UPDATE tasks SET base_branch = ? WHERE id = ?').run(parsed.data.baseBranch, row.id);
+  const sets: string[] = [];
+  const vals: unknown[] = [];
+  if (parsed.data.title      !== undefined) { sets.push('title = ?');       vals.push(parsed.data.title) }
+  if (parsed.data.prompt     !== undefined) { sets.push('prompt = ?');      vals.push(parsed.data.prompt) }
+  if (parsed.data.baseBranch !== undefined) { sets.push('base_branch = ?'); vals.push(parsed.data.baseBranch) }
+  if (parsed.data.priority   !== undefined) { sets.push('priority = ?');    vals.push(parsed.data.priority) }
+  if (sets.length > 0) { vals.push(row.id); db.prepare(`UPDATE tasks SET ${sets.join(', ')} WHERE id = ?`).run(...vals); }
 
   const updated = db.prepare('SELECT * FROM tasks WHERE id = ?').get(row.id) as TaskRow;
   res.json(toTask(updated));
@@ -175,66 +224,6 @@ router.post('/:id/assign', async (req: Request, res: Response) => {
   void runAgent(toSession(updatedSession), task.prompt, uid, agent.id);
 
   res.status(201).json({ task: toTask(updatedTask), session: toSession(updatedSession) });
-});
-
-// ---------------------------------------------------------------------------
-// POST /tasks/queue/run
-// ---------------------------------------------------------------------------
-
-router.post('/queue/run', async (req: Request, res: Response) => {
-  const uid = userId(req);
-
-  const pendingTasks = db.prepare(
-    "SELECT * FROM tasks WHERE user_id = ? AND status = 'pending' ORDER BY created_at ASC"
-  ).all(uid) as TaskRow[];
-
-  const busyAgentIds = new Set(
-    (db.prepare("SELECT agent_id FROM sessions WHERE user_id = ? AND status = 'running'").all(uid) as { agent_id: string }[])
-      .map((r) => r.agent_id)
-  );
-
-  const idleAgents = (db.prepare('SELECT * FROM agents WHERE user_id = ?').all(uid) as AgentRow[])
-    .filter((a) => !busyAgentIds.has(a.id));
-
-  const dispatched: { task: ReturnType<typeof toTask>; session: ReturnType<typeof toSession> }[] = [];
-  const assignedTaskIds = new Set<string>();
-
-  for (const agent of idleAgents) {
-    const next = pendingTasks.find((t) => {
-      if (assignedTaskIds.has(t.id)) return false;
-      const proj = db.prepare('SELECT id FROM projects WHERE id = ?').get(t.project_id) as { id: string } | undefined;
-      return !!proj;
-    });
-    if (!next) continue;
-
-    const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(next.project_id) as ProjectRow;
-    const sessionId    = uuid();
-    const branch       = `agent/${sessionId}`;
-    const worktreePath = await createWorktree(
-      { id: project.id, name: project.name, repoPath: project.repo_path, role: project.role as any, createdAt: project.created_at },
-      sessionId,
-      next.base_branch
-    );
-
-    const now = new Date().toISOString();
-    db.prepare(
-      'INSERT INTO sessions (id, user_id, agent_id, project_id, work_task_id, provider, branch, worktree_path, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(sessionId, uid, agent.id, project.id, next.id, agent.provider, branch, worktreePath, 'idle', now);
-
-    db.prepare(
-      'UPDATE tasks SET status = ?, agent_id = ?, session_id = ?, started_at = ? WHERE id = ?'
-    ).run('running', agent.id, sessionId, now, next.id);
-
-    const updatedTask    = db.prepare('SELECT * FROM tasks WHERE id = ?').get(next.id) as TaskRow;
-    const updatedSession = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId) as SessionRow;
-
-    void runAgent(toSession(updatedSession), next.prompt, uid, agent.id);
-
-    dispatched.push({ task: toTask(updatedTask), session: toSession(updatedSession) });
-    assignedTaskIds.add(next.id);
-  }
-
-  res.json({ dispatched });
 });
 
 export default router;

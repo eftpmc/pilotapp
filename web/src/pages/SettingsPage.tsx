@@ -3,224 +3,176 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { connections, agents } from '../api/client'
 import type { Connection, Agent, AgentProvider } from '../api/client'
 import { useTheme, ACCENTS, type ThemeMode } from '../theme'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { cn } from '@/lib/utils'
 
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  const { T } = useTheme()
-  return (
-    <div style={{ fontFamily: T.mono, fontSize: 10, fontWeight: 600, color: T.faint, textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 10 }}>
-      {children}
-    </div>
-  )
-}
+// ---------------------------------------------------------------------------
+// Provider badge
+// ---------------------------------------------------------------------------
 
-function TypeBadge({ type }: { type: string }) {
-  const { T } = useTheme()
-  const colors: Record<string, { bg: string; text: string }> = {
-    claude: { bg: '#F0820B20', text: '#F0820B' },
-    codex:  { bg: '#0A84FF20', text: '#0A84FF' },
-  }
-  const c = colors[type] ?? { bg: T.surface, text: T.muted }
+function ProviderBadge({ type }: { type: string }) {
   return (
-    <span style={{ fontFamily: T.sans, fontSize: 11, fontWeight: 600, color: c.text, background: c.bg, borderRadius: 5, padding: '2px 7px' }}>
+    <Badge variant="outline" className={cn(
+      'font-mono text-[10px]',
+      type === 'claude' && 'text-orange-500 border-orange-500/30 bg-orange-500/10',
+      type === 'codex'  && 'text-blue-500 border-blue-500/30 bg-blue-500/10',
+    )}>
       {type}
-    </span>
+    </Badge>
   )
 }
 
 // ---------------------------------------------------------------------------
-// Modals
+// Add Connection dialog
 // ---------------------------------------------------------------------------
 
-function AddConnectionModal({ onClose, onCreate, loading, error }: {
-  onClose: () => void
+function AddConnectionDialog({ open, onClose, onCreate, loading, error }: {
+  open: boolean; onClose: () => void
   onCreate: (body: { name: string; type: AgentProvider; apiKey?: string; model?: string }) => void
-  loading: boolean
-  error?: string
+  loading: boolean; error?: string
 }) {
-  const { T } = useTheme()
-  const inputStyle: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 9, padding: '9px 11px', fontFamily: T.sans, fontSize: 13, color: T.text, outline: 'none' }
   const [name, setName]     = useState('')
   const [type, setType]     = useState<AgentProvider>('claude')
   const [apiKey, setApiKey] = useState('')
   const [model, setModel]   = useState('')
 
-  const modelPlaceholder = type === 'claude' ? 'claude-opus-4-7' : 'o4-mini'
-
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60 }}>
-      <div onClick={e => e.stopPropagation()} style={{ width: 400, background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: '20px 22px 18px', boxShadow: '0 30px 80px rgba(0,0,0,.12)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 18 }}>
-          <span style={{ fontFamily: T.sans, fontSize: 17, fontWeight: 600, color: T.text }}>Add Connection</span>
-          <div style={{ flex: 1 }} />
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: T.muted, fontSize: 18, cursor: 'pointer', lineHeight: 1, padding: 4 }}>×</button>
-        </div>
+    <Dialog open={open} onOpenChange={o => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Add Connection</DialogTitle></DialogHeader>
 
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ fontFamily: T.mono, fontSize: 9.5, color: T.faint, textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 6 }}>Name</div>
-          <input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="My Claude Key" style={inputStyle} />
-        </div>
-
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ fontFamily: T.mono, fontSize: 9.5, color: T.faint, textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 8 }}>Type</div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {(['claude', 'codex'] as AgentProvider[]).map(t => (
-              <button key={t} type="button" onClick={() => setType(t)}
-                style={{
-                  flex: 1, padding: '8px 0', fontFamily: T.sans, fontSize: 13, fontWeight: 600,
-                  borderRadius: 9, cursor: 'pointer', border: `1px solid ${type === t ? T.tint : T.border}`,
-                  background: type === t ? T.tint + '15' : 'transparent',
-                  color: type === t ? T.tint : T.muted,
-                }}>
-                {t}
-              </button>
-            ))}
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label>Name</Label>
+            <Input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="My Claude Key" />
           </div>
-        </div>
 
-        <div style={{ display: 'flex', gap: 12, marginBottom: 8 }}>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontFamily: T.mono, fontSize: 9.5, color: T.faint, textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 6 }}>
-              API Key <span style={{ textTransform: 'none', letterSpacing: 0 }}>(optional)</span>
-            </div>
-            <input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)}
-              placeholder={type === 'claude' ? 'sk-ant-…' : 'sk-…'}
-              style={inputStyle} />
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontFamily: T.mono, fontSize: 9.5, color: T.faint, textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 6 }}>Model <span style={{ textTransform: 'none', letterSpacing: 0 }}>(optional)</span></div>
-            <input value={model} onChange={e => setModel(e.target.value)}
-              placeholder={modelPlaceholder}
-              style={{ ...inputStyle, fontFamily: T.mono, fontSize: 12 }} />
-          </div>
-        </div>
-
-        <div style={{ fontFamily: T.sans, fontSize: 12, color: T.muted, marginBottom: 18, lineHeight: 1.5 }}>
-          {apiKey
-            ? 'Tasks will use this API key — billed per token on your developer dashboard.'
-            : `No key — tasks will use ${type === 'claude' ? 'Claude Code OAuth (your claude.ai subscription)' : 'machine auth'} on this server.`}
-        </div>
-
-        {error && <p style={{ fontFamily: T.sans, fontSize: 13, color: T.danger, marginBottom: 12 }}>{error}</p>}
-
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={onClose} style={{ flex: '0 0 auto', fontFamily: T.sans, fontSize: 13, fontWeight: 600, color: T.muted, background: 'transparent', border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 16px', cursor: 'pointer' }}>
-            Cancel
-          </button>
-          <button onClick={() => onCreate({ name, type, apiKey: apiKey || undefined, model: model || undefined })} disabled={!name || loading}
-            style={{ flex: 1, fontFamily: T.sans, fontSize: 13, fontWeight: 700, color: '#FFFFFF', background: T.tint, border: 'none', borderRadius: 10, padding: '10px 0', cursor: name && !loading ? 'pointer' : 'default', opacity: name && !loading ? 1 : 0.4 }}>
-            {loading ? '…' : 'Add'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function AddAgentModal({ connectionList, onClose, onCreate, loading, error }: {
-  connectionList: Connection[]
-  onClose: () => void
-  onCreate: (body: { name: string; connectionId: string }) => void
-  loading: boolean
-  error?: string
-}) {
-  const { T } = useTheme()
-  const inputStyle: React.CSSProperties = { width: '100%', boxSizing: 'border-box', background: T.surface, border: `1px solid ${T.border}`, borderRadius: 9, padding: '9px 11px', fontFamily: T.sans, fontSize: 13, color: T.text, outline: 'none' }
-  const [name, setName]                   = useState('')
-  const [connectionId, setConnectionId]   = useState(connectionList[0]?.id ?? '')
-
-  return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 60 }}>
-      <div onClick={e => e.stopPropagation()} style={{ width: 400, background: T.card, border: `1px solid ${T.border}`, borderRadius: 16, padding: '20px 22px 18px', boxShadow: '0 30px 80px rgba(0,0,0,.12)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 18 }}>
-          <span style={{ fontFamily: T.sans, fontSize: 17, fontWeight: 600, color: T.text }}>Add Agent</span>
-          <div style={{ flex: 1 }} />
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: T.muted, fontSize: 18, cursor: 'pointer', lineHeight: 1, padding: 4 }}>×</button>
-        </div>
-
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ fontFamily: T.mono, fontSize: 9.5, color: T.faint, textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 6 }}>Name</div>
-          <input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="Backend Claude" style={inputStyle} />
-        </div>
-
-        <div style={{ marginBottom: 18 }}>
-          <div style={{ fontFamily: T.mono, fontSize: 9.5, color: T.faint, textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: 6 }}>Connection</div>
-          {connectionList.length === 0 ? (
-            <p style={{ fontFamily: T.sans, fontSize: 13, color: T.muted }}>No connections yet — add one first.</p>
-          ) : (
-            <select value={connectionId} onChange={e => setConnectionId(e.target.value)}
-              style={{ ...inputStyle, cursor: 'pointer' }}>
-              {connectionList.map(c => (
-                <option key={c.id} value={c.id}>{c.name} ({c.type})</option>
+          <div className="flex flex-col gap-1.5">
+            <Label>Type</Label>
+            <div className="flex gap-2">
+              {(['claude', 'codex'] as AgentProvider[]).map(t => (
+                <button key={t} type="button" onClick={() => setType(t)} className={cn(
+                  'flex-1 py-2 rounded-lg border text-sm font-semibold transition-colors cursor-pointer',
+                  type === t
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border bg-transparent text-muted-foreground hover:text-foreground'
+                )}>{t}</button>
               ))}
-            </select>
-          )}
-        </div>
+            </div>
+          </div>
 
-        {error && <p style={{ fontFamily: T.sans, fontSize: 13, color: T.danger, marginBottom: 12 }}>{error}</p>}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label>API Key <span className="opacity-60">(optional)</span></Label>
+              <Input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)}
+                placeholder={type === 'claude' ? 'sk-ant-…' : 'sk-…'} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>Model <span className="opacity-60">(optional)</span></Label>
+              <Input value={model} onChange={e => setModel(e.target.value)}
+                placeholder={type === 'claude' ? 'claude-opus-4-7' : 'o4-mini'}
+                className="font-mono text-xs" />
+            </div>
+          </div>
 
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={onClose} style={{ flex: '0 0 auto', fontFamily: T.sans, fontSize: 13, fontWeight: 600, color: T.muted, background: 'transparent', border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 16px', cursor: 'pointer' }}>
-            Cancel
-          </button>
-          <button onClick={() => onCreate({ name, connectionId })} disabled={!name || !connectionId || loading}
-            style={{ flex: 1, fontFamily: T.sans, fontSize: 13, fontWeight: 700, color: '#FFFFFF', background: T.tint, border: 'none', borderRadius: 10, padding: '10px 0', cursor: (!name || !connectionId || loading) ? 'default' : 'pointer', opacity: (!name || !connectionId || loading) ? 0.4 : 1 }}>
-            {loading ? '…' : 'Add'}
-          </button>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            {apiKey
+              ? 'Tasks will use this API key — billed per token on your developer dashboard.'
+              : `No key — tasks will use ${type === 'claude' ? 'Claude Code OAuth (your claude.ai subscription)' : 'machine auth'} on this server.`}
+          </p>
+
+          {error && <p className="text-sm text-destructive">{error}</p>}
+
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+            <Button className="flex-1" disabled={!name || loading}
+              onClick={() => onCreate({ name, type, apiKey: apiKey || undefined, model: model || undefined })}>
+              {loading ? '…' : 'Add'}
+            </Button>
+          </div>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
 // ---------------------------------------------------------------------------
-// Grouped list helpers
+// Add Agent dialog
 // ---------------------------------------------------------------------------
 
-function Card({ children }: { children: React.ReactNode }) {
-  const { T } = useTheme()
+function AddAgentDialog({ open, connectionList, onClose, onCreate, loading, error }: {
+  open: boolean; connectionList: Connection[]; onClose: () => void
+  onCreate: (body: { name: string; connectionId: string }) => void
+  loading: boolean; error?: string
+}) {
+  const [name, setName]               = useState('')
+  const [connectionId, setConnectionId] = useState(connectionList[0]?.id ?? '')
+
   return (
-    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: 14, overflow: 'hidden' }}>
-      {children}
-    </div>
+    <Dialog open={open} onOpenChange={o => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Add Agent</DialogTitle></DialogHeader>
+
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <Label>Name</Label>
+            <Input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="Backend Claude" />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label>Connection</Label>
+            {connectionList.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No connections yet — add one first.</p>
+            ) : (
+              <Select value={connectionId} onValueChange={setConnectionId}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {connectionList.map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.name} ({c.type})</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+
+          {error && <p className="text-sm text-destructive">{error}</p>}
+
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+            <Button className="flex-1" disabled={!name || !connectionId || loading}
+              onClick={() => onCreate({ name, connectionId })}>
+              {loading ? '…' : 'Add'}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
-function Row({ children, isLast }: { children: React.ReactNode; isLast?: boolean }) {
-  const { T } = useTheme()
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: isLast ? 'none' : `1px solid ${T.border}` }}>
-      {children}
-    </div>
-  )
-}
-
-function AuthBadge({ hasKey, type }: { hasKey: boolean; type: string }) {
-  const { T } = useTheme()
-  if (hasKey) return (
-    <span style={{ fontFamily: T.mono, fontSize: 10, color: T.muted, background: T.surface2, border: `1px solid ${T.border}`, borderRadius: 5, padding: '1px 6px' }}>API key</span>
-  )
-  return (
-    <span style={{ fontFamily: T.mono, fontSize: 10, color: T.green, background: T.green + '15', border: `1px solid ${T.green}30`, borderRadius: 5, padding: '1px 6px' }}>
-      {type === 'claude' ? 'subscription' : 'machine auth'}
-    </span>
-  )
-}
+// ---------------------------------------------------------------------------
+// Confirm-delete button
+// ---------------------------------------------------------------------------
 
 function DeleteBtn({ onDelete }: { onDelete: () => void }) {
-  const { T } = useTheme()
   const [confirming, setConfirming] = useState(false)
-  if (confirming) {
-    return (
-      <div style={{ display: 'flex', gap: 6 }}>
-        <button onClick={() => setConfirming(false)} style={{ fontFamily: T.sans, fontSize: 11, color: T.muted, background: 'transparent', border: `1px solid ${T.border}`, borderRadius: 6, padding: '3px 9px', cursor: 'pointer' }}>Cancel</button>
-        <button onClick={onDelete} style={{ fontFamily: T.sans, fontSize: 11, fontWeight: 600, color: '#fff', background: T.danger, border: 'none', borderRadius: 6, padding: '3px 9px', cursor: 'pointer' }}>Delete</button>
-      </div>
-    )
-  }
+  if (confirming) return (
+    <div className="flex gap-1.5">
+      <Button size="sm" variant="outline" onClick={() => setConfirming(false)}>Cancel</Button>
+      <Button size="sm" variant="destructive" onClick={onDelete}>Delete</Button>
+    </div>
+  )
   return (
-    <button onClick={() => setConfirming(true)} style={{ fontFamily: T.sans, fontSize: 11, color: T.faint, background: 'transparent', border: `1px solid ${T.border}`, borderRadius: 6, padding: '3px 9px', cursor: 'pointer' }}>
+    <Button size="sm" variant="outline" onClick={() => setConfirming(true)}
+      className="text-muted-foreground hover:text-destructive hover:border-destructive/40">
       Delete
-    </button>
+    </Button>
   )
 }
 
@@ -229,7 +181,7 @@ function DeleteBtn({ onDelete }: { onDelete: () => void }) {
 // ---------------------------------------------------------------------------
 
 export default function SettingsPage() {
-  const { T, theme, accent, setTheme, setAccent } = useTheme()
+  const { theme, accent, setTheme, setAccent } = useTheme()
   const qc = useQueryClient()
   const [showAddConnection, setShowAddConnection] = useState(false)
   const [showAddAgent, setShowAddAgent]           = useState(false)
@@ -241,17 +193,14 @@ export default function SettingsPage() {
     mutationFn: (body: Parameters<typeof connections.create>[0]) => connections.create(body),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['connections'] }); setShowAddConnection(false) },
   })
-
   const deleteConnection = useMutation({
     mutationFn: (id: string) => connections.delete(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['connections'] }),
   })
-
   const createAgent = useMutation({
     mutationFn: (body: Parameters<typeof agents.create>[0]) => agents.create(body),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['agents'] }); setShowAddAgent(false) },
   })
-
   const deleteAgent = useMutation({
     mutationFn: (id: string) => agents.delete(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['agents'] }),
@@ -267,153 +216,141 @@ export default function SettingsPage() {
   }
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto', background: T.bg }}>
-      <div style={{ maxWidth: 640, margin: '0 auto', padding: '32px 24px', display: 'flex', flexDirection: 'column', gap: 32 }}>
+    <div className="flex-1 overflow-y-auto bg-background">
+      <div className="max-w-2xl mx-auto px-6 py-10 flex flex-col gap-10">
 
-        <span style={{ fontFamily: T.sans, fontSize: 22, fontWeight: 700, color: T.text, letterSpacing: '-.02em' }}>Settings</span>
+        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
 
-        {/* ------------------------------------------------------------------ */}
-        {/* Connections                                                         */}
-        {/* ------------------------------------------------------------------ */}
-        <section>
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 10 }}>
-            <SectionTitle>Connections</SectionTitle>
-            <div style={{ flex: 1 }} />
-            <button onClick={() => setShowAddConnection(true)}
-              style={{ fontFamily: T.sans, fontSize: 12, fontWeight: 600, color: '#fff', background: T.tint, border: 'none', borderRadius: 7, padding: '5px 12px', cursor: 'pointer' }}>
-              + Add
-            </button>
+        {/* Connections */}
+        <section className="flex flex-col gap-3">
+          <div className="flex items-center">
+            <span className="text-sm font-semibold text-foreground">Connections</span>
+            <div className="flex-1" />
+            <Button size="sm" onClick={() => setShowAddConnection(true)}>+ Add</Button>
           </div>
 
           {connectionList.length === 0 ? (
-            <div style={{ fontFamily: T.sans, fontSize: 13, color: T.muted, padding: '16px 0' }}>
-              No connections yet. Add an API key to get started.
-            </div>
+            <p className="text-sm text-muted-foreground">No connections yet. Add an API key to get started.</p>
           ) : (
-            <Card>
+            <div className="bg-card rounded-2xl overflow-hidden [box-shadow:var(--shadow-card)]">
               {connectionList.map((c, i) => (
-                <Row key={c.id} isLast={i === connectionList.length - 1}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ fontFamily: T.sans, fontSize: 14, fontWeight: 500, color: T.text }}>{c.name}</span>
+                <div key={c.id}>
+                  <div className="flex items-center gap-3 px-4 py-3">
+                    <span className="text-sm font-medium text-foreground flex-1">{c.name}</span>
+                    {c.model && <span className="font-mono text-[10px] text-muted-foreground">{c.model}</span>}
+                    <Badge variant="outline" className={cn(
+                      'font-mono text-[10px]',
+                      c.hasKey ? 'text-muted-foreground' : 'text-green-500 border-green-500/30 bg-green-500/10'
+                    )}>
+                      {c.hasKey ? 'API key' : c.type === 'claude' ? 'subscription' : 'machine auth'}
+                    </Badge>
+                    <ProviderBadge type={c.type} />
+                    <DeleteBtn onDelete={() => deleteConnection.mutate(c.id)} />
                   </div>
-                  {c.model && <span style={{ fontFamily: T.mono, fontSize: 10, color: T.faint }}>{c.model}</span>}
-                  <AuthBadge hasKey={c.hasKey} type={c.type} />
-                  <TypeBadge type={c.type} />
-                  <DeleteBtn onDelete={() => deleteConnection.mutate(c.id)} />
-                </Row>
+                  {i < connectionList.length - 1 && <Separator />}
+                </div>
               ))}
-            </Card>
+            </div>
           )}
         </section>
 
-        {/* ------------------------------------------------------------------ */}
-        {/* Agents                                                              */}
-        {/* ------------------------------------------------------------------ */}
-        <section>
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 10 }}>
-            <SectionTitle>Agents</SectionTitle>
-            <div style={{ flex: 1 }} />
-            <button onClick={() => setShowAddAgent(true)} disabled={connectionList.length === 0}
-              style={{ fontFamily: T.sans, fontSize: 12, fontWeight: 600, color: '#fff', background: T.tint, border: 'none', borderRadius: 7, padding: '5px 12px', cursor: connectionList.length === 0 ? 'default' : 'pointer', opacity: connectionList.length === 0 ? 0.4 : 1 }}>
-              + Add
-            </button>
+        {/* Agents */}
+        <section className="flex flex-col gap-3">
+          <div className="flex items-center">
+            <span className="text-sm font-semibold text-foreground">Agents</span>
+            <div className="flex-1" />
+            <Button size="sm" disabled={connectionList.length === 0} onClick={() => setShowAddAgent(true)}>+ Add</Button>
           </div>
 
           {agentList.length === 0 ? (
-            <div style={{ fontFamily: T.sans, fontSize: 13, color: T.muted, padding: '16px 0' }}>
+            <p className="text-sm text-muted-foreground">
               No agents yet.{connectionList.length === 0 ? ' Add a connection first.' : ' Add an agent to dispatch tasks.'}
-            </div>
+            </p>
           ) : (
-            <Card>
+            <div className="bg-card rounded-2xl overflow-hidden [box-shadow:var(--shadow-card)]">
               {agentList.map((a, i) => {
                 const conn = connectionFor(a)
                 return (
-                  <Row key={a.id} isLast={i === agentList.length - 1}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <span style={{ fontFamily: T.sans, fontSize: 14, fontWeight: 500, color: T.text }}>{a.name}</span>
+                  <div key={a.id}>
+                    <div className="flex items-center gap-3 px-4 py-3">
+                      <span className="text-sm font-medium text-foreground flex-1">{a.name}</span>
+                      {conn ? (
+                        <div className="flex flex-col items-end gap-0.5">
+                          <ProviderBadge type={conn.type} />
+                          <span className="font-mono text-[10px] text-muted-foreground">
+                            {conn.name}{conn.model ? ` · ${conn.model}` : ''}
+                          </span>
+                        </div>
+                      ) : (
+                        <ProviderBadge type={a.provider} />
+                      )}
+                      <DeleteBtn onDelete={() => deleteAgent.mutate(a.id)} />
                     </div>
-                    {conn ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
-                        <TypeBadge type={conn.type} />
-                        <span style={{ fontFamily: T.mono, fontSize: 10, color: T.faint }}>{conn.name}{conn.model ? ` · ${conn.model}` : ''}</span>
-                      </div>
-                    ) : (
-                      <TypeBadge type={a.provider} />
-                    )}
-                    <DeleteBtn onDelete={() => deleteAgent.mutate(a.id)} />
-                  </Row>
+                    {i < agentList.length - 1 && <Separator />}
+                  </div>
                 )
               })}
-            </Card>
+            </div>
           )}
         </section>
 
-        {/* ------------------------------------------------------------------ */}
-        {/* Appearance                                                          */}
-        {/* ------------------------------------------------------------------ */}
-        <section>
-          <SectionTitle>Appearance</SectionTitle>
-          <Card>
-            <Row>
-              <span style={{ fontFamily: T.sans, fontSize: 14, color: T.text, flex: 1 }}>Theme</span>
-              <div style={{ display: 'flex', gap: 2, background: T.surface2, borderRadius: 8, padding: 2 }}>
-                {(['light', 'system', 'dark'] as ThemeMode[]).map(t => (
-                  <button key={t} onClick={() => setTheme(t)} style={{
-                    fontFamily: T.sans, fontSize: 12, fontWeight: theme === t ? 600 : 500,
-                    color: theme === t ? T.text : T.muted,
-                    background: theme === t ? T.card : 'transparent',
-                    border: 'none', borderRadius: 6, padding: '5px 12px', cursor: 'pointer',
-                    boxShadow: theme === t ? '0 1px 2px rgba(0,0,0,.1)' : 'none',
-                    textTransform: 'capitalize',
-                  }}>{t}</button>
+        {/* Appearance */}
+        <section className="flex flex-col gap-3">
+          <span className="text-sm font-semibold text-foreground">Appearance</span>
+          <div className="bg-card rounded-2xl overflow-hidden [box-shadow:var(--shadow-card)]">
+            <div className="flex items-center gap-3 px-4 py-3">
+              <span className="text-sm text-foreground flex-1">Theme</span>
+              <div className="flex gap-0.5 bg-muted rounded-lg p-0.5">
+                {(['dark', 'system', 'light'] as ThemeMode[]).map(t => (
+                  <button key={t} onClick={() => setTheme(t)} className={cn(
+                    'px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer border-none',
+                    theme === t
+                      ? 'bg-card text-foreground font-semibold shadow-sm'
+                      : 'bg-transparent text-muted-foreground hover:text-foreground',
+                  )}>{t}</button>
                 ))}
               </div>
-            </Row>
-            <Row isLast>
-              <span style={{ fontFamily: T.sans, fontSize: 14, color: T.text, flex: 1 }}>Accent color</span>
-              <div style={{ display: 'flex', gap: 8 }}>
+            </div>
+            <Separator />
+            <div className="flex items-center gap-3 px-4 py-3">
+              <span className="text-sm text-foreground flex-1">Accent color</span>
+              <div className="flex gap-2">
                 {ACCENTS.map(({ hex, label }) => (
-                  <button key={hex} title={label} onClick={() => setAccent(hex)} style={{
-                    width: 22, height: 22, borderRadius: '50%', background: hex, border: accent === hex ? `2px solid ${T.text}` : '2px solid transparent',
-                    cursor: 'pointer', boxShadow: '0 0 0 1px rgba(0,0,0,.1)',
-                  }} />
+                  <button key={hex} title={label} onClick={() => setAccent(hex)} className={cn(
+                    'w-5 h-5 rounded-full cursor-pointer border-2 transition-all',
+                    accent === hex ? 'border-foreground scale-110' : 'border-transparent hover:scale-110',
+                  )} style={{ background: hex }} />
                 ))}
               </div>
-            </Row>
-          </Card>
+            </div>
+          </div>
         </section>
 
-        {/* ------------------------------------------------------------------ */}
-        {/* Account                                                             */}
-        {/* ------------------------------------------------------------------ */}
-        <section>
-          <SectionTitle>Account</SectionTitle>
-          <button onClick={signOut}
-            style={{ fontFamily: T.sans, fontSize: 13, color: T.danger, background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, textDecoration: 'underline', textUnderlineOffset: 3 }}>
+        {/* Account */}
+        <section className="flex flex-col gap-3">
+          <span className="text-sm font-semibold text-foreground">Account</span>
+          <button onClick={signOut} className="text-sm text-destructive cursor-pointer bg-transparent border-none text-left underline underline-offset-3 hover:opacity-80 transition-opacity w-fit">
             Sign out
           </button>
         </section>
 
       </div>
 
-      {showAddConnection && (
-        <AddConnectionModal
-          onClose={() => setShowAddConnection(false)}
-          onCreate={body => createConnection.mutate(body)}
-          loading={createConnection.isPending}
-          error={createConnection.error?.message}
-        />
-      )}
-
-      {showAddAgent && (
-        <AddAgentModal
-          connectionList={connectionList}
-          onClose={() => setShowAddAgent(false)}
-          onCreate={body => createAgent.mutate(body)}
-          loading={createAgent.isPending}
-          error={createAgent.error?.message}
-        />
-      )}
+      <AddConnectionDialog
+        open={showAddConnection}
+        onClose={() => setShowAddConnection(false)}
+        onCreate={body => createConnection.mutate(body)}
+        loading={createConnection.isPending}
+        error={createConnection.error?.message}
+      />
+      <AddAgentDialog
+        open={showAddAgent}
+        connectionList={connectionList}
+        onClose={() => setShowAddAgent(false)}
+        onCreate={body => createAgent.mutate(body)}
+        loading={createAgent.isPending}
+        error={createAgent.error?.message}
+      />
     </div>
   )
 }
