@@ -6,6 +6,7 @@ import path from 'path';
 import { db } from '../db';
 import { createWorktree, removeWorktree, getDiff, mergeWorktree, commitWorktree } from '../services/git';
 import { killAgent, runAgent } from '../services/agents';
+import { writeEvent } from '../services/events';
 import { authMiddleware, userId } from '../middleware/auth';
 import { SessionRow, toSession } from './_helpers';
 
@@ -128,7 +129,69 @@ router.post('/:id/merge', async (req: Request, res: Response) => {
   await mergeWorktree(projectObj, row.branch, targetBranch);
   removeWorktree(projectObj, row.worktree_path).catch(() => {});
   db.prepare("UPDATE sessions SET status = 'merged' WHERE id = ?").run(row.id);
+  writeEvent(uid, 'session.merged', { sessionId: row.id, taskId: row.work_task_id ?? undefined, projectId: row.project_id, agentId: row.agent_id });
   res.json({ merged: true });
+});
+
+// ---------------------------------------------------------------------------
+// POST /sessions/:id/request-review
+// ---------------------------------------------------------------------------
+
+interface AgentRow2 { id: string; provider: string }
+
+const RequestReviewSchema = z.object({ agentId: z.string() });
+
+router.post('/:id/request-review', async (req: Request, res: Response) => {
+  const uid = userId(req);
+  const row = db.prepare('SELECT * FROM sessions WHERE id = ? AND user_id = ?').get(req.params.id, uid) as SessionRow | undefined;
+  if (!row) { res.status(404).json({ error: 'Not found' }); return; }
+  if (row.status !== 'done') { res.status(400).json({ error: 'Session must be done to request review' }); return; }
+  if (row.review_verdict && row.review_verdict !== 'pending') { res.status(400).json({ error: 'Already reviewed' }); return; }
+
+  const parsed = RequestReviewSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+
+  const reviewer = db.prepare('SELECT id, provider FROM agents WHERE id = ? AND user_id = ?').get(parsed.data.agentId, uid) as AgentRow2 | undefined;
+  if (!reviewer) { res.status(404).json({ error: 'Agent not found' }); return; }
+
+  const task    = row.work_task_id ? db.prepare('SELECT base_branch, prompt FROM tasks WHERE id = ?').get(row.work_task_id) as { base_branch: string; prompt: string } | undefined : undefined;
+  const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(row.project_id) as ProjectRow | undefined;
+  if (!project) { res.status(404).json({ error: 'Project not found' }); return; }
+
+  const baseBranch = task?.base_branch ?? 'main';
+  const diff = await getDiff(row.worktree_path, baseBranch).catch(() => '(diff unavailable)');
+
+  const reviewPrompt = `You are conducting a code review for a colleague's work.
+
+Original task:
+${task?.prompt ?? '(no task description)'}
+
+Git diff:
+\`\`\`diff
+${diff.slice(0, 40000)}
+\`\`\`
+
+Review the changes carefully. After your review, write a REVIEW.md file in the project root:
+- First line must be exactly: VERDICT: APPROVED  or  VERDICT: CHANGES_REQUESTED
+- Followed by your detailed review notes, specific issues, and suggestions.`;
+
+  const reviewId     = uuid();
+  const reviewBranch = `review/${reviewId}`;
+  const projectObj   = { id: project.id, name: project.name, repoPath: project.repo_path, role: project.role as any, createdAt: project.created_at };
+
+  const worktreePath = await createWorktree(projectObj, reviewId, baseBranch);
+  const now = new Date().toISOString();
+
+  db.prepare(
+    'INSERT INTO sessions (id, user_id, agent_id, project_id, work_task_id, provider, branch, worktree_path, status, parent_session_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(reviewId, uid, reviewer.id, project.id, row.work_task_id ?? null, reviewer.provider, reviewBranch, worktreePath, 'idle', row.id, now);
+
+  db.prepare("UPDATE sessions SET review_verdict = 'pending' WHERE id = ?").run(row.id);
+
+  const reviewSession = db.prepare('SELECT * FROM sessions WHERE id = ?').get(reviewId) as SessionRow;
+  void runAgent(toSession(reviewSession), reviewPrompt, uid, reviewer.id);
+
+  res.status(201).json(toSession(reviewSession));
 });
 
 // ---------------------------------------------------------------------------
@@ -173,6 +236,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
   const uid = userId(req);
   const row = db.prepare('SELECT * FROM sessions WHERE id = ? AND user_id = ?').get(req.params.id, uid) as SessionRow | undefined;
   if (!row) { res.status(404).json({ error: 'Not found' }); return; }
+  if (row.status === 'merged') { res.status(400).json({ error: 'Cannot discard a merged session' }); return; }
 
   killAgent(row.id);
 

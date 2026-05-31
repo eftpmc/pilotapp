@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
+import { Highlight, themes } from 'prism-react-renderer'
 import { projects } from '../api/client'
+import { useTheme } from '../theme'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ViewToggle, type ViewMode } from '@/components/ViewToggle'
 import { cn } from '@/lib/utils'
@@ -9,6 +11,15 @@ import {
   File, FileCode2, FileText, Braces, Paintbrush, Globe, Image,
   FolderOpen, X, ChevronRight,
 } from 'lucide-react'
+
+const PRISM_LANG: Record<string, string> = {
+  ts: 'typescript', tsx: 'tsx', js: 'javascript', jsx: 'jsx',
+  py: 'python', go: 'go', rs: 'rust', rb: 'ruby', java: 'java',
+  json: 'json', yaml: 'yaml', yml: 'yaml', toml: 'toml',
+  md: 'markdown', mdx: 'markdown', css: 'css', scss: 'scss',
+  sass: 'scss', html: 'html', xml: 'xml', sh: 'bash', bash: 'bash',
+  sql: 'sql', graphql: 'graphql', swift: 'swift', kt: 'kotlin',
+}
 
 // ---------------------------------------------------------------------------
 // File type metadata
@@ -69,20 +80,37 @@ function groupByDir(files: string[]): DirGroup[] {
 }
 
 // ---------------------------------------------------------------------------
-// Code preview with line numbers
+// Syntax-highlighted code preview
 // ---------------------------------------------------------------------------
 
-function CodePreview({ content }: { content: string }) {
-  const lines = content.split('\n')
+function CodePreview({ content, filePath }: { content: string; filePath: string }) {
+  const { isDark } = useTheme()
+  const ext = filePath.split('.').pop()?.toLowerCase() ?? ''
+  const language = PRISM_LANG[ext] ?? 'plain'
+  const theme = isDark ? themes.oneDark : themes.oneLight
+
   return (
-    <div className="flex font-mono text-[11.5px] leading-[1.7] h-full">
-      <div className="select-none pr-4 pl-4 text-right text-muted-foreground/30 shrink-0 border-r border-border/40 min-w-[3rem]">
-        {lines.map((_, i) => <div key={i}>{i + 1}</div>)}
-      </div>
-      <pre className="flex-1 overflow-auto m-0 px-4 py-0 text-foreground/80 whitespace-pre">
-        {content}
-      </pre>
-    </div>
+    <Highlight theme={theme} code={content.trimEnd()} language={language}>
+      {({ tokens, getLineProps, getTokenProps }) => (
+        <div className="flex font-mono text-xs leading-relaxed min-w-0">
+          {/* Line numbers */}
+          <div className="select-none text-right shrink-0 border-r border-border/30 min-w-[3rem] pr-3 pl-4"
+            style={{ color: 'var(--color-muted-foreground)', opacity: 0.4 }}>
+            {tokens.map((_, i) => <div key={i}>{i + 1}</div>)}
+          </div>
+          {/* Code */}
+          <pre className="flex-1 m-0 px-4 py-0 overflow-x-auto whitespace-pre bg-transparent">
+            {tokens.map((line, i) => (
+              <div key={i} {...getLineProps({ line })}>
+                {line.map((token, key) => (
+                  <span key={key} {...getTokenProps({ token })} />
+                ))}
+              </div>
+            ))}
+          </pre>
+        </div>
+      )}
+    </Highlight>
   )
 }
 
@@ -116,7 +144,7 @@ function FileGridCard({ path, selected, onClick }: { path: string; selected: boo
           selected ? 'text-primary' : 'text-foreground'
         )} title={path}>{name}</p>
         {ext && (
-          <span className="font-mono text-[9px] text-muted-foreground uppercase tracking-wide">{ext}</span>
+          <span className="font-mono text-[10px] text-muted-foreground uppercase tracking-wide">{ext}</span>
         )}
       </div>
     </button>
@@ -146,7 +174,7 @@ function FileListRow({ path, selected, onClick, indent = false }: {
       <div className="w-4 h-4 rounded flex items-center justify-center shrink-0" style={{ background: color + '18' }}>
         <Icon className="h-2.5 w-2.5" style={{ color }} />
       </div>
-      <span className="font-mono text-[11.5px] flex-1 truncate">{path}</span>
+      <span className="font-mono text-xs flex-1 truncate">{path}</span>
     </button>
   )
 }
@@ -171,6 +199,13 @@ export default function FilesPage() {
   const fileList = fileData?.files ?? []
   const groups = groupByDir(fileList)
 
+  // Auto-open first 3 non-root directories when files load
+  useEffect(() => {
+    if (fileList.length === 0) return
+    const dirs = groups.filter(g => g.dir !== '').slice(0, 3).map(g => g.dir)
+    if (dirs.length > 0) setOpenDirs(new Set(dirs))
+  }, [fileList.length]) // eslint-disable-line react-hooks/exhaustive-deps
+
   async function selectFile(path: string) {
     if (path === selectedFile) { setSelected(null); setContent(null); return }
     setSelected(path)
@@ -192,7 +227,7 @@ export default function FilesPage() {
   const previewOpen = selectedFile !== null
 
   return (
-    <div className="flex-1 flex flex-col bg-background">
+    <div className="flex-1 min-h-0 flex flex-col bg-background">
 
       {/* Top bar */}
       <div className="h-14 shrink-0 flex items-center gap-3 px-6 border-b border-border/60">
@@ -257,7 +292,7 @@ export default function FilesPage() {
             {/* Preview header */}
             <div className="h-9 shrink-0 flex items-center gap-2 px-4 border-b border-border/60 bg-muted/20">
               {(() => { const { icon: Icon, color } = fileMeta(selectedFile!); return <Icon className="h-3.5 w-3.5 shrink-0" style={{ color }} />; })()}
-              <span className="font-mono text-[11.5px] text-muted-foreground flex-1 truncate">{selectedFile}</span>
+              <span className="font-mono text-xs text-muted-foreground flex-1 truncate">{selectedFile}</span>
               <button
                 onClick={() => { setSelected(null); setContent(null) }}
                 className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer bg-transparent border-none"
@@ -267,10 +302,10 @@ export default function FilesPage() {
             </div>
             {/* Preview content */}
             <ScrollArea className="flex-1 bg-muted/10">
-              <div className="py-3">
+              <div className="py-4">
                 {loading
                   ? <p className="font-mono text-xs text-muted-foreground px-4">Loading…</p>
-                  : <CodePreview content={fileContent ?? ''} />}
+                  : <CodePreview content={fileContent ?? ''} filePath={selectedFile ?? ''} />}
               </div>
             </ScrollArea>
           </div>

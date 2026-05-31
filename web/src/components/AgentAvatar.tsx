@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { KNOWN_FACES } from '../theme'
-import type { Agent } from '../api/client'
+import type { Employee } from '../api/client'
 
 interface Props {
-  agent?: Agent
+  agent?: Employee
   size?: number
 }
 

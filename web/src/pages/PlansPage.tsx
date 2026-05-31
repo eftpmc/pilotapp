@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
-import { specs, agents, sessions } from '../api/client'
-import type { Spec, Agent } from '../api/client'
+import { specs, employees, sessions } from '../api/client'
+import type { Spec, Employee } from '../api/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -32,7 +32,7 @@ function SpecEditor({ spec, onUpdate }: { spec: Spec; onUpdate: (b: { content: s
       onChange={e => setContent(e.target.value)}
       onBlur={() => { if (content !== spec.content) onUpdate({ content }) }}
       placeholder="Spec content — edit freely…"
-      className="font-mono text-[11.5px] leading-relaxed resize-y min-h-[140px]"
+      className="font-mono text-xs leading-relaxed resize-y min-h-[140px]"
     />
   )
 }
@@ -84,13 +84,13 @@ function PlanGridCard({ spec, onDelete, onExecute, onWatch, onStop, isExecuting,
         </div>
 
         {spec.status === 'planning' ? (
-          <p className="text-[12px] text-muted-foreground">Agent is writing the spec…</p>
+          <p className="text-xs text-muted-foreground">Agent is writing the spec…</p>
         ) : spec.content ? (
-          <p className="text-[12px] text-muted-foreground leading-relaxed line-clamp-3">
+          <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">
             {spec.content.replace(/^#.*\n?/gm, '').trim().slice(0, 180)}
           </p>
         ) : (
-          <p className="text-[12px] text-muted-foreground/50 italic">No content yet.</p>
+          <p className="text-xs text-muted-foreground/50 italic">No content yet.</p>
         )}
       </div>
 
@@ -200,7 +200,7 @@ function PlanListRow({ spec, expanded, onToggle, onDelete, onExecute, onUpdate, 
 
 function NewPlanDialog({ projectId, agentList, onClose, onCreate }: {
   projectId: string
-  agentList: Agent[]
+  agentList: Employee[]
   onClose: () => void
   onCreate: (body: { projectId: string; title: string; brief?: string; agentId?: string }) => Promise<void>
 }) {
@@ -283,7 +283,7 @@ export default function PlansPage() {
     enabled: !!projectId,
     refetchInterval: q => anyPlanning(q.state.data ?? []) ? 3000 : false,
   })
-  const { data: agentList = [] } = useQuery({ queryKey: ['agents'], queryFn: () => agents.list() })
+  const { data: agentList = [] } = useQuery({ queryKey: ['employees'], queryFn: () => employees.list() })
 
   const stopPlan = useMutation({
     mutationFn: (sessionId: string) => sessions.stop(sessionId),
@@ -303,7 +303,10 @@ export default function PlansPage() {
   })
   const executeSpec = useMutation({
     mutationFn: (id: string) => specs.execute(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks', projectId] }),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['tasks', data.projectId] })
+      navigate(`/projects/${data.projectId}`)
+    },
   })
 
   return (

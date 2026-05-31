@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { connections, agents } from '../api/client'
-import type { Connection, Agent, AgentProvider } from '../api/client'
+import { useNavigate } from 'react-router-dom'
+import { brains, employees } from '../api/client'
+import type { Brain, AgentProvider, Employee } from '../api/client'
 import { useTheme, ACCENTS, type ThemeMode } from '../theme'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -9,7 +10,6 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 
 // ---------------------------------------------------------------------------
@@ -29,10 +29,10 @@ function ProviderBadge({ type }: { type: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// Add Connection dialog
+// Add Brain dialog
 // ---------------------------------------------------------------------------
 
-function AddConnectionDialog({ open, onClose, onCreate, loading, error }: {
+function AddBrainDialog({ open, onClose, onCreate, loading, error }: {
   open: boolean; onClose: () => void
   onCreate: (body: { name: string; type: AgentProvider; apiKey?: string; model?: string }) => void
   loading: boolean; error?: string
@@ -45,28 +45,26 @@ function AddConnectionDialog({ open, onClose, onCreate, loading, error }: {
   return (
     <Dialog open={open} onOpenChange={o => !o && onClose()}>
       <DialogContent>
-        <DialogHeader><DialogTitle>Add Connection</DialogTitle></DialogHeader>
-
+        <DialogHeader><DialogTitle>Add Brain</DialogTitle></DialogHeader>
         <div className="flex flex-col gap-4">
+          <p className="text-xs text-muted-foreground -mt-1">
+            A brain is a reasoning provider — an API connection employees borrow at runtime.
+          </p>
           <div className="flex flex-col gap-1.5">
             <Label>Name</Label>
-            <Input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="My Claude Key" />
+            <Input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="Anthropic · Pro" />
           </div>
-
           <div className="flex flex-col gap-1.5">
-            <Label>Type</Label>
+            <Label>Provider</Label>
             <div className="flex gap-2">
               {(['claude', 'codex'] as AgentProvider[]).map(t => (
                 <button key={t} type="button" onClick={() => setType(t)} className={cn(
                   'flex-1 py-2 rounded-lg border text-sm font-semibold transition-colors cursor-pointer',
-                  type === t
-                    ? 'border-primary bg-primary/10 text-primary'
-                    : 'border-border bg-transparent text-muted-foreground hover:text-foreground'
+                  type === t ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-transparent text-muted-foreground hover:text-foreground'
                 )}>{t}</button>
               ))}
             </div>
           </div>
-
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label>API Key <span className="opacity-60">(optional)</span></Label>
@@ -76,24 +74,20 @@ function AddConnectionDialog({ open, onClose, onCreate, loading, error }: {
             <div className="flex flex-col gap-1.5">
               <Label>Model <span className="opacity-60">(optional)</span></Label>
               <Input value={model} onChange={e => setModel(e.target.value)}
-                placeholder={type === 'claude' ? 'claude-opus-4-7' : 'o4-mini'}
-                className="font-mono text-xs" />
+                placeholder={type === 'claude' ? 'claude-opus-4-7' : 'o4-mini'} className="font-mono text-xs" />
             </div>
           </div>
-
           <p className="text-xs text-muted-foreground leading-relaxed">
             {apiKey
               ? 'Tasks will use this API key — billed per token on your developer dashboard.'
               : `No key — tasks will use ${type === 'claude' ? 'Claude Code OAuth (your claude.ai subscription)' : 'machine auth'} on this server.`}
           </p>
-
           {error && <p className="text-sm text-destructive">{error}</p>}
-
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
             <Button className="flex-1" disabled={!name || loading}
               onClick={() => onCreate({ name, type, apiKey: apiKey || undefined, model: model || undefined })}>
-              {loading ? '…' : 'Add'}
+              {loading ? '…' : 'Add Brain'}
             </Button>
           </div>
         </div>
@@ -103,116 +97,126 @@ function AddConnectionDialog({ open, onClose, onCreate, loading, error }: {
 }
 
 // ---------------------------------------------------------------------------
-// Add Agent dialog
+// Brain row
 // ---------------------------------------------------------------------------
 
-function AddAgentDialog({ open, connectionList, onClose, onCreate, loading, error }: {
-  open: boolean; connectionList: Connection[]; onClose: () => void
-  onCreate: (body: { name: string; connectionId: string }) => void
-  loading: boolean; error?: string
+function BrainRow({ brain, employeeCount, onUpdate, onDelete, onClearQuota }: {
+  brain: Brain; employeeCount: number
+  onUpdate: (body: { name?: string; apiKey?: string; model?: string }) => void
+  onDelete: () => void; onClearQuota: () => void
 }) {
-  const [name, setName]               = useState('')
-  const [connectionId, setConnectionId] = useState(connectionList[0]?.id ?? '')
+  const [editing, setEditing] = useState(false)
+  const [name,   setName]   = useState(brain.name)
+  const [model,  setModel]  = useState(brain.model ?? '')
+  const [apiKey, setApiKey] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState(false)
+
+  if (editing) {
+    return (
+      <div className="flex flex-col gap-3 px-4 py-3.5 bg-muted/30">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs">Name</Label>
+            <Input value={name} onChange={e => setName(e.target.value)} className="h-8 text-xs" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs">Model</Label>
+            <Input value={model} onChange={e => setModel(e.target.value)} placeholder="default" className="h-8 text-xs font-mono" />
+          </div>
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label className="text-xs">New API Key <span className="text-muted-foreground font-normal">(leave blank to keep existing)</span></Label>
+          <Input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)}
+            placeholder={brain.hasKey ? '••••••••' : 'no key set'} className="h-8 text-xs font-mono" />
+        </div>
+        <div className="flex gap-2 justify-end">
+          <Button size="sm" variant="outline" onClick={() => { setEditing(false); setName(brain.name); setModel(brain.model ?? ''); setApiKey('') }}>
+            Cancel
+          </Button>
+          <Button size="sm" onClick={() => { onUpdate({ name, model: model || undefined, apiKey: apiKey || undefined }); setEditing(false); setApiKey('') }}>
+            Save
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  if (confirmDelete) {
+    return (
+      <div className="flex items-center gap-3 px-4 py-3 bg-destructive/5">
+        <p className="text-xs text-muted-foreground flex-1">
+          {employeeCount > 0
+            ? `This brain is used by ${employeeCount} employee${employeeCount !== 1 ? 's' : ''}. They will lose their brain.`
+            : 'Delete this brain?'}
+        </p>
+        <Button size="sm" variant="outline" onClick={() => setConfirmDelete(false)}>Cancel</Button>
+        <Button size="sm" variant="destructive" onClick={() => { onDelete(); setConfirmDelete(false) }}>Delete</Button>
+      </div>
+    )
+  }
 
   return (
-    <Dialog open={open} onOpenChange={o => !o && onClose()}>
-      <DialogContent>
-        <DialogHeader><DialogTitle>Add Agent</DialogTitle></DialogHeader>
-
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <Label>Name</Label>
-            <Input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="Backend Claude" />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label>Connection</Label>
-            {connectionList.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No connections yet — add one first.</p>
-            ) : (
-              <Select value={connectionId} onValueChange={setConnectionId}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {connectionList.map(c => (
-                    <SelectItem key={c.id} value={c.id}>{c.name} ({c.type})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
-
-          {error && <p className="text-sm text-destructive">{error}</p>}
-
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button className="flex-1" disabled={!name || !connectionId || loading}
-              onClick={() => onCreate({ name, connectionId })}>
-              {loading ? '…' : 'Add'}
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Confirm-delete button
-// ---------------------------------------------------------------------------
-
-function DeleteBtn({ onDelete }: { onDelete: () => void }) {
-  const [confirming, setConfirming] = useState(false)
-  if (confirming) return (
-    <div className="flex gap-1.5">
-      <Button size="sm" variant="outline" onClick={() => setConfirming(false)}>Cancel</Button>
-      <Button size="sm" variant="destructive" onClick={onDelete}>Delete</Button>
+    <div className="flex items-center gap-3 px-4 py-3">
+      <span className="text-sm font-medium text-foreground flex-1">{brain.name}</span>
+      {brain.model && <span className="font-mono text-[10px] text-muted-foreground">{brain.model}</span>}
+      {brain.quotaStatus === 'exceeded' && (
+        <button onClick={onClearQuota} className="flex items-center gap-1 cursor-pointer bg-transparent border-none p-0">
+          <Badge variant="warning" className="text-[10px] gap-1 hover:opacity-80 transition-opacity">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+            Rate limited · clear
+          </Badge>
+        </button>
+      )}
+      <Badge variant="outline" className={cn(
+        'font-mono text-[10px]',
+        brain.hasKey ? 'text-muted-foreground' : 'text-green-500 border-green-500/30 bg-green-500/10'
+      )}>
+        {brain.hasKey ? 'API key' : brain.type === 'claude' ? 'subscription' : 'machine auth'}
+      </Badge>
+      <ProviderBadge type={brain.type} />
+      <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground" onClick={() => setEditing(true)}>Edit</Button>
+      <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive" onClick={() => setConfirmDelete(true)}>Delete</Button>
     </div>
   )
-  return (
-    <Button size="sm" variant="outline" onClick={() => setConfirming(true)}
-      className="text-muted-foreground hover:text-destructive hover:border-destructive/40">
-      Delete
-    </Button>
-  )
 }
 
 // ---------------------------------------------------------------------------
-// Main page
+// Page
 // ---------------------------------------------------------------------------
 
 export default function SettingsPage() {
   const { theme, accent, setTheme, setAccent } = useTheme()
+  const navigate = useNavigate()
   const qc = useQueryClient()
-  const [showAddConnection, setShowAddConnection] = useState(false)
-  const [showAddAgent, setShowAddAgent]           = useState(false)
+  const [showAddBrain, setShowAddBrain] = useState(false)
 
-  const { data: connectionList = [] } = useQuery({ queryKey: ['connections'], queryFn: () => connections.list() })
-  const { data: agentList = [] }      = useQuery({ queryKey: ['agents'],      queryFn: () => agents.list() })
+  const { data: brainList    = [] } = useQuery({ queryKey: ['brains'],    queryFn: () => brains.list() })
+  const { data: employeeList = [] } = useQuery({ queryKey: ['employees'], queryFn: () => employees.list() })
 
-  const createConnection = useMutation({
-    mutationFn: (body: Parameters<typeof connections.create>[0]) => connections.create(body),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['connections'] }); setShowAddConnection(false) },
+  const createBrain = useMutation({
+    mutationFn: (body: Parameters<typeof brains.create>[0]) => brains.create(body),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['brains'] }); setShowAddBrain(false) },
   })
-  const deleteConnection = useMutation({
-    mutationFn: (id: string) => connections.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['connections'] }),
+  const updateBrain = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: Parameters<typeof brains.update>[1] }) => brains.update(id, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['brains'] }),
   })
-  const createAgent = useMutation({
-    mutationFn: (body: Parameters<typeof agents.create>[0]) => agents.create(body),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['agents'] }); setShowAddAgent(false) },
+  const deleteBrain = useMutation({
+    mutationFn: (id: string) => brains.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['brains'] }),
   })
-  const deleteAgent = useMutation({
-    mutationFn: (id: string) => agents.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['agents'] }),
+  const clearQuota = useMutation({
+    mutationFn: (id: string) => brains.clearQuota(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['brains'] }),
   })
 
-  function connectionFor(agent: Agent): Connection | undefined {
-    return agent.connectionId ? connectionList.find(c => c.id === agent.connectionId) : undefined
+  function employeeCountForBrain(brainId: string): number {
+    return (employeeList as Employee[]).filter(e => e.connectionId === brainId).length
   }
 
   function signOut() {
     localStorage.removeItem('token')
-    window.location.href = '/login'
+    navigate('/login')
   }
 
   return (
@@ -221,75 +225,33 @@ export default function SettingsPage() {
 
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
 
-        {/* Connections */}
+        {/* Brains */}
         <section className="flex flex-col gap-3">
           <div className="flex items-center">
-            <span className="text-sm font-semibold text-foreground">Connections</span>
+            <div>
+              <span className="text-sm font-semibold text-foreground">Brains</span>
+              <p className="text-xs text-muted-foreground mt-0.5">Reasoning providers — API connections employees borrow at runtime.</p>
+            </div>
             <div className="flex-1" />
-            <Button size="sm" onClick={() => setShowAddConnection(true)}>+ Add</Button>
+            <Button size="sm" onClick={() => setShowAddBrain(true)}>+ Add</Button>
           </div>
 
-          {connectionList.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No connections yet. Add an API key to get started.</p>
+          {brainList.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No brains yet. Add an API key to get started.</p>
           ) : (
             <div className="bg-card rounded-2xl overflow-hidden [box-shadow:var(--shadow-card)]">
-              {connectionList.map((c, i) => (
-                <div key={c.id}>
-                  <div className="flex items-center gap-3 px-4 py-3">
-                    <span className="text-sm font-medium text-foreground flex-1">{c.name}</span>
-                    {c.model && <span className="font-mono text-[10px] text-muted-foreground">{c.model}</span>}
-                    <Badge variant="outline" className={cn(
-                      'font-mono text-[10px]',
-                      c.hasKey ? 'text-muted-foreground' : 'text-green-500 border-green-500/30 bg-green-500/10'
-                    )}>
-                      {c.hasKey ? 'API key' : c.type === 'claude' ? 'subscription' : 'machine auth'}
-                    </Badge>
-                    <ProviderBadge type={c.type} />
-                    <DeleteBtn onDelete={() => deleteConnection.mutate(c.id)} />
-                  </div>
-                  {i < connectionList.length - 1 && <Separator />}
+              {brainList.map((b, i) => (
+                <div key={b.id}>
+                  <BrainRow
+                    brain={b}
+                    employeeCount={employeeCountForBrain(b.id)}
+                    onUpdate={body => updateBrain.mutate({ id: b.id, body })}
+                    onDelete={() => deleteBrain.mutate(b.id)}
+                    onClearQuota={() => clearQuota.mutate(b.id)}
+                  />
+                  {i < brainList.length - 1 && <Separator />}
                 </div>
               ))}
-            </div>
-          )}
-        </section>
-
-        {/* Agents */}
-        <section className="flex flex-col gap-3">
-          <div className="flex items-center">
-            <span className="text-sm font-semibold text-foreground">Agents</span>
-            <div className="flex-1" />
-            <Button size="sm" disabled={connectionList.length === 0} onClick={() => setShowAddAgent(true)}>+ Add</Button>
-          </div>
-
-          {agentList.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No agents yet.{connectionList.length === 0 ? ' Add a connection first.' : ' Add an agent to dispatch tasks.'}
-            </p>
-          ) : (
-            <div className="bg-card rounded-2xl overflow-hidden [box-shadow:var(--shadow-card)]">
-              {agentList.map((a, i) => {
-                const conn = connectionFor(a)
-                return (
-                  <div key={a.id}>
-                    <div className="flex items-center gap-3 px-4 py-3">
-                      <span className="text-sm font-medium text-foreground flex-1">{a.name}</span>
-                      {conn ? (
-                        <div className="flex flex-col items-end gap-0.5">
-                          <ProviderBadge type={conn.type} />
-                          <span className="font-mono text-[10px] text-muted-foreground">
-                            {conn.name}{conn.model ? ` · ${conn.model}` : ''}
-                          </span>
-                        </div>
-                      ) : (
-                        <ProviderBadge type={a.provider} />
-                      )}
-                      <DeleteBtn onDelete={() => deleteAgent.mutate(a.id)} />
-                    </div>
-                    {i < agentList.length - 1 && <Separator />}
-                  </div>
-                )
-              })}
             </div>
           )}
         </section>
@@ -304,9 +266,7 @@ export default function SettingsPage() {
                 {(['dark', 'system', 'light'] as ThemeMode[]).map(t => (
                   <button key={t} onClick={() => setTheme(t)} className={cn(
                     'px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer border-none',
-                    theme === t
-                      ? 'bg-card text-foreground font-semibold shadow-sm'
-                      : 'bg-transparent text-muted-foreground hover:text-foreground',
+                    theme === t ? 'bg-card text-foreground font-semibold shadow-sm' : 'bg-transparent text-muted-foreground hover:text-foreground',
                   )}>{t}</button>
                 ))}
               </div>
@@ -329,28 +289,27 @@ export default function SettingsPage() {
         {/* Account */}
         <section className="flex flex-col gap-3">
           <span className="text-sm font-semibold text-foreground">Account</span>
-          <button onClick={signOut} className="text-sm text-destructive cursor-pointer bg-transparent border-none text-left underline underline-offset-3 hover:opacity-80 transition-opacity w-fit">
-            Sign out
-          </button>
+          <div className="bg-card rounded-2xl overflow-hidden [box-shadow:var(--shadow-card)]">
+            <div className="flex items-center gap-3 px-4 py-3">
+              <span className="text-sm text-foreground flex-1">Sign out of pilot</span>
+              <Button size="sm" variant="outline" onClick={signOut}
+                className="text-muted-foreground hover:text-destructive hover:border-destructive/40">
+                Sign out
+              </Button>
+            </div>
+          </div>
         </section>
 
       </div>
 
-      <AddConnectionDialog
-        open={showAddConnection}
-        onClose={() => setShowAddConnection(false)}
-        onCreate={body => createConnection.mutate(body)}
-        loading={createConnection.isPending}
-        error={createConnection.error?.message}
+      <AddBrainDialog
+        open={showAddBrain}
+        onClose={() => setShowAddBrain(false)}
+        onCreate={body => createBrain.mutate(body)}
+        loading={createBrain.isPending}
+        error={createBrain.error?.message}
       />
-      <AddAgentDialog
-        open={showAddAgent}
-        connectionList={connectionList}
-        onClose={() => setShowAddAgent(false)}
-        onCreate={body => createAgent.mutate(body)}
-        loading={createAgent.isPending}
-        error={createAgent.error?.message}
-      />
+
     </div>
   )
 }

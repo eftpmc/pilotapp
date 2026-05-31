@@ -3,6 +3,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ThemeProvider } from './theme'
 import LoginPage from './pages/LoginPage'
 import Layout from './components/Layout'
+import ProjectLayout from './components/ProjectLayout'
+import OverviewPage from './pages/OverviewPage'
+import WorkPage from './pages/WorkPage'
+import EmployeesPage from './pages/EmployeesPage'
+import KnowledgePage from './pages/KnowledgePage'
 import ProjectsPage from './pages/ProjectsPage'
 import ProjectDetailPage from './pages/ProjectDetailPage'
 import SessionsPage from './pages/SessionsPage'
@@ -11,6 +16,7 @@ import FilesPage from './pages/FilesPage'
 import ProjectSettingsPage from './pages/ProjectSettingsPage'
 import SessionPage from './pages/SessionPage'
 import SettingsPage from './pages/SettingsPage'
+import ToolsPage from './pages/ToolsPage'
 
 const qc = new QueryClient({ defaultOptions: { queries: { staleTime: 10_000 } } })
 
@@ -26,14 +32,21 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/" element={<RequireAuth><Layout /></RequireAuth>}>
-              <Route index element={<ProjectsPage />} />
-              <Route path="projects/:id"           element={<ProjectDetailPage />} />
-              <Route path="projects/:id/sessions"  element={<SessionsPage />} />
-              <Route path="projects/:id/plans"     element={<PlansPage />} />
-              <Route path="projects/:id/files"     element={<FilesPage />} />
-              <Route path="projects/:id/settings"  element={<ProjectSettingsPage />} />
-              <Route path="sessions/:id"           element={<SessionPage />} />
-              <Route path="settings"               element={<SettingsPage />} />
+              <Route index                element={<OverviewPage />} />
+              <Route path="work"          element={<WorkPage />} />
+              <Route path="employees"     element={<EmployeesPage />} />
+              <Route path="projects"      element={<ProjectsPage />} />
+              <Route path="knowledge"     element={<KnowledgePage />} />
+              <Route path="tools"         element={<ToolsPage />} />
+              <Route path="settings"      element={<SettingsPage />} />
+              <Route path="sessions/:id"  element={<SessionPage />} />
+              <Route path="projects/:id"  element={<ProjectLayout />}>
+                <Route index              element={<ProjectDetailPage />} />
+                <Route path="sessions"    element={<SessionsPage />} />
+                <Route path="plans"       element={<PlansPage />} />
+                <Route path="files"       element={<FilesPage />} />
+                <Route path="settings"    element={<ProjectSettingsPage />} />
+              </Route>
             </Route>
           </Routes>
         </BrowserRouter>

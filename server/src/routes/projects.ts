@@ -96,6 +96,33 @@ router.post('/', async (req: Request, res: Response) => {
 });
 
 // ---------------------------------------------------------------------------
+// PATCH /projects/:id
+// ---------------------------------------------------------------------------
+
+const UpdateSchema = z.object({
+  name:        z.string().min(1).optional(),
+  remoteUrl:   z.string().url().optional().or(z.literal('')),
+  githubToken: z.string().optional(),
+});
+
+router.patch('/:id', (req: Request, res: Response) => {
+  const parsed = UpdateSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+
+  const row = db.prepare('SELECT * FROM projects WHERE id = ? AND user_id = ?').get(req.params.id, userId(req)) as Row | undefined;
+  if (!row) { res.status(404).json({ error: 'Not found' }); return; }
+
+  const sets: string[] = []; const vals: unknown[] = [];
+  if (parsed.data.name        !== undefined) { sets.push('name = ?');         vals.push(parsed.data.name) }
+  if (parsed.data.remoteUrl   !== undefined) { sets.push('remote_url = ?');   vals.push(parsed.data.remoteUrl   || null) }
+  if (parsed.data.githubToken !== undefined) { sets.push('github_token = ?'); vals.push(parsed.data.githubToken || null) }
+  if (sets.length > 0) { vals.push(row.id); db.prepare(`UPDATE projects SET ${sets.join(', ')} WHERE id = ?`).run(...vals); }
+
+  const updated = db.prepare('SELECT * FROM projects WHERE id = ?').get(row.id) as Row;
+  res.json(toProject(updated));
+});
+
+// ---------------------------------------------------------------------------
 // POST /projects/:id/push  — push main to GitHub remote
 // ---------------------------------------------------------------------------
 

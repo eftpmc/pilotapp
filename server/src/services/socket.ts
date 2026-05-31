@@ -6,10 +6,12 @@ import { AuthPayload } from '../types';
 import { JWT_SECRET } from '../middleware/auth';
 import { db } from '../db';
 import { SessionRow, toSession } from '../routes/_helpers';
+import { addGlobalSubscriber, removeGlobalSubscriber } from './broadcast';
 
 type ClientMessage =
-  | { type: 'run';       sessionId: string; prompt: string }
-  | { type: 'subscribe'; sessionId: string };
+  | { type: 'run';              sessionId: string; prompt: string }
+  | { type: 'subscribe';        sessionId: string }
+  | { type: 'subscribe-global' };
 
 function send(ws: WebSocket, type: string, data: string, sessionId?: string): void {
   ws.send(JSON.stringify({ type, data, ...(sessionId ? { sessionId } : {}) }));
@@ -30,12 +32,17 @@ export function attachWebSocket(wss: WebSocketServer): void {
       return;
     }
 
-    ws.on('close', () => unsubscribeFromAllSessions(ws));
+    ws.on('close', () => { unsubscribeFromAllSessions(ws); removeGlobalSubscriber(ws); });
 
     ws.on('message', (raw) => {
       let msg: ClientMessage;
       try { msg = JSON.parse(raw.toString()); }
       catch { send(ws, 'error', 'Invalid JSON'); return; }
+
+      if (msg.type === 'subscribe-global') {
+        addGlobalSubscriber(ws);
+        return;
+      }
 
       if (msg.type === 'subscribe') {
         if (subscribeToSession(msg.sessionId, ws)) return;

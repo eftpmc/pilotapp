@@ -1,7 +1,8 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
-import { sessions, agents, tasks } from '../api/client'
-import type { Session, Agent, Task } from '../api/client'
+import { sessions, employees, tasks } from '../api/client'
+import type { Session, Employee, Task, SessionStatus } from '../api/client'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { EmptyState } from '@/components/EmptyState'
@@ -37,7 +38,7 @@ const STATUS_CONFIG = {
 // ---------------------------------------------------------------------------
 
 function SessionRow({ session, agent, task, onClick }: {
-  session: Session; agent?: Agent; task?: Task; onClick: () => void
+  session: Session; agent?: Employee; task?: Task; onClick: () => void
 }) {
   const cfg = STATUS_CONFIG[session.status] ?? STATUS_CONFIG.idle
   const isSpec = !!session.specId
@@ -72,7 +73,10 @@ function SessionRow({ session, agent, task, onClick }: {
 
       {/* Right */}
       <div className="flex items-center gap-3 shrink-0">
-        <span className="text-xs text-muted-foreground tabular-nums">{timeAgo(session.createdAt)}</span>
+        <span
+        className="text-xs text-muted-foreground tabular-nums"
+        title={new Date(session.createdAt).toLocaleString()}
+      >{timeAgo(session.createdAt)}</span>
         <Badge variant={cfg.variant} className="text-[10px] shrink-0">{cfg.label}</Badge>
       </div>
     </button>
@@ -83,9 +87,20 @@ function SessionRow({ session, agent, task, onClick }: {
 // Page
 // ---------------------------------------------------------------------------
 
+type Filter = 'all' | SessionStatus
+
+const FILTERS: { key: Filter; label: string }[] = [
+  { key: 'all',     label: 'All'     },
+  { key: 'running', label: 'Running' },
+  { key: 'done',    label: 'Done'    },
+  { key: 'error',   label: 'Error'   },
+  { key: 'merged',  label: 'Merged'  },
+]
+
 export default function SessionsPage() {
   const { id: projectId } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const [filter, setFilter] = useState<Filter>('all')
 
   const { data: sessionList = [], isLoading } = useQuery({
     queryKey: ['sessions', projectId],
@@ -93,7 +108,7 @@ export default function SessionsPage() {
     enabled: !!projectId,
     refetchInterval: 5000,
   })
-  const { data: agentList  = [] } = useQuery({ queryKey: ['agents'],           queryFn: () => agents.list() })
+  const { data: agentList  = [] } = useQuery({ queryKey: ['employees'],         queryFn: () => employees.list() })
   const { data: taskList   = [] } = useQuery({ queryKey: ['tasks', projectId], queryFn: () => tasks.list({ projectId }), enabled: !!projectId })
 
   function agentFor(s: Session) { return agentList.find(a => a.id === s.agentId) }
@@ -106,12 +121,37 @@ export default function SessionsPage() {
     return b.createdAt.localeCompare(a.createdAt)
   })
 
+  const filtered = filter === 'all' ? sorted : sorted.filter(s => s.status === filter)
+
+  // Only show filter tabs that have at least one session
+  const activeCounts = new Map<string, number>()
+  for (const s of sessionList) activeCounts.set(s.status, (activeCounts.get(s.status) ?? 0) + 1)
+  const visibleFilters = FILTERS.filter(f => f.key === 'all' || (activeCounts.get(f.key) ?? 0) > 0)
+
   return (
-    <div className="flex-1 flex flex-col bg-background">
+    <div className="flex-1 min-h-0 flex flex-col bg-background">
       <div className="h-14 shrink-0 flex items-center gap-3 px-6 border-b border-border/60">
         <span className="text-sm font-semibold text-foreground">Sessions</span>
         {sessionList.length > 0 && (
           <span className="font-mono text-xs text-muted-foreground">{sessionList.length}</span>
+        )}
+        {visibleFilters.length > 2 && (
+          <div className="flex items-center gap-1 ml-2">
+            {visibleFilters.map(f => (
+              <button key={f.key} onClick={() => setFilter(f.key)}
+                className={cn(
+                  'px-2.5 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer border-none',
+                  filter === f.key
+                    ? 'bg-primary/15 text-primary'
+                    : 'bg-transparent text-muted-foreground hover:text-foreground hover:bg-muted/60'
+                )}>
+                {f.label}
+                {f.key !== 'all' && activeCounts.get(f.key) && (
+                  <span className="ml-1 font-mono opacity-60">{activeCounts.get(f.key)}</span>
+                )}
+              </button>
+            ))}
+          </div>
         )}
       </div>
 
@@ -120,15 +160,15 @@ export default function SessionsPage() {
           <div className="flex flex-col">
             {Array.from({ length: 5 }).map((_, i) => <RowSkeleton key={i} />)}
           </div>
-        ) : sorted.length === 0 ? (
+        ) : filtered.length === 0 ? (
           <EmptyState
             icon={History}
-            title="No sessions yet"
-            description="Sessions are created when you assign a task to an agent from the Board."
+            title={filter === 'all' ? 'No sessions yet' : `No ${filter} sessions`}
+            description={filter === 'all' ? 'Sessions are created when you assign a task to an agent from the Board.' : 'Try a different filter.'}
           />
         ) : (
           <div className="flex flex-col">
-            {sorted.map(s => (
+            {filtered.map(s => (
               <SessionRow
                 key={s.id}
                 session={s}

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { projects } from '../api/client'
+import { projects, tasks, sessions } from '../api/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -17,10 +17,9 @@ export default function ProjectsPage() {
   const qc = useQueryClient()
   const [showNew, setShowNew] = useState(false)
 
-  const { data: projectList = [] } = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => projects.list(),
-  })
+  const { data: projectList = [] } = useQuery({ queryKey: ['projects'], queryFn: () => projects.list() })
+  const { data: taskList    = [] } = useQuery({ queryKey: ['tasks'],    queryFn: () => tasks.list() })
+  const { data: sessionList = [] } = useQuery({ queryKey: ['sessions'], queryFn: () => sessions.list() })
 
   const createProject = useMutation({
     mutationFn: (body: Parameters<typeof projects.create>[0]) => projects.create(body),
@@ -31,13 +30,41 @@ export default function ProjectsPage() {
     },
   })
 
+  function statsFor(projectId: string) {
+    const pending = taskList.filter(t => t.projectId === projectId && t.status === 'pending').length
+    const running = sessionList.filter(s => s.projectId === projectId && s.status === 'running').length
+    const review  = sessionList.filter(s => s.projectId === projectId && (s.status === 'done' || s.status === 'error')).length
+    return { pending, running, review }
+  }
+
   if (projectList.length === 0) {
     return (
-      <div className="h-full flex flex-col items-center justify-center bg-background gap-3 p-8">
-        <span className="font-mono font-bold text-4xl tracking-tight text-foreground mb-1">pilot</span>
-        <p className="text-base font-medium text-foreground">Your AI coding team starts here</p>
-        <p className="text-sm text-muted-foreground mb-4">Add a project to dispatch your first task.</p>
-        <Button size="lg" onClick={() => setShowNew(true)}>+ Add first project</Button>
+      <div className="h-full flex flex-col items-center justify-center bg-background px-8">
+        <div className="w-full max-w-sm flex flex-col gap-8">
+          <div className="text-center">
+            <p className="font-mono font-bold text-4xl tracking-tight text-foreground">pilot</p>
+            <p className="text-sm text-muted-foreground mt-2">Your AI coding crew, ready to ship.</p>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            {[
+              { n: '1', label: 'Add a project', desc: 'Connect a GitHub repo or local path.' },
+              { n: '2', label: 'Add an agent',  desc: 'Configure an API key in Settings.' },
+              { n: '3', label: 'Dispatch tasks', desc: 'Agents run in parallel on separate branches.' },
+            ].map(({ n, label, desc }) => (
+              <div key={n} className="flex items-start gap-3 px-4 py-3 rounded-xl bg-card border border-border/50 [box-shadow:var(--shadow-card)]">
+                <span className="font-mono text-xs font-bold text-primary/60 mt-0.5 shrink-0 w-4">{n}</span>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">{label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <Button size="lg" className="w-full" onClick={() => setShowNew(true)}>Add first project</Button>
+        </div>
+
         <NewProjectDialog
           open={showNew}
           onClose={() => setShowNew(false)}
@@ -62,29 +89,47 @@ export default function ProjectsPage() {
         </div>
 
         <div className="flex flex-col gap-2">
-          {projectList.map((p, i) => (
-            <button
-              key={p.id}
-              onClick={() => navigate(`/projects/${p.id}`)}
-              className="w-full text-left bg-card border border-border/60 rounded-2xl px-5 py-4 flex items-center gap-4 hover:border-border transition-colors cursor-pointer [box-shadow:var(--shadow-card)] hover:[box-shadow:var(--shadow-card-hover)] group"
-            >
-              <span
-                className="w-3 h-3 rounded-sm shrink-0"
-                style={{ background: PROJECT_COLORS[i % PROJECT_COLORS.length] }}
-              />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-foreground">{p.name}</p>
-                <p className="text-xs text-muted-foreground font-mono mt-0.5 truncate">
-                  {p.remoteUrl
-                    ? p.remoteUrl.replace(/^https?:\/\/(www\.)?github\.com\//, '').replace(/\.git$/, '')
-                    : p.localPath
-                    ? p.localPath
-                    : 'Local repo'}
-                </p>
-              </div>
-              <span className="text-muted-foreground group-hover:text-foreground transition-colors text-sm">→</span>
-            </button>
-          ))}
+          {projectList.map((p, i) => {
+            const { pending, running, review } = statsFor(p.id)
+            return (
+              <button
+                key={p.id}
+                onClick={() => navigate(`/projects/${p.id}`)}
+                className="w-full text-left bg-card border border-border/60 rounded-2xl px-5 py-4 flex items-center gap-4 hover:border-border transition-colors cursor-pointer [box-shadow:var(--shadow-card)] hover:[box-shadow:var(--shadow-card-hover)] group"
+              >
+                <span className="w-3 h-3 rounded-sm shrink-0" style={{ background: PROJECT_COLORS[i % PROJECT_COLORS.length] }} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground">{p.name}</p>
+                  <p className="text-xs text-muted-foreground font-mono mt-0.5 truncate">
+                    {p.remoteUrl
+                      ? p.remoteUrl.replace(/^https?:\/\/(www\.)?github\.com\//, '').replace(/\.git$/, '')
+                      : p.localPath ?? 'Local repo'}
+                  </p>
+                </div>
+
+                {/* Activity chips */}
+                <div className="flex items-center gap-2 shrink-0">
+                  {running > 0 && (
+                    <span className="flex items-center gap-1 text-[11px] font-semibold text-green-500">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-[pulse_1.6s_ease-out_infinite]" />
+                      {running} running
+                    </span>
+                  )}
+                  {review > 0 && (
+                    <span className="text-[11px] font-semibold text-amber-500">{review} in review</span>
+                  )}
+                  {pending > 0 && (
+                    <span className="text-[11px] text-muted-foreground">{pending} queued</span>
+                  )}
+                  {running === 0 && review === 0 && pending === 0 && (
+                    <span className="text-[11px] text-muted-foreground/40">idle</span>
+                  )}
+                </div>
+
+                <span className="text-muted-foreground group-hover:text-foreground transition-colors text-sm">→</span>
+              </button>
+            )
+          })}
         </div>
       </div>
 

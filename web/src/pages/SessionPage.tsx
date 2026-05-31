@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { sessions, agents, projects, tasks } from '../api/client'
+import { sessions, employees, projects, tasks } from '../api/client'
+import type { Employee } from '../api/client'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
+import { AgentAvatar } from '@/components/AgentAvatar'
 import { cn } from '@/lib/utils'
 import { fmtSecs, useElapsed } from '@/lib/time'
 import { ArrowLeft } from 'lucide-react'
@@ -35,7 +37,7 @@ function formatToolCall(name: string, input: Record<string, unknown>): string {
 function ColoredDiff({ raw }: { raw: string }) {
   if (!raw.trim()) return <p className="font-mono text-xs text-muted-foreground">No changes.</p>
   return (
-    <div className="font-mono text-[11.5px] leading-[1.65]">
+    <div className="font-mono text-xs leading-relaxed">
       {raw.split('\n').map((line, i) => {
         if (line.startsWith('diff --git') || line.startsWith('index ') || line.startsWith('new file') || line.startsWith('deleted file'))
           return <div key={i} className="text-muted-foreground/60 py-px">{line || ' '}</div>
@@ -86,6 +88,39 @@ function CopyCommand({ text }: { text: string }) {
 }
 
 // ---------------------------------------------------------------------------
+// Reviewer picker
+// ---------------------------------------------------------------------------
+
+function ReviewerPicker({ agentList, onPick }: { agentList: Employee[]; onPick: (id: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    function down(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', down)
+    return () => document.removeEventListener('mousedown', down)
+  }, [open])
+  if (agentList.length === 0) return null
+  return (
+    <div ref={ref} className="relative">
+      <Button variant="outline" size="sm" onClick={() => setOpen(o => !o)}>Request Review</Button>
+      {open && (
+        <div className="absolute right-0 top-[calc(100%+4px)] z-30 bg-card border border-border rounded-xl shadow-xl overflow-hidden min-w-[160px]">
+          <p className="text-[10px] text-muted-foreground px-3 py-2 border-b border-border/60">Pick reviewer</p>
+          {agentList.map(a => (
+            <button key={a.id} onClick={() => { onPick(a.id); setOpen(false) }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors cursor-pointer bg-transparent border-none text-left">
+              <AgentAvatar agent={a} size={16} />
+              {a.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -96,10 +131,11 @@ export default function SessionPage() {
 
   const [lines, setLines]       = useState<Line[]>([])
   const [done, setDone]         = useState(false)
-  const [activeTab, setActiveTab] = useState<'output' | 'diff'>('output')
+  const [activeTab, setActiveTab] = useState<'output' | 'diff' | 'journal'>('output')
   const [diff, setDiff]         = useState<string | null>(null)
   const [diffLoading, setDiffLoading] = useState(false)
   const [hint, setHint]         = useState('')
+  const [idlePrompt, setIdlePrompt] = useState('')
   const [pushed, setPushed]     = useState(false)
   const bottomRef   = useRef<HTMLDivElement>(null)
   const bufferRef   = useRef('')
@@ -111,7 +147,7 @@ export default function SessionPage() {
     enabled: !!id,
     refetchInterval: 3000,
   })
-  const { data: agentList   = [] } = useQuery({ queryKey: ['agents'],   queryFn: () => agents.list() })
+  const { data: agentList   = [] } = useQuery({ queryKey: ['employees'], queryFn: () => employees.list() })
   const { data: projectList = [] } = useQuery({ queryKey: ['projects'], queryFn: () => projects.list() })
   const { data: taskList    = [] } = useQuery({
     queryKey: ['tasks', session?.projectId],
@@ -131,11 +167,12 @@ export default function SessionPage() {
   // Use task startedAt as the clock origin (excludes worktree creation time)
   const elapsedSecs = useElapsed(task?.startedAt ?? session?.createdAt, isRunning)
 
-  const merge   = useMutation({ mutationFn: () => sessions.merge(id!),   onSuccess: () => { qc.invalidateQueries({ queryKey: ['sessions'] }); refetchSession() } })
-  const push    = useMutation({ mutationFn: () => projects.push(project!.id), onSuccess: () => setPushed(true) })
-  const stop    = useMutation({ mutationFn: () => sessions.stop(id!),   onSuccess: () => refetchSession() })
-  const discard = useMutation({ mutationFn: () => sessions.delete(id!),   onSuccess: () => { qc.invalidateQueries({ queryKey: ['sessions'] }); navigate(session?.projectId ? `/projects/${session.projectId}` : -1 as never) } })
-  const retry   = useMutation({
+  const merge         = useMutation({ mutationFn: () => sessions.merge(id!),   onSuccess: () => { qc.invalidateQueries({ queryKey: ['sessions'] }); refetchSession() } })
+  const push          = useMutation({ mutationFn: () => projects.push(project!.id), onSuccess: () => setPushed(true) })
+  const stop          = useMutation({ mutationFn: () => sessions.stop(id!),   onSuccess: () => refetchSession() })
+  const discard       = useMutation({ mutationFn: () => sessions.delete(id!),   onSuccess: () => { qc.invalidateQueries({ queryKey: ['sessions'] }); navigate(session?.projectId ? `/projects/${session.projectId}` : -1 as never) } })
+  const requestReview = useMutation({ mutationFn: (agentId: string) => sessions.requestReview(id!, agentId), onSuccess: () => refetchSession() })
+  const retry         = useMutation({
     mutationFn: (prompt?: string) => sessions.run(id!, prompt),
     onSuccess: () => { setLines([]); setDone(false); setDiff(null); setHint(''); bufferRef.current = ''; refetchSession() },
   })
@@ -241,33 +278,35 @@ export default function SessionPage() {
         {/* Back */}
         <button
           onClick={() => navigate(session?.projectId ? `/projects/${session.projectId}` : -1 as never)}
-          className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer bg-transparent border-none font-medium shrink-0"
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer bg-transparent border-none font-medium shrink-0"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
           {project?.name ?? 'Back'}
         </button>
 
-        <span className="text-border/80 select-none">/</span>
+        <span className="text-border/60 select-none text-xs">›</span>
 
-        {/* Agent + branch */}
-        <div className="flex items-center gap-2 flex-1 min-w-0">
-          {agent && <span className="text-sm font-semibold text-foreground shrink-0">{agent.name}</span>}
-          {session?.branch && (
-            <span className="font-mono text-[11px] text-muted-foreground bg-muted px-2 py-0.5 rounded-full truncate">
-              {session.branch}
-            </span>
+        {/* Task title — primary identity */}
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-foreground truncate">
+            {task?.title ?? session?.branch ?? 'Session'}
+          </p>
+          {agent && (
+            <p className="text-[11px] text-muted-foreground truncate leading-none mt-0.5">
+              {agent.name}
+              {session?.id && <span className="font-mono opacity-50 ml-1.5">#{session.id.slice(0, 7)}</span>}
+            </p>
           )}
         </div>
 
         {/* Status + elapsed + actions */}
-        <div className="flex items-center gap-2.5 shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           {session && <StatusBadge status={session.status} />}
           {isRunning && (
             <span className="font-mono text-xs text-muted-foreground tabular-nums">
               {fmtSecs(elapsedSecs)}
             </span>
           )}
-
           {isRunning && (
             <Button variant="outline" size="sm" onClick={() => stop.mutate()} disabled={stop.isPending}>
               {stop.isPending ? '…' : 'Stop'}
@@ -278,13 +317,30 @@ export default function SessionPage() {
               {diffLoading ? '…' : 'Diff'}
             </Button>
           )}
+          {isDone && !session?.reviewVerdict && !isMerged && (
+            <ReviewerPicker
+              agentList={agentList.filter(a => a.id !== session?.agentId)}
+              onPick={agentId => requestReview.mutate(agentId)}
+            />
+          )}
+          {session?.reviewVerdict === 'pending' && (
+            <Badge variant="outline" className="text-[11px] text-muted-foreground">Reviewing…</Badge>
+          )}
+          {session?.reviewVerdict === 'approved' && (
+            <Badge variant="success" className="text-[11px]">Approved ✓</Badge>
+          )}
+          {session?.reviewVerdict === 'changes_requested' && (
+            <Badge variant="warning" className="text-[11px]">Changes Requested</Badge>
+          )}
           {isDone && !isMerged && (
             <Button size="sm" onClick={() => merge.mutate()} disabled={merge.isPending}>
               {merge.isPending ? '…' : 'Merge ✓'}
             </Button>
           )}
-          <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive"
-            onClick={() => discard.mutate()} disabled={discard.isPending}>
+          {/* Discard separated with a visible gap */}
+          <div className="w-px h-5 bg-border/60 mx-1" />
+          <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive hover:bg-destructive/8"
+            onClick={() => discard.mutate()} disabled={discard.isPending || isMerged}>
             {discard.isPending ? '…' : 'Discard'}
           </Button>
         </div>
@@ -303,28 +359,52 @@ export default function SessionPage() {
             )}>
             {t}
             {t === 'diff' && diff && (
-              <span className="ml-1.5 font-mono text-[9px] text-primary bg-primary/10 rounded-full px-1.5 py-px">ready</span>
+              <span className="ml-1.5 font-mono text-[10px] text-primary bg-primary/10 rounded-full px-1.5 py-px">ready</span>
             )}
           </button>
         ))}
+        {session?.journal && (
+          <button onClick={() => setActiveTab('journal')}
+            className={cn(
+              'relative h-full px-4 text-xs font-medium transition-colors cursor-pointer bg-transparent border-none',
+              'after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:rounded-t',
+              activeTab === 'journal'
+                ? 'text-foreground after:bg-primary'
+                : 'text-muted-foreground hover:text-foreground after:bg-transparent'
+            )}>
+            {session.parentSessionId ? 'review' : 'journal'}
+          </button>
+        )}
       </div>
 
       {/* ── Content ── */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
-        {activeTab === 'output' ? (
-          <div className="flex flex-col">
+      <div className="flex-1 min-h-0 overflow-y-auto bg-muted/20">
+        {activeTab === 'journal' && session?.journal ? (
+          <div className="px-5 py-4">
+            <pre className="font-mono text-xs leading-relaxed whitespace-pre-wrap text-foreground/80">{session.journal}</pre>
+          </div>
+        ) : activeTab === 'diff' ? (
+          <div className="px-5 py-4">
+            {diffLoading
+              ? <p className="font-mono text-xs text-muted-foreground/60">loading diff…</p>
+              : <ColoredDiff raw={diff ?? ''} />}
+          </div>
+        ) : (
+          <div className="flex flex-col px-5 py-4">
             {lines.length === MAX_LINES && (
-              <p className="font-mono text-[11px] text-muted-foreground/50 mb-2">── earlier output truncated (showing last {MAX_LINES} lines) ──</p>
+              <p className="font-mono text-[11px] text-muted-foreground/40 mb-3 pb-2 border-b border-border/30">
+                ↑ earlier output truncated — showing last {MAX_LINES} lines
+              </p>
             )}
             {lines.length === 0 && !isRunning && !done && (
-              <p className="font-mono text-[11.5px] text-muted-foreground">Waiting for output…</p>
+              <p className="font-mono text-xs text-muted-foreground/60">waiting for output…</p>
             )}
             {lines.map((line, i) => (
               <div key={i} className={cn(
-                'font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap break-words',
-                line.kind === 'tool'   && 'text-primary',
-                line.kind === 'stderr' && 'text-muted-foreground/60',
-                line.kind === 'text'   && 'text-foreground/85',
+                'font-mono text-xs leading-relaxed whitespace-pre-wrap break-words',
+                line.kind === 'tool'   && 'text-primary/90',
+                line.kind === 'stderr' && 'text-muted-foreground/50',
+                line.kind === 'text'   && 'text-foreground/80',
               )}>
                 {line.text}
               </div>
@@ -332,21 +412,21 @@ export default function SessionPage() {
             {isRunning && !done && (
               <span className="inline-block w-[7px] h-[13px] bg-green-500 mt-0.5 animate-[blink_1s_steps(1)_infinite]" />
             )}
-            {done && <p className="font-mono text-[11px] text-muted-foreground/50 mt-3">── done ──</p>}
+            {done && (
+              <p className="font-mono text-[11px] text-muted-foreground/40 mt-4 pt-3 border-t border-border/30">
+                process exited 0 · {task?.startedAt && task.completedAt
+                  ? `${Math.round((new Date(task.completedAt).getTime() - new Date(task.startedAt).getTime()) / 1000)}s`
+                  : fmtSecs(elapsedSecs)}
+              </p>
+            )}
             <div ref={bottomRef} />
-          </div>
-        ) : (
-          <div className="px-4 -mx-4">
-            {diffLoading
-              ? <p className="font-mono text-xs text-muted-foreground">Loading diff…</p>
-              : <ColoredDiff raw={diff ?? ''} />}
           </div>
         )}
       </div>
 
       {/* ── Merged banner ── */}
       {isMerged && (
-        <div className="shrink-0 border-t border-green-500/25 bg-green-500/5 px-5 py-3.5 flex items-center gap-3">
+        <div className="shrink-0 border-t border-green-500/20 bg-green-500/5 px-5 py-3.5 flex items-center gap-3 flex-wrap">
           <span className="text-sm font-semibold text-green-600 dark:text-green-400">Merged ✓</span>
           <div className="flex-1" />
           {project?.remoteUrl && !pushed && (
@@ -363,9 +443,36 @@ export default function SessionPage() {
         </div>
       )}
 
+      {/* ── Idle prompt panel — manually created sessions with no task ── */}
+      {session?.status === 'idle' && !session.workTaskId && (
+        <div className="shrink-0 border-t border-border/60 bg-card px-5 py-4">
+          <p className="text-xs font-semibold text-foreground mb-3">What should this agent do?</p>
+          <div className="flex gap-3 items-end">
+            <Textarea
+              value={idlePrompt}
+              onChange={e => setIdlePrompt(e.target.value)}
+              placeholder="Describe the task…"
+              rows={3}
+              className="flex-1 text-sm"
+              autoFocus
+            />
+            <Button
+              onClick={() => {
+                if (!idlePrompt.trim()) return
+                retry.mutate(idlePrompt.trim())
+                setIdlePrompt('')
+              }}
+              disabled={!idlePrompt.trim() || retry.isPending}
+            >
+              {retry.isPending ? '…' : 'Run'}
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* ── Error panel ── */}
       {isError && (
-        <div className="shrink-0 border-t border-destructive/25 bg-destructive/5 px-5 py-4">
+        <div className="shrink-0 border-t border-destructive/20 bg-destructive/5 px-5 py-4">
           <p className="text-xs font-semibold text-destructive mb-3">Session ended with an error</p>
           <div className="flex gap-3 items-end">
             <Textarea

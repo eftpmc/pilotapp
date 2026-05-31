@@ -70,14 +70,14 @@
   :root {
     --background:           oklch(0.095 0.006 264);
     --foreground:           oklch(0.93  0.005 264);
-    --card:                 oklch(0.135 0.007 264);
+    --card:                 oklch(0.155 0.008 264);
     --card-foreground:      oklch(0.93  0.005 264);
-    --muted:                oklch(0.175 0.007 264);
-    --muted-foreground:     oklch(0.48  0.012 264);
-    --accent:               oklch(0.175 0.007 264);
+    --muted:                oklch(0.190 0.008 264);
+    --muted-foreground:     oklch(0.50  0.012 264);
+    --accent:               oklch(0.190 0.008 264);
     --accent-foreground:    oklch(0.93  0.005 264);
-    --border:               oklch(1 0 0 / 0.09);
-    --input:                oklch(1 0 0 / 0.09);
+    --border:               oklch(1 0 0 / 0.11);
+    --input:                oklch(1 0 0 / 0.11);
     --ring:                 oklch(0.40  0.01  264);
     --primary:              oklch(0.65  0.18  254);
     --primary-foreground:   oklch(1 0 0);

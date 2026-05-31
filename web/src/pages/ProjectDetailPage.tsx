@@ -1,8 +1,17 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
-import { tasks, agents, sessions, projects } from '../api/client'
-import type { Task, Agent, Session } from '../api/client'
+import {
+  DndContext, closestCenter, PointerSensor, useSensor, useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext, verticalListSortingStrategy, useSortable, arrayMove,
+} from '@dnd-kit/sortable'
+import { restrictToVerticalAxis, restrictToParentElement } from '@dnd-kit/modifiers'
+import { CSS } from '@dnd-kit/utilities'
+import { tasks, employees, sessions, projects, brains } from '../api/client'
+import type { Task, Employee, Session, TaskSize } from '../api/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -15,7 +24,7 @@ import { CardSkeleton } from '@/components/Skeleton'
 import { AgentAvatar } from '@/components/AgentAvatar'
 import { fmtSecs, useElapsed } from '@/lib/time'
 import { cn } from '@/lib/utils'
-import { ListTodo, Loader2, GitMerge, Upload } from 'lucide-react'
+import { ListTodo, Loader2, GitMerge, Upload, GripVertical, ChevronDown } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
 // Column header
@@ -41,7 +50,24 @@ function ColHead({ title, count }: { title: string; count: number }) {
 // Kanban cards
 // ---------------------------------------------------------------------------
 
-function AgentPicker({ agentList, onAssign }: { agentList: Agent[]; onAssign: (id: string) => void }) {
+const SIZE_COLORS: Record<TaskSize, string> = {
+  xs: 'text-muted-foreground/60 bg-muted/40',
+  s:  'text-blue-500/70 bg-blue-500/8',
+  m:  'text-foreground/60 bg-muted/50',
+  l:  'text-amber-500/80 bg-amber-500/10',
+  xl: 'text-red-500/80 bg-red-500/10',
+}
+
+function SizeChip({ size }: { size?: TaskSize }) {
+  if (!size || size === 'm') return null
+  return (
+    <span className={cn('font-mono text-[9px] uppercase rounded px-1 py-0.5 font-bold', SIZE_COLORS[size])}>
+      {size}
+    </span>
+  )
+}
+
+function AgentPicker({ agentList, onAssign }: { agentList: Employee[]; onAssign: (id: string) => void }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -71,90 +97,188 @@ function AgentPicker({ agentList, onAssign }: { agentList: Agent[]; onAssign: (i
   )
 }
 
-function QueueCard({ task, agentList, onAssign, onDelete, onMoveUp, onMoveDown, isFirst, isLast }: {
-  task: Task; agentList: Agent[]; onAssign: (id: string) => void; onDelete: () => void
-  onMoveUp: () => void; onMoveDown: () => void; isFirst: boolean; isLast: boolean
+function QueueCard({ task, agentList, onAssign, onDelete }: {
+  task: Task; agentList: Employee[]; onAssign: (id: string) => void; onDelete: () => void
 }) {
+  const [expanded, setExpanded] = useState(false)
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id })
+  const style = { transform: CSS.Transform.toString(transform), transition }
+
   return (
-    <div className="bg-card rounded-xl p-3.5 flex flex-col gap-2.5 [box-shadow:var(--shadow-card)] border border-dashed border-border/50">
-      <p className="text-sm font-medium text-foreground leading-snug">{task.title}</p>
-      <div className="flex items-center gap-2">
-        <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-[11px] font-mono truncate max-w-[120px]">{task.baseBranch || 'main'}</span>
-        <div className="flex gap-0.5">
-          <button onClick={onMoveUp} disabled={isFirst}
-            className="text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-25 cursor-pointer disabled:cursor-default bg-transparent border-none px-0.5 leading-none">↑</button>
-          <button onClick={onMoveDown} disabled={isLast}
-            className="text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-25 cursor-pointer disabled:cursor-default bg-transparent border-none px-0.5 leading-none">↓</button>
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        'bg-card rounded-xl [box-shadow:var(--shadow-card)] border border-dashed border-border/50 select-none',
+        isDragging && 'opacity-50 shadow-2xl ring-1 ring-primary/30',
+      )}
+    >
+      <div className="flex items-start gap-2 p-3.5">
+        {/* Drag handle */}
+        <button
+          {...attributes}
+          {...listeners}
+          className="mt-0.5 text-muted-foreground/40 hover:text-muted-foreground cursor-grab active:cursor-grabbing bg-transparent border-none p-0 shrink-0 touch-none"
+          tabIndex={-1}
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+
+        <div className="flex-1 min-w-0 flex flex-col gap-2">
+          {/* Title row */}
+          <div className="flex items-start gap-2">
+            <p className="text-sm font-medium text-foreground leading-snug flex-1">{task.title}</p>
+            {task.prompt && (
+              <button
+                onClick={() => setExpanded(e => !e)}
+                className={cn(
+                  'shrink-0 text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer bg-transparent border-none p-0 mt-0.5',
+                )}
+              >
+                <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', expanded && 'rotate-180')} />
+              </button>
+            )}
+          </div>
+
+          {/* Expanded prompt */}
+          {expanded && task.prompt && (
+            <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap bg-muted/40 rounded-lg px-2.5 py-2">
+              {task.prompt}
+            </p>
+          )}
+
+          {/* Bottom row */}
+          <div className="flex items-center gap-2">
+            <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-[11px] font-mono">
+              {task.baseBranch || 'main'}
+            </span>
+            <SizeChip size={task.size} />
+            <div className="flex-1" />
+            {agentList.length > 0
+              ? <AgentPicker agentList={agentList} onAssign={onAssign} />
+              : <span className="text-[11px] text-muted-foreground">No agents</span>}
+            <button
+              onClick={onDelete}
+              className="text-muted-foreground/50 hover:text-destructive transition-colors cursor-pointer bg-transparent border-none text-base leading-none"
+            >×</button>
+          </div>
         </div>
-        <div className="flex-1" />
-        {agentList.length > 0
-          ? <AgentPicker agentList={agentList} onAssign={onAssign} />
-          : <span className="text-[11px] text-muted-foreground">No agents</span>}
-        <button onClick={onDelete}
-          className="text-muted-foreground hover:text-destructive transition-colors cursor-pointer bg-transparent border-none text-base leading-none ml-0.5">×</button>
       </div>
     </div>
   )
 }
 
 function WorkingCard({ session, agent, task, onClick }: {
-  session: Session; agent?: Agent; task?: Task; onClick: () => void
+  session: Session; agent?: Employee; task?: Task; onClick: () => void
 }) {
   const secs = useElapsed(session.createdAt, true)
+  const shortId = session.id.slice(0, 7)
   return (
     <button onClick={onClick}
-      className="w-full text-left bg-card rounded-xl p-3.5 flex flex-col gap-2 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.99] [box-shadow:var(--shadow-card)] border border-green-500/20">
+      className="w-full text-left bg-card rounded-xl p-3.5 flex flex-col gap-2.5 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.99] [box-shadow:var(--shadow-card)] border border-green-500/20">
+      <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2 min-h-[2.5rem]">
+        {task?.title ?? session.branch}
+      </p>
       <div className="flex items-center gap-2">
-        <AgentAvatar agent={agent} size={26} />
-        <span className="text-sm font-semibold text-foreground">{agent?.name ?? '—'}</span>
+        <AgentAvatar agent={agent} size={18} />
+        <span className="text-xs text-muted-foreground truncate">{agent?.name ?? '—'}</span>
+        <span className="font-mono text-[10px] text-muted-foreground/40">#{shortId}</span>
         <div className="flex-1" />
         <span className="font-mono text-[11px] text-green-500 tabular-nums">{fmtSecs(secs)}</span>
         <Badge variant="success" className="gap-1 shrink-0 text-[10px] px-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-[pulse_1.6s_ease-out_infinite]" />
-          Working
+          Live
         </Badge>
       </div>
-      {task && <p className="text-[12.5px] text-muted-foreground leading-snug line-clamp-2">{task.title}</p>}
-      <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-[11px] font-mono self-start truncate max-w-full">{session.branch}</span>
     </button>
   )
 }
 
-function ReviewCard({ session, agent, task, hasRemote, onMerge, onMergePush, onClick }: {
-  session: Session; agent?: Agent; task?: Task
-  hasRemote: boolean; onMerge: () => void; onMergePush: () => void; onClick: () => void
+function ReviewerPicker({ agentList, onPick }: { agentList: Employee[]; onPick: (id: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    function down(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', down)
+    return () => document.removeEventListener('mousedown', down)
+  }, [open])
+  return (
+    <div ref={ref} className="relative">
+      <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={e => { e.stopPropagation(); setOpen(o => !o) }}>
+        Request Review
+      </Button>
+      {open && (
+        <div className="absolute right-0 top-[calc(100%+4px)] z-30 bg-card border border-border rounded-xl shadow-xl overflow-hidden min-w-[150px]">
+          <p className="text-[10px] text-muted-foreground px-3 py-2 border-b border-border/60">Pick reviewer</p>
+          {agentList.map(a => (
+            <button key={a.id} onClick={() => { onPick(a.id); setOpen(false) }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors cursor-pointer bg-transparent border-none text-left">
+              <AgentAvatar agent={a} size={16} />
+              {a.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ReviewCard({ session, agent, task, hasRemote, allAgents, onMerge, onMergePush, onClick, isMerging, onRequestReview }: {
+  session: Session; agent?: Employee; task?: Task
+  hasRemote: boolean; allAgents: Employee[]
+  onMerge: () => void; onMergePush: () => void; onClick: () => void; isMerging?: boolean
+  onRequestReview: (agentId: string) => void
 }) {
-  const isError = session.status === 'error'
+  const isError   = session.status === 'error'
+  const shortId   = session.id.slice(0, 7)
+  const verdict   = session.reviewVerdict
+  const isPending = verdict === 'pending'
+  const approved  = verdict === 'approved'
   return (
     <div onClick={onClick}
       className={cn(
-        'bg-card rounded-xl p-3.5 flex flex-col gap-1.5 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 [box-shadow:var(--shadow-card)]',
-        isError ? 'border border-red-500/25' : 'border border-amber-400/20'
+        'bg-card rounded-xl p-3.5 flex flex-col gap-2.5 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 [box-shadow:var(--shadow-card)]',
+        isError ? 'border border-red-500/25' : approved ? 'border border-green-500/20' : 'border border-amber-400/20'
       )}>
+      <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2 min-h-[2.5rem]">
+        {task?.title ?? session.branch}
+      </p>
       <div className="flex items-center gap-2">
-        <AgentAvatar agent={agent} size={28} />
-        <span className="text-sm font-semibold text-foreground">{agent?.name ?? '—'}</span>
+        <AgentAvatar agent={agent} size={18} />
+        <span className="text-xs text-muted-foreground truncate">{agent?.name ?? '—'}</span>
+        <span className="font-mono text-[10px] text-muted-foreground/40">#{shortId}</span>
         <div className="flex-1" />
-        <Badge variant={isError ? 'destructive' : 'success'} className="shrink-0 text-[10px]">
-          {isError ? 'Error' : 'Ready'}
-        </Badge>
+        {approved  && <Badge variant="success"     className="shrink-0 text-[10px]">Approved ✓</Badge>}
+        {verdict === 'changes_requested' && <Badge variant="warning" className="shrink-0 text-[10px]">Changes Requested</Badge>}
+        {isPending && <Badge variant="outline"     className="shrink-0 text-[10px] text-muted-foreground">Reviewing…</Badge>}
+        {!verdict  && !isError && <Badge variant="warning" className="shrink-0 text-[10px]">Review</Badge>}
+        {isError   && <Badge variant="destructive" className="shrink-0 text-[10px]">Error</Badge>}
       </div>
-      {task && <p className="text-sm text-muted-foreground leading-snug line-clamp-2 mt-1">{task.title}</p>}
-      <div className="flex items-center gap-2 mt-1" onClick={e => e.stopPropagation()}>
-        <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-[11px] font-mono truncate max-w-[120px]">{session.branch}</span>
-        <div className="flex-1" />
-        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={onClick}>Log</Button>
+      <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
         {isError ? (
-          <Button size="sm" className="h-7 px-2.5 text-xs" onClick={onClick}>Retry</Button>
-        ) : hasRemote ? (
-          <>
-            <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={onMerge}>Merge</Button>
-            <Button size="sm" className="h-7 px-2.5 text-xs gap-1" onClick={onMergePush}>
-              <Upload className="h-3 w-3" />Push
-            </Button>
-          </>
+          <Button size="sm" className="h-7 px-2.5 text-xs flex-1" onClick={onClick}>View & Retry</Button>
+        ) : isPending ? (
+          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground flex-1" onClick={onClick}>View Output</Button>
         ) : (
-          <Button size="sm" className="h-7 px-2.5 text-xs" onClick={onMerge}>Merge ✓</Button>
+          <>
+            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground" onClick={onClick}>Log</Button>
+            {!verdict && <ReviewerPicker agentList={allAgents.filter(a => a.id !== session.agentId)} onPick={onRequestReview} />}
+            {hasRemote ? (
+              <>
+                <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs flex-1" onClick={onMerge} disabled={isMerging}>
+                  {isMerging ? '…' : 'Merge'}
+                </Button>
+                <Button size="sm" className="h-7 px-2.5 text-xs gap-1 flex-1" onClick={onMergePush} disabled={isMerging}>
+                  <Upload className="h-3 w-3" />{isMerging ? '…' : 'Push'}
+                </Button>
+              </>
+            ) : (
+              <Button size="sm" className="h-7 px-2.5 text-xs flex-1" onClick={onMerge} disabled={isMerging}>
+                {isMerging ? '…' : 'Merge ✓'}
+              </Button>
+            )}
+          </>
         )}
       </div>
     </div>
@@ -174,12 +298,15 @@ export default function ProjectDetailPage() {
   const [showNew,   setShowNew]   = useState(false)
   const [mobileCol, setMobileCol] = useState<MobileCol>('Queue')
 
-  const { data: taskList    = [], isLoading: tasksLoading   } = useQuery({ queryKey: ['tasks',    projectId], queryFn: () => tasks.list({ projectId }),    refetchInterval: 4000 })
-  const { data: agentList   = []                             } = useQuery({ queryKey: ['agents'],              queryFn: () => agents.list() })
-  const { data: sessionList = [], isLoading: sessionsLoading } = useQuery({ queryKey: ['sessions', projectId], queryFn: () => sessions.list({ projectId }), refetchInterval: 4000 })
-  const { data: projectList = []                             } = useQuery({ queryKey: ['projects'],             queryFn: () => projects.list() })
+  const { data: taskList      = [], isLoading: tasksLoading   } = useQuery({ queryKey: ['tasks',    projectId], queryFn: () => tasks.list({ projectId }),    refetchInterval: 4000 })
+  const { data: agentList     = []                             } = useQuery({ queryKey: ['employees'],           queryFn: () => employees.list() })
+  const { data: sessionList   = [], isLoading: sessionsLoading } = useQuery({ queryKey: ['sessions', projectId], queryFn: () => sessions.list({ projectId }), refetchInterval: 4000 })
+  const { data: projectList   = []                             } = useQuery({ queryKey: ['projects'],             queryFn: () => projects.list() })
+  const { data: connectionList = []                            } = useQuery({ queryKey: ['brains'],              queryFn: () => brains.list() })
   const isLoading = tasksLoading || sessionsLoading
   const project   = projectList.find(p => p.id === projectId)
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
 
   const runQueue    = useMutation({ mutationFn: () => tasks.runQueue(), onSuccess: () => { qc.invalidateQueries({ queryKey: ['tasks', projectId] }); qc.invalidateQueries({ queryKey: ['sessions', projectId] }) } })
   const deleteTask  = useMutation({ mutationFn: (id: string) => tasks.delete(id), onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks', projectId] }) })
@@ -187,8 +314,7 @@ export default function ProjectDetailPage() {
     mutationFn: ({ taskId, agentId }: { taskId: string; agentId: string }) => tasks.assign(taskId, agentId),
     onSuccess: ({ session }) => { qc.invalidateQueries({ queryKey: ['tasks', projectId] }); qc.invalidateQueries({ queryKey: ['sessions', projectId] }); navigate(`/sessions/${session.id}`) },
   })
-  const setPriority = useMutation({ mutationFn: ({ taskId, priority }: { taskId: string; priority: number }) => tasks.update(taskId, { priority }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks', projectId] }) })
+  const setPriority = useMutation({ mutationFn: ({ taskId, priority }: { taskId: string; priority: number }) => tasks.update(taskId, { priority }) })
   const mergeSession = useMutation({
     mutationFn: (id: string) => sessions.merge(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['sessions', projectId] }),
@@ -197,16 +323,35 @@ export default function ProjectDetailPage() {
     mutationFn: async (id: string) => { await sessions.merge(id); await projects.push(projectId!) },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['sessions', projectId] }),
   })
+  const requestReview = useMutation({
+    mutationFn: ({ sessionId, agentId }: { sessionId: string; agentId: string }) => sessions.requestReview(sessionId, agentId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['sessions', projectId] }),
+  })
 
-  const codeSessions = sessionList.filter(s => !s.specId)
-  const busyIds      = new Set(codeSessions.filter(s => s.status === 'running').map(s => s.agentId))
-  const idleAgents   = agentList.filter(a => !busyIds.has(a.id))
+  const codeSessions    = sessionList.filter(s => !s.specId && !s.parentSessionId)
+  const busyIds         = new Set(codeSessions.filter(s => s.status === 'running').map(s => s.agentId))
+  const quotaConnIds    = new Set(connectionList.filter(c => c.quotaStatus === 'exceeded').map(c => c.id))
+  const idleAgents      = agentList.filter(a => !busyIds.has(a.id) && !quotaConnIds.has(a.connectionId ?? ''))
   const queue        = taskList.filter(t => t.status === 'pending').sort((a, b) => {
     if ((b.priority ?? 0) !== (a.priority ?? 0)) return (b.priority ?? 0) - (a.priority ?? 0)
     return a.createdAt.localeCompare(b.createdAt)
   })
   const working      = codeSessions.filter(s => s.status === 'running' || s.status === 'idle')
   const review       = codeSessions.filter(s => s.status === 'done' || s.status === 'error')
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    const oldIndex = queue.findIndex(t => t.id === active.id)
+    const newIndex = queue.findIndex(t => t.id === over.id)
+    const reordered = arrayMove(queue, oldIndex, newIndex)
+    reordered.forEach((task, i) => {
+      const newPriority = reordered.length - i
+      if ((task.priority ?? 0) !== newPriority) {
+        setPriority.mutate({ taskId: task.id, priority: newPriority })
+      }
+    })
+  }
 
   function agentFor(s: Session) { return agentList.find(a => a.id === s.agentId) }
   function taskFor(s: Session)  { return taskList.find(t => t.id === s.workTaskId) }
@@ -307,9 +452,8 @@ export default function ProjectDetailPage() {
         <div className="flex-1" />
         <div className="flex items-center gap-2">
           {queue.length > 0 && idleAgents.length > 0 && (
-            <Button variant="outline" size="sm" onClick={() => runQueue.mutate()} disabled={runQueue.isPending}
-              className="hidden sm:flex">
-              {runQueue.isPending ? '…' : '▶ Run'}
+            <Button variant="outline" size="sm" onClick={() => runQueue.mutate()} disabled={runQueue.isPending}>
+              {runQueue.isPending ? '…' : '▶ Run queue'}
             </Button>
           )}
           <Button size="sm" disabled={agentList.length === 0} onClick={() => setShowNew(true)}>
@@ -349,14 +493,22 @@ export default function ProjectDetailPage() {
                 ) : title === 'Queue' ? (
                   queue.length === 0
                     ? <EmptyState icon={ListTodo} title="Queue is empty" description="Add a task to get started." />
-                    : queue.map((task, idx) => (
-                        <QueueCard key={task.id} task={task} agentList={idleAgents}
-                          onAssign={agentId => assignTask.mutate({ taskId: task.id, agentId })}
-                          onDelete={() => deleteTask.mutate(task.id)}
-                          isFirst={idx === 0} isLast={idx === queue.length - 1}
-                          onMoveUp={() => setPriority.mutate({ taskId: task.id, priority: (queue[idx - 1]?.priority ?? 0) + 1 })}
-                          onMoveDown={() => setPriority.mutate({ taskId: task.id, priority: Math.max(0, (queue[idx + 1]?.priority ?? 0) - 1) })} />
-                      ))
+                    : (
+                      <DndContext
+                        sensors={sensors}
+                        collisionDetection={closestCenter}
+                        modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+                        onDragEnd={handleDragEnd}
+                      >
+                        <SortableContext items={queue.map(t => t.id)} strategy={verticalListSortingStrategy}>
+                          {queue.map(task => (
+                            <QueueCard key={task.id} task={task} agentList={idleAgents}
+                              onAssign={agentId => assignTask.mutate({ taskId: task.id, agentId })}
+                              onDelete={() => deleteTask.mutate(task.id)} />
+                          ))}
+                        </SortableContext>
+                      </DndContext>
+                    )
                 ) : title === 'Working' ? (
                   working.length === 0
                     ? <EmptyState icon={Loader2} title="Nobody working" description="Assign a task from the Queue to an agent." />
@@ -366,10 +518,12 @@ export default function ProjectDetailPage() {
                     ? <EmptyState icon={GitMerge} title="Nothing to review" description="Completed sessions will appear here." />
                     : review.map(s => (
                         <ReviewCard key={s.id} session={s} agent={agentFor(s)} task={taskFor(s)}
-                          hasRemote={!!project?.remoteUrl}
+                          hasRemote={!!project?.remoteUrl} allAgents={agentList}
                           onMerge={() => mergeSession.mutate(s.id)}
                           onMergePush={() => mergePushSession.mutate(s.id)}
-                          onClick={() => navigate(`/sessions/${s.id}`)} />
+                          onClick={() => navigate(`/sessions/${s.id}`)}
+                          isMerging={mergeSession.isPending || mergePushSession.isPending}
+                          onRequestReview={agentId => requestReview.mutate({ sessionId: s.id, agentId })} />
                       ))
                 )}
               </div>
@@ -416,23 +570,32 @@ export default function ProjectDetailPage() {
 // New task dialog
 // ---------------------------------------------------------------------------
 
+const SIZES: { value: TaskSize; label: string; desc: string }[] = [
+  { value: 'xs', label: 'XS', desc: '<30m' },
+  { value: 's',  label: 'S',  desc: '~1h'  },
+  { value: 'm',  label: 'M',  desc: '~2h'  },
+  { value: 'l',  label: 'L',  desc: '~4h'  },
+  { value: 'xl', label: 'XL', desc: '1d+'  },
+]
+
 function NewTaskDialog({ projectId, hasIdleAgent, onClose, onCreate, onCreateAndRun }: {
   projectId: string
   hasIdleAgent: boolean
   onClose: () => void
-  onCreate: (body: { projectId: string; title: string; prompt: string; baseBranch: string }) => Promise<void>
-  onCreateAndRun: (body: { projectId: string; title: string; prompt: string; baseBranch: string }) => Promise<void>
+  onCreate: (body: { projectId: string; title: string; prompt: string; baseBranch: string; size: TaskSize }) => Promise<void>
+  onCreateAndRun: (body: { projectId: string; title: string; prompt: string; baseBranch: string; size: TaskSize }) => Promise<void>
 }) {
   const [title,      setTitle]      = useState('')
   const [prompt,     setPrompt]     = useState('')
   const [baseBranch, setBaseBranch] = useState('main')
+  const [size,       setSize]       = useState<TaskSize>('m')
   const [loading,    setLoading]    = useState(false)
   const isValid = title.trim().length > 2
 
   async function submit(fn: typeof onCreate) {
     if (!isValid) return
     setLoading(true)
-    try { await fn({ projectId, title: title.trim(), prompt, baseBranch }) }
+    try { await fn({ projectId, title: title.trim(), prompt, baseBranch, size }) }
     finally { setLoading(false) }
   }
 
@@ -452,9 +615,25 @@ function NewTaskDialog({ projectId, hasIdleAgent, onClose, onCreate, onCreateAnd
             <Textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={3}
               placeholder="Additional context, requirements, or constraints…" />
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Base branch</Label>
-            <Input value={baseBranch} onChange={e => setBaseBranch(e.target.value)} className="font-mono text-xs" />
+          <div className="flex gap-3">
+            <div className="flex flex-col gap-1.5 flex-1">
+              <Label>Base branch</Label>
+              <Input value={baseBranch} onChange={e => setBaseBranch(e.target.value)} className="font-mono text-xs" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>Size</Label>
+              <div className="flex gap-1">
+                {SIZES.map(s => (
+                  <button key={s.value} type="button" onClick={() => setSize(s.value)} className={cn(
+                    'flex flex-col items-center px-2 py-1 rounded-lg border text-xs font-bold transition-colors cursor-pointer min-w-[36px]',
+                    size === s.value ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-transparent text-muted-foreground hover:text-foreground'
+                  )}>
+                    {s.label}
+                    <span className="font-normal text-[9px] opacity-70">{s.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
           <div className="flex gap-2 pt-1">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
