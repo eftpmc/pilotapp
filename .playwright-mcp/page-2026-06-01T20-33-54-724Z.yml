@@ -1,0 +1,95 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - button "p pilot" [ref=e6] [cursor=pointer]:
+      - generic [ref=e7]: p
+      - text: pilot
+    - navigation [ref=e8]:
+      - link "Today" [ref=e9] [cursor=pointer]:
+        - /url: /
+        - img [ref=e10]
+        - generic [ref=e13]: Today
+      - link "Agents" [ref=e14] [cursor=pointer]:
+        - /url: /employees
+        - img [ref=e15]
+        - generic [ref=e20]: Agents
+      - link "Knowledge" [ref=e21] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=e22]
+        - generic [ref=e24]: Knowledge
+      - link "Tools" [ref=e25] [cursor=pointer]:
+        - /url: /tools
+        - img [ref=e26]
+        - generic [ref=e28]: Tools
+      - link "Settings" [ref=e29] [cursor=pointer]:
+        - /url: /settings
+        - img [ref=e30]
+        - generic [ref=e33]: Settings
+      - generic [ref=e34]:
+        - button "Projects 3" [ref=e35] [cursor=pointer]:
+          - img [ref=e36]
+          - generic [ref=e38]: Projects
+          - generic [ref=e39]: "3"
+          - img [ref=e40]
+        - generic [ref=e42]:
+          - link "All projects" [ref=e43] [cursor=pointer]:
+            - /url: /projects
+          - link "test" [ref=e44] [cursor=pointer]:
+            - /url: /projects/f74fb468-306d-4a63-8afd-9a94b9c340a8
+            - generic [ref=e45]: test
+          - link "sewing-studio" [ref=e46] [cursor=pointer]:
+            - /url: /projects/9e1ce698-8d7d-45dc-9652-24a17b0a70d9
+            - generic [ref=e47]: sewing-studio
+          - link "test" [ref=e48] [cursor=pointer]:
+            - /url: /projects/14d728ff-a314-4e16-8c0a-e88b2ad9d785
+            - generic [ref=e49]: test
+    - generic [ref=e50]:
+      - button "Search ⌘K" [ref=e51] [cursor=pointer]:
+        - img [ref=e52]
+        - generic [ref=e55]: Search
+        - generic [ref=e56]: ⌘K
+      - button "Dark mode" [ref=e57] [cursor=pointer]:
+        - img [ref=e58]
+        - generic [ref=e60]: Dark mode
+      - button "Sign out" [ref=e61] [cursor=pointer]:
+        - img [ref=e62]
+        - generic [ref=e65]: Sign out
+  - main [ref=e66]:
+    - generic [ref=e67]:
+      - generic [ref=e68]:
+        - button "Projects" [ref=e69] [cursor=pointer]:
+          - img [ref=e70]
+          - text: Projects
+        - heading "sewing-studio" [level=1] [ref=e72]
+        - navigation [ref=e73]:
+          - link "Board" [ref=e74] [cursor=pointer]:
+            - /url: /projects/9e1ce698-8d7d-45dc-9652-24a17b0a70d9
+          - link "History" [ref=e75] [cursor=pointer]:
+            - /url: /projects/9e1ce698-8d7d-45dc-9652-24a17b0a70d9/sessions
+          - link "Plans" [ref=e76] [cursor=pointer]:
+            - /url: /projects/9e1ce698-8d7d-45dc-9652-24a17b0a70d9/plans
+          - link "Files" [ref=e77] [cursor=pointer]:
+            - /url: /projects/9e1ce698-8d7d-45dc-9652-24a17b0a70d9/files
+          - link "Settings" [ref=e78] [cursor=pointer]:
+            - /url: /projects/9e1ce698-8d7d-45dc-9652-24a17b0a70d9/settings
+      - generic [ref=e81]:
+        - generic [ref=e82]:
+          - generic [ref=e83]:
+            - heading "Project" [level=2] [ref=e84]
+            - button "Edit" [ref=e85] [cursor=pointer]
+          - generic [ref=e86]:
+            - generic [ref=e88]:
+              - generic [ref=e90]: Name
+              - generic [ref=e91]: sewing-studio
+            - generic [ref=e93]:
+              - generic [ref=e95]: Repository
+              - generic [ref=e96]: data/repos/8dbdfc3d-e758-4476-abae-8e25b8e556d4/9e1ce698-8d7d-45dc-9652-24a17b0a70d9
+            - generic [ref=e98]:
+              - generic [ref=e100]: Created
+              - generic [ref=e101]: May 29, 2026
+        - generic [ref=e102]:
+          - heading "Danger zone" [level=2] [ref=e104]
+          - generic [ref=e106]:
+            - generic [ref=e107]:
+              - generic [ref=e108]: Delete project
+              - generic [ref=e109]: Permanently deletes this project and all its tasks and sessions. This cannot be undone.
+            - button "Delete" [ref=e110] [cursor=pointer]

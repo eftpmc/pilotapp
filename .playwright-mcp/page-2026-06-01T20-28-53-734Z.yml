@@ -1,0 +1,82 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - button "p pilot" [ref=e6] [cursor=pointer]:
+      - generic [ref=e7]: p
+      - text: pilot
+    - navigation [ref=e8]:
+      - link "Today" [ref=e9] [cursor=pointer]:
+        - /url: /
+        - img [ref=e10]
+        - generic [ref=e13]: Today
+      - link "Agents" [ref=e14] [cursor=pointer]:
+        - /url: /employees
+        - img [ref=e15]
+        - generic [ref=e20]: Agents
+      - link "Knowledge" [ref=e21] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=e22]
+        - generic [ref=e24]: Knowledge
+      - link "Tools" [ref=e25] [cursor=pointer]:
+        - /url: /tools
+        - img [ref=e26]
+        - generic [ref=e28]: Tools
+      - link "Settings" [ref=e29] [cursor=pointer]:
+        - /url: /settings
+        - img [ref=e30]
+        - generic [ref=e33]: Settings
+      - generic [ref=e34]:
+        - button "Projects" [ref=e35] [cursor=pointer]:
+          - img [ref=e36]
+          - generic [ref=e38]: Projects
+          - img [ref=e39]
+        - link "All projects" [ref=e42] [cursor=pointer]:
+          - /url: /projects
+    - generic [ref=e43]:
+      - button "Search ⌘K" [ref=e44] [cursor=pointer]:
+        - img [ref=e45]
+        - generic [ref=e48]: Search
+        - generic [ref=e49]: ⌘K
+      - button "Dark mode" [ref=e50] [cursor=pointer]:
+        - img [ref=e51]
+        - generic [ref=e53]: Dark mode
+      - button "Sign out" [ref=e54] [cursor=pointer]:
+        - img [ref=e55]
+        - generic [ref=e58]: Sign out
+  - main [ref=e59]:
+    - generic [ref=e60]:
+      - generic [ref=e61]:
+        - button "Projects" [ref=e62] [cursor=pointer]:
+          - img [ref=e63]
+          - text: Projects
+        - heading "…" [level=1] [ref=e65]
+        - navigation [ref=e66]:
+          - link "Board" [ref=e67] [cursor=pointer]:
+            - /url: /projects/test
+          - link "History" [ref=e68] [cursor=pointer]:
+            - /url: /projects/test/sessions
+          - link "Plans" [ref=e69] [cursor=pointer]:
+            - /url: /projects/test/plans
+          - link "Files" [ref=e70] [cursor=pointer]:
+            - /url: /projects/test/files
+          - link "Settings" [ref=e71] [cursor=pointer]:
+            - /url: /projects/test/settings
+      - generic [ref=e75]:
+        - generic [ref=e76]:
+          - button "Review 0" [ref=e78] [cursor=pointer]:
+            - img [ref=e79]
+            - heading "Review" [level=2] [ref=e81]
+            - generic [ref=e82]: "0"
+          - paragraph [ref=e83]: Nothing to review.
+        - generic [ref=e84]:
+          - button "Working 0" [ref=e86] [cursor=pointer]:
+            - img [ref=e87]
+            - heading "Working" [level=2] [ref=e89]
+            - generic [ref=e90]: "0"
+          - paragraph [ref=e91]: No agents running.
+        - generic [ref=e92]:
+          - generic [ref=e93]:
+            - button "Queue" [ref=e94] [cursor=pointer]:
+              - img [ref=e95]
+              - heading "Queue" [level=2] [ref=e97]
+            - button "+ Add" [ref=e98] [cursor=pointer]
+          - paragraph [ref=e99]: Queue is empty — add a task to get started.

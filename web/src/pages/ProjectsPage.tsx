@@ -2,12 +2,23 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { projects, tasks, sessions } from '../api/client'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 
 type ImportMode = 'github' | 'local' | 'empty'
+
+function timeAgo(iso?: string) {
+  if (!iso) return 'No activity'
+  const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000)
+  if (m < 1)  return 'just now'
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  return `${Math.floor(h / 24)}d ago`
+}
 
 export default function ProjectsPage() {
   const navigate = useNavigate()
@@ -31,33 +42,51 @@ export default function ProjectsPage() {
     const pending = taskList.filter(t => t.projectId === pid && t.status === 'pending').length
     const running = sessionList.filter(s => s.projectId === pid && s.status === 'running').length
     const review  = sessionList.filter(s => s.projectId === pid && (s.status === 'done' || s.status === 'error')).length
-    return { pending, running, review }
+    const latestSession = sessionList
+      .filter(s => s.projectId === pid)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
+    const latestTask = taskList
+      .filter(t => t.projectId === pid)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
+    const latestAt = latestSession?.createdAt ?? latestTask?.createdAt
+    return { pending, running, review, latestAt }
   }
 
   if (projectList.length === 0) {
     return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
-        <div style={{ width: '100%', maxWidth: 400, padding: '0 24px', display: 'flex', flexDirection: 'column', gap: 32 }}>
-          <div style={{ textAlign: 'center' }}>
-            <p style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 36, letterSpacing: 0, color: 'var(--ink)', margin: 0 }}>pilot</p>
-            <p style={{ fontSize: 14, color: 'var(--muted)', marginTop: 6 }}>Your AI coding crew, ready to ship.</p>
+        <div style={{ width: '100%', maxWidth: 380, padding: '0 24px', display: 'flex', flexDirection: 'column', gap: 28 }}>
+          <div>
+            <p style={{ fontWeight: 700, fontSize: 24, letterSpacing: '-0.02em', color: 'var(--ink)', margin: '0 0 6px' }}>pilot</p>
+            <p style={{ fontSize: 14, color: 'var(--muted)', margin: 0 }}>Your AI coding crew, ready to ship.</p>
           </div>
-          <div className="rows">
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {[
               { n: '1', label: 'Add a project',  desc: 'Connect a GitHub repo or local path.' },
               { n: '2', label: 'Add an agent',   desc: 'Configure an API key in Settings.' },
               { n: '3', label: 'Dispatch tasks', desc: 'Agents run in parallel on separate branches.' },
             ].map(({ n, label, desc }) => (
-              <div key={n} className="row" style={{ cursor: 'default' }}>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--indigo)', fontWeight: 600, width: 18, flexShrink: 0 }}>{n}</span>
-                <div className="row-main">
-                  <div className="row-title">{label}</div>
-                  <div className="row-meta">{desc}</div>
+              <div key={n} style={{
+                display: 'flex', alignItems: 'flex-start', gap: 14,
+                padding: '14px 16px', background: 'var(--panel)',
+                border: '1px solid var(--rule)', borderRadius: 12,
+              }}>
+                <span style={{
+                  width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+                  background: 'var(--ember-wash)', color: 'var(--ember)',
+                  display: 'grid', placeItems: 'center',
+                  fontSize: 11, fontWeight: 700,
+                }}>{n}</span>
+                <div>
+                  <p style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)', margin: '0 0 2px' }}>{label}</p>
+                  <p style={{ fontSize: 12, color: 'var(--muted)', margin: 0 }}>{desc}</p>
                 </div>
               </div>
             ))}
           </div>
-          <button className="btn primary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => setShowNew(true)}>
+
+          <button className="btn primary" style={{ width: '100%', justifyContent: 'center', padding: '10px 16px', borderRadius: 10, fontSize: 14 }} onClick={() => setShowNew(true)}>
             Add first project
           </button>
         </div>
@@ -69,35 +98,57 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div style={{ overflowY: 'auto', flex: 1, background: 'var(--bg)' }}>
-      <div className="page-content narrow" style={{ paddingTop: 52, paddingBottom: 80 }}>
+    <div className="flex-1 overflow-y-auto bg-background">
+      <div className="px-6 pt-10 pb-8">
 
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 32 }}>
-          <h1 className="h-page">Projects</h1>
-          <button className="btn sm" onClick={() => setShowNew(true)}>+ New</button>
+        <div className="flex items-start justify-between mb-8">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
+            <p className="text-sm text-muted-foreground mt-1">{projectList.length} project{projectList.length !== 1 ? 's' : ''} · git repos your agents work in</p>
+          </div>
+          <Button onClick={() => setShowNew(true)}>+ New</Button>
         </div>
 
-        <div className="rows">
+        <div className="project-card-grid">
           {projectList.map(p => {
-            const { pending, running, review } = statsFor(p.id)
+            const { pending, running, review, latestAt } = statsFor(p.id)
             const repo = p.remoteUrl
               ? p.remoteUrl.replace(/^https?:\/\/(www\.)?github\.com\//, '').replace(/\.git$/, '')
               : p.localPath ?? 'local'
+            const total = pending + running + review
             return (
-              <button key={p.id} className="row" onClick={() => navigate(`/projects/${p.id}`)}>
-                <div className="row-main">
-                  <div className="row-title" style={{ fontSize: 16 }}>{p.name}</div>
-                  <div className="row-meta">
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{repo}</span>
-                  </div>
+              <button
+                key={p.id}
+                onClick={() => navigate(`/projects/${p.id}`)}
+                className="project-card"
+              >
+                <div className="project-card-head">
+                  <span className="project-card-title">{p.name}</span>
+                  {(running > 0 || review > 0) && (
+                    <span className="project-card-dots">
+                      {running > 0 && <span className="dot green pulse" />}
+                      {review > 0  && <span className="dot amber" />}
+                    </span>
+                  )}
                 </div>
-                <div className="row-meta" style={{ margin: 0, gap: 12 }}>
-                  {running > 0 && <span className="stat green"><span className="dot green pulse" />{running} running</span>}
-                  {review  > 0 && <span className="stat amber"><span className="dot amber" />{review} to review</span>}
+                <p className="project-card-repo">{repo}</p>
+                <div className="project-card-lanes" aria-hidden="true">
+                  <span className={cn('lane green', running > 0 && 'active')} />
+                  <span className={cn('lane amber', review > 0 && 'active')} />
+                  <span className={cn('lane muted', pending > 0 && 'active')} />
+                </div>
+                <div className="project-card-stats">
+                  {running > 0 && <span className="stat green" style={{ fontSize: 12 }}><span className="dot green pulse" />{running} running</span>}
+                  {review  > 0 && <span className="stat amber" style={{ fontSize: 12 }}><span className="dot amber" />{review} to review</span>}
                   {pending > 0 && <span style={{ fontSize: 12, color: 'var(--muted)' }}>{pending} queued</span>}
-                  {running === 0 && review === 0 && pending === 0 && <span style={{ fontSize: 12, color: 'var(--faint)' }}>Idle</span>}
+                  {running === 0 && review === 0 && pending === 0 && (
+                    <span style={{ fontSize: 12, color: 'var(--faint)' }}>Idle</span>
+                  )}
                 </div>
-                <svg className="row-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                <div className="project-card-foot">
+                  <span>{total > 0 ? `${total} active item${total !== 1 ? 's' : ''}` : 'Quiet'}</span>
+                  <span>{timeAgo(latestAt)}</span>
+                </div>
               </button>
             )
           })}
@@ -148,7 +199,7 @@ function NewProjectDialog({ open, onClose, onCreate, loading, error }: {
               onKeyDown={e => { if (e.key === 'Enter' && isValid) submit() }} />
           </div>
 
-          <div style={{ display: 'flex', gap: 4, background: 'var(--panel)', borderRadius: 10, padding: 3 }}>
+          <div style={{ display: 'flex', gap: 3, background: 'var(--panel)', borderRadius: 10, padding: 3 }}>
             {(['github', 'local', 'empty'] as ImportMode[]).map(k => (
               <button key={k} onClick={() => setMode(k)} className={cn(
                 'flex-1 text-[13px] font-medium rounded-lg py-1.5 border-none cursor-pointer transition-colors',

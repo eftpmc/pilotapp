@@ -1,0 +1,187 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - button "p pilot" [ref=e6] [cursor=pointer]:
+      - generic [ref=e7]: p
+      - text: pilot
+    - navigation [ref=e8]:
+      - link "Today" [ref=e9] [cursor=pointer]:
+        - /url: /
+        - img [ref=e10]
+        - generic [ref=e13]: Today
+      - link "Agents" [ref=e14] [cursor=pointer]:
+        - /url: /employees
+        - img [ref=e15]
+        - generic [ref=e20]: Agents
+      - link "Knowledge" [ref=e21] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=e22]
+        - generic [ref=e24]: Knowledge
+      - link "Tools" [active] [ref=e25] [cursor=pointer]:
+        - /url: /tools
+        - img [ref=e26]
+        - generic [ref=e28]: Tools
+      - link "Settings" [ref=e29] [cursor=pointer]:
+        - /url: /settings
+        - img [ref=e30]
+        - generic [ref=e33]: Settings
+      - generic [ref=e34]:
+        - button "Projects 3" [ref=e80] [cursor=pointer]:
+          - img [ref=e36]
+          - generic [ref=e38]: Projects
+          - generic [ref=e81]: "3"
+          - img [ref=e39]
+        - generic [ref=e41]:
+          - link "All projects" [ref=e42] [cursor=pointer]:
+            - /url: /projects
+          - link "test" [ref=e82] [cursor=pointer]:
+            - /url: /projects/f74fb468-306d-4a63-8afd-9a94b9c340a8
+            - generic [ref=e83]: test
+          - link "sewing-studio" [ref=e84] [cursor=pointer]:
+            - /url: /projects/9e1ce698-8d7d-45dc-9652-24a17b0a70d9
+            - generic [ref=e85]: sewing-studio
+          - link "test" [ref=e86] [cursor=pointer]:
+            - /url: /projects/14d728ff-a314-4e16-8c0a-e88b2ad9d785
+            - generic [ref=e87]: test
+    - generic [ref=e43]:
+      - button "Search ⌘K" [ref=e44] [cursor=pointer]:
+        - img [ref=e45]
+        - generic [ref=e48]: Search
+        - generic [ref=e49]: ⌘K
+      - button "Dark mode" [ref=e50] [cursor=pointer]:
+        - img [ref=e51]
+        - generic [ref=e53]: Dark mode
+      - button "Sign out" [ref=e54] [cursor=pointer]:
+        - img [ref=e55]
+        - generic [ref=e58]: Sign out
+  - main [ref=e59]:
+    - generic [ref=e194]:
+      - generic [ref=e195]:
+        - generic [ref=e196]:
+          - heading "Tools" [level=1] [ref=e197]
+          - paragraph [ref=e198]: MCP servers available to your agents.
+        - button "Custom tool" [ref=e199] [cursor=pointer]:
+          - img [ref=e200]
+          - text: Custom tool
+      - generic [ref=e201]:
+        - paragraph [ref=e202]: Installed · 3
+        - generic [ref=e203]:
+          - generic [ref=e204]:
+            - generic [ref=e205]:
+              - img [ref=e207]
+              - generic [ref=e209]:
+                - paragraph [ref=e210]: Fetch
+                - paragraph [ref=e211]: Web browsing
+              - generic [ref=e212]:
+                - button [ref=e213] [cursor=pointer]:
+                  - img [ref=e214]
+                - button [ref=e217] [cursor=pointer]:
+                  - img [ref=e218]
+            - generic [ref=e221]:
+              - generic [ref=e222]: 1 server
+              - generic [ref=e223]:
+                - img [ref=e224]
+                - text: 1 direct
+            - generic [ref=e229]:
+              - paragraph [ref=e230]: Departments
+              - button "Software" [ref=e232] [cursor=pointer]: Software
+          - generic [ref=e234]:
+            - generic [ref=e235]:
+              - img [ref=e237]
+              - generic [ref=e239]:
+                - paragraph [ref=e240]: Sequential Thinking
+                - paragraph [ref=e241]: Structured reasoning
+              - generic [ref=e242]:
+                - button [ref=e243] [cursor=pointer]:
+                  - img [ref=e244]
+                - button [ref=e247] [cursor=pointer]:
+                  - img [ref=e248]
+            - generic [ref=e251]:
+              - generic [ref=e252]: 1 server
+              - generic [ref=e253]:
+                - img [ref=e254]
+                - text: 1 direct
+            - generic [ref=e259]:
+              - paragraph [ref=e260]: Departments
+              - button "Software" [ref=e262] [cursor=pointer]: Software
+          - generic [ref=e264]:
+            - generic [ref=e265]:
+              - img [ref=e267]
+              - generic [ref=e269]:
+                - paragraph [ref=e270]: Memory
+                - paragraph [ref=e271]: Persistent knowledge
+              - generic [ref=e272]:
+                - button [ref=e273] [cursor=pointer]:
+                  - img [ref=e274]
+                - button [ref=e277] [cursor=pointer]:
+                  - img [ref=e278]
+            - generic [ref=e282]: 1 server
+            - generic [ref=e283]:
+              - paragraph [ref=e284]: Departments
+              - button "Software" [ref=e286] [cursor=pointer]
+      - generic [ref=e287]:
+        - paragraph [ref=e288]: Available
+        - generic [ref=e289]:
+          - generic [ref=e290]:
+            - img [ref=e292]
+            - generic [ref=e295]:
+              - generic [ref=e296]:
+                - generic [ref=e297]: Brave Search
+                - generic [ref=e298]: Web search
+              - paragraph [ref=e299]: Search the web via Brave Search API. Better than fetch for discovery tasks.
+            - button "Add" [ref=e300] [cursor=pointer]
+          - generic [ref=e301]:
+            - img [ref=e303]
+            - generic [ref=e307]:
+              - generic [ref=e308]:
+                - generic [ref=e309]: GitHub
+                - generic [ref=e310]: Issues, PRs, repos
+              - paragraph [ref=e311]: Read and write issues, pull requests, and repository content.
+            - button "Add" [ref=e312] [cursor=pointer]
+          - generic [ref=e313]:
+            - img [ref=e315]
+            - generic [ref=e319]:
+              - generic [ref=e320]:
+                - generic [ref=e321]: GitLab
+                - generic [ref=e322]: Issues, MRs, repos
+              - paragraph [ref=e323]: Read and write GitLab issues, merge requests, and repository content.
+            - button "Add" [ref=e324] [cursor=pointer]
+          - generic [ref=e325]:
+            - img [ref=e327]
+            - generic [ref=e331]:
+              - generic [ref=e332]:
+                - generic [ref=e333]: PostgreSQL
+                - generic [ref=e334]: Database queries
+              - paragraph [ref=e335]: Read-only access to a Postgres database. Agents can query schema and run SELECTs.
+            - button "Add" [ref=e336] [cursor=pointer]
+          - generic [ref=e337]:
+            - img [ref=e339]
+            - generic [ref=e341]:
+              - generic [ref=e342]:
+                - generic [ref=e343]: Puppeteer
+                - generic [ref=e344]: Browser automation
+              - paragraph [ref=e345]: Control a real browser — navigate pages, click, fill forms, take screenshots.
+            - button "Add" [ref=e346] [cursor=pointer]
+          - generic [ref=e347]:
+            - img [ref=e349]
+            - generic [ref=e351]:
+              - generic [ref=e352]:
+                - generic [ref=e353]: Slack
+                - generic [ref=e354]: Messaging
+              - paragraph [ref=e355]: Read channels and post messages to Slack workspaces.
+            - button "Add" [ref=e356] [cursor=pointer]
+          - generic [ref=e357]:
+            - img [ref=e359]
+            - generic [ref=e361]:
+              - generic [ref=e362]:
+                - generic [ref=e363]: Sentry
+                - generic [ref=e364]: Error monitoring
+              - paragraph [ref=e365]: Query Sentry for errors, issues, and stack traces to help agents debug.
+            - button "Add" [ref=e366] [cursor=pointer]
+          - generic [ref=e367]:
+            - img [ref=e369]
+            - generic [ref=e371]:
+              - generic [ref=e372]:
+                - generic [ref=e373]: Linear
+                - generic [ref=e374]: Issues & projects
+              - paragraph [ref=e375]: Read and create Linear issues, projects, and cycles.
+            - button "Add" [ref=e376] [cursor=pointer]

@@ -71,7 +71,7 @@ const SelectItem = React.forwardRef<
   >
     <span style={{ position: 'absolute', left: '10px', display: 'flex', alignItems: 'center' }}>
       <SelectPrimitive.ItemIndicator>
-        <Check size={13} style={{ color: 'var(--indigo)' }} />
+        <Check size={13} style={{ color: 'var(--ember)' }} />
       </SelectPrimitive.ItemIndicator>
     </span>
     <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>

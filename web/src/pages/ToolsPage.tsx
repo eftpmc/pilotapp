@@ -332,7 +332,7 @@ function ToolCard({ tool, deptList, deptToolIds, employeeToolIds, onEdit, onDele
   const directCount = employeeToolIds.size
 
   return (
-    <div className="bg-card rounded-2xl [box-shadow:var(--shadow-card)] border border-border/50 overflow-hidden flex flex-col">
+    <div className="bg-card rounded-xl [box-shadow:var(--shadow-card)] border border-border/50 overflow-hidden flex flex-col">
       {/* Header */}
       <div className="px-4 pt-4 pb-3 flex items-start gap-3">
         <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
@@ -420,20 +420,20 @@ function ToolCard({ tool, deptList, deptToolIds, employeeToolIds, onEdit, onDele
 function PresetRow({ preset, onAdd }: { preset: Preset; onAdd: () => void }) {
   const Icon = preset.icon
   return (
-    <div className="flex items-center gap-4 px-4 py-3.5 rounded-xl hover:bg-muted/30 transition-colors group">
-      <div className="w-8 h-8 rounded-lg bg-muted/60 flex items-center justify-center shrink-0">
-        <Icon className="h-4 w-4 text-muted-foreground" />
+    <div className="flex items-center gap-4 px-4 py-3.5 rounded-xl border border-transparent hover:border-border/60 hover:bg-muted/30 transition-colors group">
+      <div className="w-8 h-8 rounded-lg bg-muted/70 flex items-center justify-center shrink-0">
+        <Icon className="h-4 w-4 text-foreground/70" />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2">
-          <span className="text-sm text-foreground">{preset.name}</span>
-          <span className="text-xs text-muted-foreground/60">{preset.tagline}</span>
+          <span className="text-sm font-medium text-foreground">{preset.name}</span>
+          <span className="text-xs text-muted-foreground">{preset.tagline}</span>
         </div>
-        <p className="text-xs text-muted-foreground/50 mt-0.5 leading-snug">{preset.description}</p>
+        <p className="text-xs text-muted-foreground/70 mt-0.5 leading-snug">{preset.description}</p>
       </div>
       <button
         onClick={onAdd}
-        className="shrink-0 h-7 px-3 rounded-lg text-xs text-muted-foreground border border-border/50 hover:border-border hover:text-foreground bg-transparent transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
+        className="shrink-0 h-7 px-3 rounded-lg text-xs text-muted-foreground border border-border/60 hover:border-border hover:text-foreground bg-background transition-colors cursor-pointer"
       >
         Add
       </button>

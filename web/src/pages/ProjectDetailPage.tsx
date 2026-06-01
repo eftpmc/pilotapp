@@ -35,7 +35,7 @@ function AgentPickerDropdown({ agentList, onAssign }: { agentList: Employee[]; o
       <button
         className="btn sm"
         onClick={e => { e.stopPropagation(); setOpen(o => !o) }}
-        style={{ color: 'var(--indigo)', borderColor: 'var(--indigo)', background: 'var(--indigo-wash)' }}
+        style={{ color: 'var(--ember)', borderColor: 'var(--ember)', background: 'var(--ember-wash)' }}
       >
         Assign
       </button>
@@ -171,11 +171,13 @@ export default function ProjectDetailPage() {
     return <span className="stat amber"><span className="dot amber" />Ready to review</span>
   }
 
-  return (
-    <div style={{ overflowY: 'auto', flex: 1, background: 'var(--bg)' }}>
-      <div className="page-content board-content" style={{ paddingTop: 24, paddingBottom: 80 }}>
+  const showBoardSummary = working.length > 0 || queue.length > 0
 
-        {(working.length > 0 || review.length > 0 || queue.length > 0) && (
+  return (
+    <div className="flex-1 overflow-y-auto bg-background">
+      <div className="px-6 pt-6 pb-8" style={{ maxWidth: 1440, margin: '0 auto' }}>
+
+        {showBoardSummary && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24, minHeight: 30 }}>
             {working.length > 0 && <span className="stat green"><span className="dot green pulse" />{working.length} working</span>}
             {review.length  > 0 && <span className="stat amber">{review.length} in review</span>}
@@ -190,9 +192,80 @@ export default function ProjectDetailPage() {
         )}
 
         <div className="board-grid">
+        {/* Queue */}
+        <div className={`section board-queue${collapsed.has('queue') ? ' collapsed' : ''}`}>
+          <div className="section-head">
+            <button className="toggle" onClick={() => toggleSection('queue')}><CaretIcon /><h2>Queue</h2>{queue.length > 0 && <span className="count">{queue.length}</span>}</button>
+            <button className="board-add" onClick={() => setShowNew(true)}>
+              + Add
+            </button>
+          </div>
+          {queue.length === 0 ? (
+            <p className="empty-line" style={{ color: 'var(--muted)' }}>Queue is empty — add a task to get started.</p>
+          ) : (
+            <div className="rows">
+              {queue.map((task: Task) => (
+                <div key={task.id} className="row" style={{ cursor: 'default' }}>
+                  <span className="dot idle" />
+                  <div className="row-main">
+                    <div className="row-title">{task.title}</div>
+                    {task.prompt && <div className="row-meta" style={{ WebkitLineClamp: 1, overflow: 'hidden' }}>{task.prompt}</div>}
+                  </div>
+                  {task.size && (
+                    <span className="chip mono">{task.size}</span>
+                  )}
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    {idleAgents.length > 0
+                      ? <AgentPickerDropdown agentList={idleAgents} onAssign={agentId => assignTask.mutate({ taskId: task.id, agentId })} />
+                      : <span style={{ fontSize: 12, color: 'var(--faint)' }}>No agents</span>
+                    }
+                    <button onClick={() => deleteTask.mutate(task.id)}
+                      style={{ fontSize: 18, lineHeight: 1, color: 'var(--faint)', background: 'none', border: 'none', cursor: 'pointer', padding: '0 4px' }}
+                      onMouseOver={e => (e.currentTarget.style.color = 'var(--red)')}
+                      onMouseOut={e => (e.currentTarget.style.color = 'var(--faint)')}
+                    >×</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Running */}
+          <div className={`section board-running${collapsed.has('running') ? ' collapsed' : ''}`}>
+            <div className="section-head"><button className="toggle" onClick={() => toggleSection('running')}><CaretIcon /><h2>Working</h2><span className="count">{working.length}</span></button></div>
+            {working.length === 0 ? (
+              <p className="empty-line">No agents running.</p>
+            ) : (
+            <div className="rows">
+              {working.map(s => {
+                const agent = agentFor(s)
+                const task  = taskFor(s)
+                return (
+                  <button key={s.id} className="row" onClick={() => navigate(`/sessions/${s.id}`)}>
+                    <span className="dot green pulse" />
+                    <AgentAvatar agent={agent} size={26} running />
+                    <div className="row-main">
+                      <div className="row-title">{task?.title ?? s.branch}</div>
+                      <div className="row-meta"><span>{agent?.name ?? '—'}</span></div>
+                    </div>
+                    {s.status === 'running' && <ElapsedTimer createdAt={s.createdAt} />}
+                    <span className="row-hint">↵</span>
+                    <svg className="row-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                  </button>
+                )
+              })}
+            </div>
+            )}
+          </div>
+
         {/* Waiting for review */}
           <div className={`section board-review${collapsed.has('review') ? ' collapsed' : ''}`}>
-            <div className="section-head"><button className="toggle" onClick={() => toggleSection('review')}><CaretIcon /><h2>Review</h2><span className="count">{review.length}</span></button></div>
+            <div className="section-head">
+              <button className="toggle" onClick={() => toggleSection('review')}>
+                <CaretIcon /><h2>Review</h2><span className="count">{review.length}</span>
+              </button>
+            </div>
             {review.length === 0 ? (
               <p className="empty-line">Nothing to review.</p>
             ) : (
@@ -240,73 +313,6 @@ export default function ProjectDetailPage() {
             </div>
             )}
           </div>
-
-        {/* Running */}
-          <div className={`section board-running${collapsed.has('running') ? ' collapsed' : ''}`}>
-            <div className="section-head"><button className="toggle" onClick={() => toggleSection('running')}><CaretIcon /><h2>Working</h2><span className="count">{working.length}</span></button></div>
-            {working.length === 0 ? (
-              <p className="empty-line">No agents running.</p>
-            ) : (
-            <div className="rows">
-              {working.map(s => {
-                const agent = agentFor(s)
-                const task  = taskFor(s)
-                return (
-                  <button key={s.id} className="row" onClick={() => navigate(`/sessions/${s.id}`)}>
-                    <span className="dot green pulse" />
-                    <AgentAvatar agent={agent} size={26} running />
-                    <div className="row-main">
-                      <div className="row-title">{task?.title ?? s.branch}</div>
-                      <div className="row-meta"><span>{agent?.name ?? '—'}</span></div>
-                    </div>
-                    {s.status === 'running' && <ElapsedTimer createdAt={s.createdAt} />}
-                    <span className="row-hint">↵</span>
-                    <svg className="row-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-                  </button>
-                )
-              })}
-            </div>
-            )}
-          </div>
-
-        {/* Queue */}
-        <div className={`section board-queue${collapsed.has('queue') ? ' collapsed' : ''}`}>
-          <div className="section-head">
-            <button className="toggle" onClick={() => toggleSection('queue')}><CaretIcon /><h2>Queue</h2>{queue.length > 0 && <span className="count">{queue.length}</span>}</button>
-            <button className="board-add" onClick={() => setShowNew(true)}>
-              + Add
-            </button>
-          </div>
-          {queue.length === 0 ? (
-            <p className="empty-line" style={{ color: 'var(--muted)' }}>Queue is empty — add a task to get started.</p>
-          ) : (
-            <div className="rows">
-              {queue.map((task: Task) => (
-                <div key={task.id} className="row" style={{ cursor: 'default' }}>
-                  <span className="dot idle" />
-                  <div className="row-main">
-                    <div className="row-title">{task.title}</div>
-                    {task.prompt && <div className="row-meta" style={{ WebkitLineClamp: 1, overflow: 'hidden' }}>{task.prompt}</div>}
-                  </div>
-                  {task.size && (
-                    <span className="chip mono">{task.size}</span>
-                  )}
-                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                    {idleAgents.length > 0
-                      ? <AgentPickerDropdown agentList={idleAgents} onAssign={agentId => assignTask.mutate({ taskId: task.id, agentId })} />
-                      : <span style={{ fontSize: 12, color: 'var(--faint)' }}>No agents</span>
-                    }
-                    <button onClick={() => deleteTask.mutate(task.id)}
-                      style={{ fontSize: 18, lineHeight: 1, color: 'var(--faint)', background: 'none', border: 'none', cursor: 'pointer', padding: '0 4px' }}
-                      onMouseOver={e => (e.currentTarget.style.color = 'var(--red)')}
-                      onMouseOut={e => (e.currentTarget.style.color = 'var(--faint)')}
-                    >×</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
         </div>
 
         {/* Errors */}

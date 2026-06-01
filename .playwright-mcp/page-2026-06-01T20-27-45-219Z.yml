@@ -1,0 +1,66 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - button "p pilot" [ref=e6] [cursor=pointer]:
+      - generic [ref=e7]: p
+      - text: pilot
+    - navigation [ref=e8]:
+      - link "Today" [ref=e9] [cursor=pointer]:
+        - /url: /
+        - img [ref=e10]
+        - generic [ref=e13]: Today
+      - link "Agents" [ref=e14] [cursor=pointer]:
+        - /url: /employees
+        - img [ref=e15]
+        - generic [ref=e20]: Agents
+      - link "Knowledge" [ref=e21] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=e22]
+        - generic [ref=e24]: Knowledge
+      - link "Tools" [ref=e25] [cursor=pointer]:
+        - /url: /tools
+        - img [ref=e26]
+        - generic [ref=e28]: Tools
+      - link "Settings" [ref=e29] [cursor=pointer]:
+        - /url: /settings
+        - img [ref=e30]
+        - generic [ref=e33]: Settings
+      - generic [ref=e34]:
+        - button "Projects" [ref=e35] [cursor=pointer]:
+          - img [ref=e36]
+          - generic [ref=e38]: Projects
+          - img [ref=e39]
+        - link "All projects" [ref=e42] [cursor=pointer]:
+          - /url: /projects
+    - generic [ref=e43]:
+      - button "Search ⌘K" [ref=e44] [cursor=pointer]:
+        - img [ref=e45]
+        - generic [ref=e48]: Search
+        - generic [ref=e49]: ⌘K
+      - button "Dark mode" [ref=e50] [cursor=pointer]:
+        - img [ref=e51]
+        - generic [ref=e53]: Dark mode
+      - button "Sign out" [ref=e54] [cursor=pointer]:
+        - img [ref=e55]
+        - generic [ref=e58]: Sign out
+  - main [ref=e59]:
+    - generic [ref=e61]:
+      - generic [ref=e62]:
+        - heading "Today" [level=1] [ref=e63]
+        - paragraph [ref=e64]: Nothing running yet.
+      - generic [ref=e65]:
+        - paragraph [ref=e66]: Get started
+        - button "1 Add a project Connect a GitHub repo or local path." [ref=e67] [cursor=pointer]:
+          - generic [ref=e68]: "1"
+          - generic [ref=e69]:
+            - paragraph [ref=e70]: Add a project
+            - paragraph [ref=e71]: Connect a GitHub repo or local path.
+        - button "2 Add agents Configure API keys and create named agents." [ref=e72] [cursor=pointer]:
+          - generic [ref=e73]: "2"
+          - generic [ref=e74]:
+            - paragraph [ref=e75]: Add agents
+            - paragraph [ref=e76]: Configure API keys and create named agents.
+        - button "3 Dispatch work Open a project, create tasks, assign to agents." [ref=e77] [cursor=pointer]:
+          - generic [ref=e78]: "3"
+          - generic [ref=e79]:
+            - paragraph [ref=e80]: Dispatch work
+            - paragraph [ref=e81]: Open a project, create tasks, assign to agents.

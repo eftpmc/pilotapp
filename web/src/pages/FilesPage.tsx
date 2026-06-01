@@ -128,7 +128,7 @@ function FileListRow({ path, selected, onClick, indent = false }: {
     >
       <Icon size={15} style={{ color, flexShrink: 0 }} />
       <div className="row-main">
-        <div className="row-title" style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: selected ? 'var(--indigo)' : 'var(--ink)' }}>{path}</div>
+        <div className="row-title" style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: selected ? 'var(--ember)' : 'var(--ink)' }}>{path}</div>
       </div>
       {ext && <span className="chip mono">{ext}</span>}
     </button>
@@ -186,12 +186,11 @@ export default function FilesPage() {
   const previewOpen = selectedFile !== null
 
   return (
-    <div style={{ overflowY: 'auto', flex: 1, background: 'var(--bg)' }}>
-      <div className="page-content" style={{ paddingTop: 32, paddingBottom: 80 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 26 }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 420, letterSpacing: 0, margin: 0 }}>Files</h2>
-          {fileList.length > 0 && <span className="count">{fileList.length}</span>}
-        </div>
+    <div className="flex-1 overflow-y-auto bg-background">
+      <div className="px-6 pt-6 pb-8">
+        {fileList.length > 0 && (
+          <p className="text-xs text-muted-foreground/50 mb-4">{fileList.length} file{fileList.length !== 1 ? 's' : ''}</p>
+        )}
 
         <div style={{
           display: 'grid',

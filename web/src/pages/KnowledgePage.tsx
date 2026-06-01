@@ -219,15 +219,17 @@ export default function KnowledgePage() {
     <div className="flex-1 overflow-y-auto bg-background">
       <div className="px-6 pt-10 pb-8 flex flex-col gap-8">
 
-        <h1 className="text-2xl font-semibold tracking-tight">Knowledge</h1>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Knowledge</h1>
+            <p className="text-sm text-muted-foreground mt-1">Documents injected into agent prompts at runtime.</p>
+          </div>
+        </div>
 
         {/* Company Library */}
         <section className="flex flex-col gap-3">
           <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs text-muted-foreground/50">Company library</p>
-              <p className="text-xs text-muted-foreground/40 mt-0.5">Injected into every agent's prompt — coding standards, architecture docs, guidelines.</p>
-            </div>
+            <p className="text-xs text-muted-foreground/50">Company library · shared across all agents</p>
             <Button size="sm" className="shrink-0" onClick={() => openAdd('company', undefined, 'Company Library')}>+ Add</Button>
           </div>
 
@@ -247,10 +249,7 @@ export default function KnowledgePage() {
         {/* Department Knowledge */}
         {deptList.length > 0 && (
           <section className="flex flex-col gap-3">
-            <div>
-              <p className="text-xs text-muted-foreground/50">Department knowledge</p>
-              <p className="text-xs text-muted-foreground/40 mt-0.5">Injected for all agents in a department.</p>
-            </div>
+            <p className="text-xs text-muted-foreground/50">Department knowledge · injected for all agents in a department</p>
             <div className="flex flex-col gap-2">
               {deptList.map(dept => (
                 <DeptSection
@@ -268,10 +267,7 @@ export default function KnowledgePage() {
 
         {/* Agent Knowledge */}
         <section className="flex flex-col gap-3">
-          <div>
-            <p className="text-xs text-muted-foreground/50">Agent knowledge</p>
-            <p className="text-xs text-muted-foreground/40 mt-0.5">Personal context injected only when a specific agent is working.</p>
-          </div>
+          <p className="text-xs text-muted-foreground/50">Agent knowledge · personal context per agent</p>
 
           {employeeList.length === 0 ? (
             <p className="text-sm text-muted-foreground/50">No agents yet.</p>

@@ -1,0 +1,3 @@
+[     126ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=1e3f1880:14336
+[   89998ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:5173/src/pages/PlansPage.tsx?t=1780346124487:0
+[   90000ms] [ERROR] [vite] Failed to reload /src/pages/PlansPage.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://localhost:5173/@vite/client:524

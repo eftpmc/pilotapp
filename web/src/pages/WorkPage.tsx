@@ -125,7 +125,7 @@ function QueueCard({ task, employeeList, projectList, onAssign, onDelete }: {
       <div className="flex items-center gap-1.5 px-3.5 pt-3.5">
         <SizeBadge size={task.size} />
         {task.leadSessionId && (
-          <span className="text-[10px] font-bold text-indigo-400 bg-indigo-500/10 border border-indigo-500/25 rounded px-1.5 py-0.5 uppercase tracking-wider">Lead</span>
+          <span className="text-[10px] font-bold text-primary bg-primary/10 border border-primary/25 rounded px-1.5 py-0.5 uppercase tracking-wider">Lead</span>
         )}
         <span className="text-[11px] font-mono text-muted-foreground/55 bg-muted/50 border border-border/40 rounded-full px-2 py-px ml-auto">
           {task.baseBranch || 'main'}

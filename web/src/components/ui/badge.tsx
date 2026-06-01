@@ -6,8 +6,8 @@ export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
 }
 
 const variantStyle: Record<string, React.CSSProperties> = {
-  default:     { color: 'var(--indigo)',   background: 'var(--indigo-wash)' },
-  pill:        { color: 'var(--indigo)',   background: 'var(--indigo-wash)' },
+  default:     { color: 'var(--ember)',   background: 'var(--ember-wash)' },
+  pill:        { color: 'var(--ember)',   background: 'var(--ember-wash)' },
   secondary:   { color: 'var(--ink-2)',    background: 'var(--panel-2)', border: '1px solid var(--rule)' },
   outline:     { color: 'var(--muted)',    background: 'var(--panel)',   border: '1px solid var(--rule)' },
   success:     { color: 'var(--green)',    background: 'color-mix(in srgb, var(--green) 10%, transparent)' },

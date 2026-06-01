@@ -1,0 +1,93 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - button "p pilot" [ref=e6] [cursor=pointer]:
+      - generic [ref=e7]: p
+      - text: pilot
+    - navigation [ref=e8]:
+      - link "Today 1" [ref=e9] [cursor=pointer]:
+        - /url: /
+        - img [ref=e10]
+        - generic [ref=e13]: Today
+        - generic [ref=e14]: "1"
+      - link "Agents" [ref=e15] [cursor=pointer]:
+        - /url: /employees
+        - img [ref=e16]
+        - generic [ref=e21]: Agents
+      - link "Knowledge" [ref=e22] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=e23]
+        - generic [ref=e25]: Knowledge
+      - link "Tools" [ref=e26] [cursor=pointer]:
+        - /url: /tools
+        - img [ref=e27]
+        - generic [ref=e29]: Tools
+      - link "Settings" [ref=e30] [cursor=pointer]:
+        - /url: /settings
+        - img [ref=e31]
+        - generic [ref=e34]: Settings
+      - generic [ref=e35]:
+        - button "Projects 3" [ref=e36] [cursor=pointer]:
+          - img [ref=e37]
+          - generic [ref=e39]: Projects
+          - generic [ref=e40]: "3"
+          - img [ref=e41]
+        - generic [ref=e43]:
+          - link "All projects" [ref=e44] [cursor=pointer]:
+            - /url: /projects
+          - link "ball-sorting 1 to review" [ref=e45] [cursor=pointer]:
+            - /url: /projects/bffc8171-2ef5-4d57-891b-10be8251e215
+            - generic [ref=e46]: ball-sorting
+            - generic "1 to review" [ref=e48]
+          - link "test" [ref=e49] [cursor=pointer]:
+            - /url: /projects/f74fb468-306d-4a63-8afd-9a94b9c340a8
+            - generic [ref=e50]: test
+          - link "test" [ref=e51] [cursor=pointer]:
+            - /url: /projects/14d728ff-a314-4e16-8c0a-e88b2ad9d785
+            - generic [ref=e52]: test
+    - generic [ref=e53]:
+      - button "Search ⌘K" [ref=e54] [cursor=pointer]:
+        - img [ref=e55]
+        - generic [ref=e58]: Search
+        - generic [ref=e59]: ⌘K
+      - button "Dark mode" [ref=e60] [cursor=pointer]:
+        - img [ref=e61]
+        - generic [ref=e63]: Dark mode
+      - button "Sign out" [ref=e64] [cursor=pointer]:
+        - img [ref=e65]
+        - generic [ref=e68]: Sign out
+  - main [ref=e69]:
+    - generic [ref=e70]:
+      - generic [ref=e71]:
+        - button "test" [ref=e72] [cursor=pointer]:
+          - img [ref=e73]
+          - text: test
+        - generic [ref=e75]:
+          - generic [ref=e76]: AT
+          - generic [ref=e77]:
+            - heading "create txt files" [level=1] [ref=e97]
+            - generic [ref=e79]:
+              - generic [ref=e80]: Atlas
+              - generic [ref=e81]: ·
+              - generic [ref=e82]: Merged
+              - generic [ref=e84]: ·
+              - generic [ref=e85]: e81ebdfd-88fa-4825-beac-c8d79d7f5a1c
+        - generic [ref=e86]:
+          - button "output" [ref=e87] [cursor=pointer]
+          - button "diff" [ref=e88] [cursor=pointer]
+          - button "journal" [active] [ref=e89] [cursor=pointer]
+      - generic [ref=e98]:
+        - paragraph [ref=e99]: Journal
+        - paragraph [ref=e100]: What was completed
+        - paragraph [ref=e104]: "Removed all files from the project: README.md, generate.js, hello_world.txt, package-lock.json, package.json, tracker.yaml, and .gitignore."
+        - paragraph [ref=e105]: Key decisions
+        - paragraph [ref=e109]:
+          - text: Used
+          - code [ref=e110]: git rm
+          - text: to stage the deletions so the removals are tracked in git history.
+        - paragraph [ref=e111]: Issues encountered
+        - paragraph [ref=e115]: None.
+        - paragraph [ref=e116]: What a future session should know
+        - paragraph [ref=e120]: The repository is now empty (only this JOURNAL.md remains). The project previously contained a Node.js package with a generate.js script and a tracker.yaml file.
+      - generic [ref=e94]:
+        - generic [ref=e95]: Merged ✓
+        - button "← Board" [ref=e96] [cursor=pointer]

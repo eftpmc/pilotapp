@@ -24,6 +24,7 @@ function getTheme(): 'light' | 'dark' {
 }
 function applyTheme(t: 'light' | 'dark') {
   document.documentElement.classList.toggle('dark', t === 'dark')
+  document.documentElement.classList.toggle('light', t === 'light')
   localStorage.setItem('pilot.theme', t)
 }
 

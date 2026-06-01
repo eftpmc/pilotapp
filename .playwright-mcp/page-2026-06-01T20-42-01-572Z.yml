@@ -1,0 +1,24 @@
+- generic [ref=e3]:
+  - generic [ref=e5]:
+    - generic [ref=e6]:
+      - generic [ref=e7]: p
+      - generic [ref=e8]: pilot
+    - heading "AI coding agents, under your control." [level=1] [ref=e9]:
+      - text: AI coding agents,
+      - text: under your control.
+    - paragraph [ref=e10]: Dispatch tasks to Claude and Codex agents. Review diffs, merge changes, ship faster.
+  - generic [ref=e11]:
+    - heading "Welcome back" [level=2] [ref=e12]
+    - paragraph [ref=e13]: Sign in to your workspace
+    - generic [ref=e14]:
+      - button "Sign in" [ref=e15] [cursor=pointer]
+      - button "Register" [ref=e16] [cursor=pointer]
+    - generic [ref=e17]:
+      - generic [ref=e18]:
+        - generic [ref=e19]: Email
+        - textbox "you@company.com" [active] [ref=e20]
+      - generic [ref=e21]:
+        - generic [ref=e22]: Password
+        - textbox "••••••••" [ref=e23]
+      - button "Sign in" [ref=e24] [cursor=pointer]
+      - paragraph [ref=e25]: Self-hosted · Your keys stay on your server

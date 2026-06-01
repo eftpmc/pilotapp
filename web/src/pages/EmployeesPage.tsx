@@ -339,14 +339,12 @@ function EmployeeCard({ employee, brain, deptList, activeSession, activeTaskTitl
   return (
     <div>
       {/* Main row */}
-      <div className="row" style={{ cursor: 'default', alignItems: 'center' }}>
+      <div className="row employee-row" style={{ cursor: 'default', alignItems: 'center' }}>
         <AgentAvatar agent={employee} size={32} running={isActive} />
-        <div className="row-main">
-          <div className="row-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {employee.name}
-            {employee.role && employee.role !== 'any' && (
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--faint)', fontWeight: 400 }}>{employee.role}</span>
-            )}
+        <div className="row-main employee-main">
+          <div className="employee-title-line">
+            <span className="row-title">{employee.name}</span>
+            {employee.role && employee.role !== 'any' && <Badge variant="outline" className="font-mono text-[10px] text-muted-foreground">{employee.role}</Badge>}
           </div>
           <div className="row-meta">
             {brain && <ProviderBadge type={brain.type} />}
@@ -355,29 +353,21 @@ function EmployeeCard({ employee, brain, deptList, activeSession, activeTaskTitl
             {isActive && activeTaskTitle && <span style={{ fontSize: 10, color: 'var(--muted)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{activeTaskTitle}</span>}
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+        <div className="employee-actions">
           {[
             { key: 'tools',     label: assignedTools.length > 0 ? `${assignedTools.length} tools` : 'tools',           active: showT, toggle: () => setShowT(s => !s) },
             { key: 'knowledge', label: knowledgeDocs.length > 0 ? `${knowledgeDocs.length} docs` : 'knowledge',        active: showK, toggle: () => setShowK(s => !s) },
             { key: 'edit',      label: editing ? 'done' : 'edit',                                                       active: editing, toggle: () => setEditing(e => !e) },
           ].map(({ key, label, active, toggle }) => (
-            <button key={key} onClick={toggle} style={{
-              fontSize: 12, padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer',
-              background: active ? 'var(--panel-2)' : 'none',
-              color: active ? 'var(--ink)' : 'var(--muted)',
-              fontFamily: 'inherit', transition: 'color .12s, background .12s',
-            }}>{label}</button>
+            <button key={key} onClick={toggle} className={cn('employee-action', active && 'active')}>{label}</button>
           ))}
           {confirmDelete ? (
             <>
-              <button onClick={() => setConfDel(false)} style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>cancel</button>
-              <button onClick={() => { onDelete(); setConfDel(false) }} style={{ fontSize: 12, color: 'var(--red)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>confirm</button>
+              <button onClick={() => setConfDel(false)} className="employee-action">cancel</button>
+              <button onClick={() => { onDelete(); setConfDel(false) }} className="employee-action danger">confirm</button>
             </>
           ) : (
-            <button onClick={() => setConfDel(true)} style={{ fontSize: 12, color: 'var(--faint)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', transition: 'color .12s' }}
-              onMouseOver={e => (e.currentTarget.style.color = 'var(--red)')}
-              onMouseOut={e => (e.currentTarget.style.color = 'var(--faint)')}
-            >delete</button>
+            <button onClick={() => setConfDel(true)} className="employee-action muted hover-danger">delete</button>
           )}
         </div>
       </div>
@@ -417,18 +407,18 @@ function EmployeeCard({ employee, brain, deptList, activeSession, activeTaskTitl
         <div style={panelStyle}>
           <p style={{ fontSize: 11, color: 'var(--muted)', margin: 0, fontFamily: 'var(--font-mono)', letterSpacing: 0, textTransform: 'uppercase' }}>Tools</p>
           {allTools.length === 0 ? (
-            <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: 0 }}>No tools yet. <a href="/settings" style={{ color: 'var(--indigo)' }}>Add in Settings.</a></p>
+            <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: 0 }}>No tools yet. <a href="/settings" style={{ color: 'var(--ember)' }}>Add in Settings.</a></p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {allTools.map(tool => {
                 const assigned = assignedTools.some(t => t.id === tool.id)
                 return (
                   <button key={tool.id} type="button" onClick={() => assigned ? onUnassignTool(tool.id) : onAssignTool(tool.id)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 7, border: `1px solid ${assigned ? 'color-mix(in srgb, var(--indigo) 30%, transparent)' : 'transparent'}`, background: assigned ? 'var(--indigo-wash)' : 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', width: '100%', transition: 'background .12s' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 7, border: `1px solid ${assigned ? 'color-mix(in srgb, var(--ember) 30%, transparent)' : 'transparent'}`, background: assigned ? 'var(--ember-wash)' : 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', width: '100%', transition: 'background .12s' }}
                     onMouseOver={e => { if (!assigned) e.currentTarget.style.background = 'var(--panel-2)' }}
                     onMouseOut={e => { if (!assigned) e.currentTarget.style.background = 'none' }}
                   >
-                    <span style={{ width: 14, height: 14, borderRadius: 4, border: `1px solid ${assigned ? 'var(--indigo)' : 'var(--rule)'}`, background: assigned ? 'var(--indigo)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 9, color: 'var(--on-indigo)' }}>{assigned ? '✓' : ''}</span>
+                    <span style={{ width: 14, height: 14, borderRadius: 4, border: `1px solid ${assigned ? 'var(--ember)' : 'var(--rule)'}`, background: assigned ? 'var(--ember)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 9, color: 'var(--on-ember)' }}>{assigned ? '✓' : ''}</span>
                     <span style={{ fontSize: 13, color: 'var(--ink)' }}>{tool.name}</span>
                     {tool.description && <span style={{ fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tool.description}</span>}
                   </button>
@@ -444,7 +434,7 @@ function EmployeeCard({ employee, brain, deptList, activeSession, activeTaskTitl
         <div style={panelStyle}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <p style={{ fontSize: 11, color: 'var(--muted)', margin: 0, fontFamily: 'var(--font-mono)', letterSpacing: 0, textTransform: 'uppercase', flex: 1 }}>Personal knowledge</p>
-            <button onClick={onAddKnowledge} style={{ fontSize: 12.5, color: 'var(--indigo)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>+ Add</button>
+            <button onClick={onAddKnowledge} style={{ fontSize: 12.5, color: 'var(--ember)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>+ Add</button>
           </div>
           {knowledgeDocs.length === 0 ? (
             <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: 0 }}>No personal knowledge yet.</p>
@@ -514,32 +504,31 @@ function DepartmentSection({ dept, employeesInDept, brainList, deptList, session
   const isUnassigned = dept === null
 
   return (
-    <div className="section" style={{ marginTop: 36 }}>
+    <section className="mb-8">
       {/* Section header */}
-      <div className="section-head" style={{ marginBottom: 4 }}>
-        <h2 style={{ fontSize: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-          {!isUnassigned && <span style={{ width: 8, height: 8, borderRadius: 2, background: dept.color, flexShrink: 0, display: 'inline-block' }} />}
-          {isUnassigned ? 'Unassigned' : dept.name}
-        </h2>
-        <span className="count">{employeesInDept.length}</span>
-        <div style={{ flex: 1 }} />
+      <div className="flex items-center gap-2 mb-3">
+        {!isUnassigned && <span className="w-2 h-2 rounded-sm shrink-0" style={{ background: dept.color }} />}
+        <p className="text-xs text-muted-foreground/50">
+          {isUnassigned ? 'Unassigned' : dept.name} · {employeesInDept.length} agent{employeesInDept.length !== 1 ? 's' : ''}
+        </p>
+        <div className="flex-1" />
         {!isUnassigned && !confirmDelDept && (
           <>
-            <button onClick={() => mutations.editDept(dept)} style={{ fontSize: 12, color: 'var(--faint)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', transition: 'color .12s' }} onMouseOver={e => (e.currentTarget.style.color = 'var(--muted)')} onMouseOut={e => (e.currentTarget.style.color = 'var(--faint)')}>edit</button>
-            <button onClick={() => setConfirmDelDept(true)} style={{ fontSize: 12, color: 'var(--faint)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', transition: 'color .12s' }} onMouseOver={e => (e.currentTarget.style.color = 'var(--red)')} onMouseOut={e => (e.currentTarget.style.color = 'var(--faint)')}>delete</button>
+            <button onClick={() => mutations.editDept(dept)} className="text-xs text-muted-foreground/40 hover:text-muted-foreground bg-transparent border-none cursor-pointer transition-colors">edit</button>
+            <button onClick={() => setConfirmDelDept(true)} className="text-xs text-muted-foreground/40 hover:text-destructive bg-transparent border-none cursor-pointer transition-colors">delete</button>
           </>
         )}
         {confirmDelDept && (
           <>
-            <span style={{ fontSize: 12, color: 'var(--muted)' }}>Delete {dept?.name}?</span>
-            <button onClick={() => setConfirmDelDept(false)} style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>cancel</button>
-            <button onClick={() => { mutations.deleteDept(dept!.id); setConfirmDelDept(false) }} style={{ fontSize: 12, color: 'var(--red)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>delete</button>
+            <span className="text-xs text-muted-foreground">Delete {dept?.name}?</span>
+            <button onClick={() => setConfirmDelDept(false)} className="text-xs text-muted-foreground bg-transparent border-none cursor-pointer">cancel</button>
+            <button onClick={() => { mutations.deleteDept(dept!.id); setConfirmDelDept(false) }} className="text-xs text-destructive bg-transparent border-none cursor-pointer">delete</button>
           </>
         )}
       </div>
 
       {/* Employee rows */}
-      <div className="rows">
+      <div className="flex flex-col gap-2">
         {employeesInDept.map(emp => (
           <EmployeeCard
             key={emp.id}
@@ -560,10 +549,9 @@ function DepartmentSection({ dept, employeesInDept, brainList, deptList, session
       </div>
 
       {/* Add agent */}
-      <button onClick={() => onAddEmployee(dept?.id)}
-        style={{ fontSize: 12.5, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', padding: '10px 0', transition: 'color .12s', display: 'block' }}
-        onMouseOver={e => (e.currentTarget.style.color = 'var(--indigo)')}
-        onMouseOut={e => (e.currentTarget.style.color = 'var(--muted)')}
+      <button
+        onClick={() => onAddEmployee(dept?.id)}
+        className="text-xs text-muted-foreground/50 hover:text-primary bg-transparent border-none cursor-pointer text-left pt-3 pb-1 transition-colors block"
       >+ Add agent{!isUnassigned && dept ? ` to ${dept.name}` : ''}</button>
 
       <KnowledgeDocDialog
@@ -580,7 +568,7 @@ function DepartmentSection({ dept, employeesInDept, brainList, deptList, session
         }}
         loading={false}
       />
-    </div>
+    </section>
   )
 }
 
@@ -680,20 +668,20 @@ export default function EmployeesPage() {
   }
 
   return (
-    <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)' }}>
-      <div className="page-content" style={{ paddingTop: 52, paddingBottom: 80 }}>
+    <div className="flex-1 overflow-y-auto bg-background">
+      <div className="px-6 pt-10 pb-8">
 
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 8 }}>
+        <div className="flex items-start justify-between mb-8">
           <div>
-            <h1 className="h-page">Agents</h1>
-            <p className="lede" style={{ marginTop: 12, fontSize: 15 }}>
+            <h1 className="text-2xl font-semibold tracking-tight">Agents</h1>
+            <p className="text-sm text-muted-foreground mt-1">
               {employeeList.length} agent{employeeList.length !== 1 ? 's' : ''}
-              {busyCount > 0 && <> · <span className="num">{busyCount} working</span></>}
+              {busyCount > 0 && <> · <span className="text-foreground font-semibold">{busyCount} working</span></>}
             </p>
           </div>
-          <div style={{ display: 'flex', gap: 8, flexShrink: 0, marginTop: 8 }}>
-            <button className="btn sm" onClick={() => setDeptDialog({ open: true })}>+ Department</button>
-            <button className="btn sm primary" onClick={() => setAddEmpDialog({ open: true })}>+ Agent</button>
+          <div className="flex gap-2 shrink-0">
+            <Button size="sm" variant="outline" onClick={() => setDeptDialog({ open: true })}>+ Department</Button>
+            <Button size="sm" onClick={() => setAddEmpDialog({ open: true })}>+ Agent</Button>
           </div>
         </div>
 

@@ -79,7 +79,7 @@ function PlanListRow({ spec, expanded, onToggle, onDelete, onExecute, onUpdate, 
       </button>
 
       {expanded && (
-        <div style={{ padding: '4px 4px 22px 4px', borderTop: '1px solid var(--rule-soft)' }}>
+        <div style={{ padding: '4px 4px 6px 4px', marginTop: 6 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {spec.status === 'planning' ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: 'var(--muted)', padding: '8px 0' }}>
@@ -87,7 +87,7 @@ function PlanListRow({ spec, expanded, onToggle, onDelete, onExecute, onUpdate, 
                 Agent is writing the spec…
                 {spec.sessionId && (
                   <button onClick={onWatch}
-                    style={{ color: 'var(--indigo)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13 }}>
+                    style={{ color: 'var(--ember)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13 }}>
                     Watch live
                   </button>
                 )}
@@ -234,29 +234,24 @@ export default function PlansPage() {
   })
 
   return (
-    <div style={{ overflowY: 'auto', flex: 1, background: 'var(--bg)' }}>
-      <div className="page-content narrow" style={{ paddingTop: 32, paddingBottom: 80 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 26 }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 420, letterSpacing: 0, margin: 0 }}>Plans</h2>
-          {specList.length > 0 && <span className="count">{specList.length}</span>}
-          <div style={{ flex: 1 }} />
+    <div className="flex-1 overflow-y-auto bg-background">
+      <div className="px-6 pt-6 pb-8 flex flex-col gap-4">
+
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-muted-foreground/50">{specList.length > 0 ? `${specList.length} plan${specList.length !== 1 ? 's' : ''}` : 'No plans yet'}</p>
           <Button size="sm" onClick={() => setShowNew(true)}>New plan</Button>
         </div>
 
         {isLoading ? (
-          <div className="rows">
+          <div className="flex flex-col gap-2">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="row">
-                <div className="row-main">
-                  <div className="row-title" style={{ color: 'var(--faint)' }}>Loading…</div>
-                </div>
-              </div>
+              <div key={i} className="h-14 bg-card border border-border rounded-xl animate-pulse" />
             ))}
           </div>
         ) : specList.length === 0 ? (
-          <p className="empty-line">No plans yet. Create one and an agent will write the spec.</p>
+          <p className="text-sm text-muted-foreground/50 py-8 text-center">No plans yet. Create one and an agent will write the spec.</p>
         ) : (
-          <div className="rows">
+          <div className="flex flex-col gap-2">
             {specList.map(spec => (
               <PlanListRow
                 key={spec.id}

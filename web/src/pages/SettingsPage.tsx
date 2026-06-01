@@ -154,26 +154,42 @@ function BrainRow({ brain, employeeCount, onUpdate, onDelete, onClearQuota }: {
   }
 
   return (
-    <div className="flex items-center gap-3 px-4 py-3">
-      <span className="text-sm text-foreground flex-1">{brain.name}</span>
-      {brain.model && <span className="font-mono text-[10px] text-muted-foreground">{brain.model}</span>}
-      {brain.quotaStatus === 'exceeded' && (
-        <button onClick={onClearQuota} className="flex items-center gap-1 cursor-pointer bg-transparent border-none p-0">
-          <Badge variant="warning" className="text-[10px] gap-1 hover:opacity-80 transition-opacity">
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-            Rate limited · clear
+    <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-3">
+      <div className="min-w-0 flex-1">
+        <span className="block truncate text-sm text-foreground">{brain.name}</span>
+        <div className="mt-1 flex flex-wrap items-center gap-1.5 sm:hidden">
+          {brain.model && <span className="font-mono text-[10px] text-muted-foreground">{brain.model}</span>}
+          <Badge variant="outline" className={cn(
+            'font-mono text-[10px]',
+            brain.hasKey ? 'text-muted-foreground' : 'text-green-500 border-green-500/30 bg-green-500/10'
+          )}>
+            {brain.hasKey ? 'API key' : brain.type === 'claude' ? 'subscription' : 'machine auth'}
           </Badge>
-        </button>
-      )}
-      <Badge variant="outline" className={cn(
-        'font-mono text-[10px]',
-        brain.hasKey ? 'text-muted-foreground' : 'text-green-500 border-green-500/30 bg-green-500/10'
-      )}>
-        {brain.hasKey ? 'API key' : brain.type === 'claude' ? 'subscription' : 'machine auth'}
-      </Badge>
-      <ProviderBadge type={brain.type} />
-      <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground" onClick={() => setEditing(true)}>Edit</Button>
-      <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive" onClick={() => setConfirmDelete(true)}>Delete</Button>
+          <ProviderBadge type={brain.type} />
+        </div>
+      </div>
+      <div className="hidden items-center gap-2 sm:flex">
+        {brain.model && <span className="font-mono text-[10px] text-muted-foreground">{brain.model}</span>}
+        <Badge variant="outline" className={cn(
+          'font-mono text-[10px]',
+          brain.hasKey ? 'text-muted-foreground' : 'text-green-500 border-green-500/30 bg-green-500/10'
+        )}>
+          {brain.hasKey ? 'API key' : brain.type === 'claude' ? 'subscription' : 'machine auth'}
+        </Badge>
+        <ProviderBadge type={brain.type} />
+      </div>
+      <div className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2">
+        {brain.quotaStatus === 'exceeded' && (
+          <button onClick={onClearQuota} className="flex items-center gap-1 cursor-pointer bg-transparent border-none p-0">
+            <Badge variant="warning" className="text-[10px] gap-1 hover:opacity-80 transition-opacity">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+              Rate limited · clear
+            </Badge>
+          </button>
+        )}
+        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground" onClick={() => setEditing(true)}>Edit</Button>
+        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive" onClick={() => setConfirmDelete(true)}>Delete</Button>
+      </div>
     </div>
   )
 }
@@ -217,24 +233,26 @@ export default function SettingsPage() {
   }
 
   return (
-    <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)' }}>
-      <div className="page-content narrow" style={{ paddingTop: 52, paddingBottom: 80 }}>
+    <div className="flex-1 overflow-y-auto bg-background">
+      <div className="px-6 pt-10 pb-8 flex flex-col gap-8">
 
-        <h1 className="h-page" style={{ marginBottom: 40 }}>Settings</h1>
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+          <p className="text-sm text-muted-foreground mt-1">Connections, account, and workspace configuration.</p>
+        </div>
 
         {/* Connections */}
-        <div className="section" style={{ marginTop: 0 }}>
-          <div className="section-head" style={{ marginBottom: 8 }}>
-            <h2>Connections</h2>
-            <button className="btn sm" onClick={() => setShowAddBrain(true)}>+ Add</button>
+        <section className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground/50">Connections · API credentials agents use to run tasks</p>
+            <Button size="sm" onClick={() => setShowAddBrain(true)}>+ Add</Button>
           </div>
-          <p style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 12 }}>API credentials agents use to run tasks.</p>
           {brainList.length === 0 ? (
-            <p className="empty-line">No connections yet.</p>
+            <p className="text-sm text-muted-foreground/50">No connections yet.</p>
           ) : (
-            <div style={{ borderTop: '1px solid var(--rule-soft)', borderBottom: '1px solid var(--rule-soft)' }}>
+            <div className="bg-card rounded-xl border border-border overflow-hidden">
               {brainList.map((b, i) => (
-                <div key={b.id} style={i > 0 ? { borderTop: '1px solid var(--rule-soft)' } : {}}>
+                <div key={b.id} className={i > 0 ? 'border-t border-border/40' : ''}>
                   <BrainRow
                     brain={b}
                     employeeCount={employeeCountForBrain(b.id)}
@@ -246,16 +264,18 @@ export default function SettingsPage() {
               ))}
             </div>
           )}
-        </div>
+        </section>
 
         {/* Account */}
-        <div className="section">
-          <div className="section-head"><h2>Account</h2></div>
-          <div style={{ borderTop: '1px solid var(--rule-soft)', borderBottom: '1px solid var(--rule-soft)', display: 'flex', alignItems: 'center', padding: '14px 4px', gap: 12 }}>
-            <span style={{ flex: 1, fontSize: 14, color: 'var(--ink)' }}>Sign out of pilot</span>
-            <button className="btn sm danger" onClick={signOut}>Sign out</button>
+        <section className="flex flex-col gap-3">
+          <p className="text-xs text-muted-foreground/50">Account</p>
+          <div className="bg-card rounded-xl border border-border overflow-hidden">
+            <div className="flex items-center gap-3 px-4 py-3">
+              <span className="text-sm text-foreground flex-1">Sign out of pilot</span>
+              <Button size="sm" variant="destructive" onClick={signOut}>Sign out</Button>
+            </div>
           </div>
-        </div>
+        </section>
 
       </div>
 

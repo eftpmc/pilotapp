@@ -1,12 +1,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { auth } from '../api/client'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { cn } from '@/lib/utils'
 
 export default function LoginPage() {
-  const navigate  = useNavigate()
+  const navigate   = useNavigate()
   const [email,    setEmail]    = useState('')
   const [password, setPassword] = useState('')
   const [mode,     setMode]     = useState<'login' | 'register'>('login')
@@ -30,83 +27,148 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4 relative overflow-hidden">
+    <div style={{ display: 'flex', minHeight: '100dvh' }}>
 
-      {/* Dot grid */}
-      <div className="absolute inset-0 opacity-100" style={{
-        backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.055) 1px, transparent 1px)',
-        backgroundSize: '28px 28px',
-      }} />
+      {/* Left: brand panel — always warm/colorful regardless of system theme */}
+      <div className="login-brand-panel" style={{
+        flex: 1,
+        minHeight: '100dvh',
+        position: 'relative',
+        overflow: 'hidden',
+        background: [
+          'radial-gradient(ellipse 100% 70% at -5% -5%, #ff6b35 0%, transparent 52%)',
+          'radial-gradient(ellipse 80% 65% at 105% 105%, #ffaa5c 0%, transparent 52%)',
+          'radial-gradient(ellipse 70% 70% at 50% 50%, #ffe8d4 0%, transparent 65%)',
+          '#fff4ec',
+        ].join(', '),
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'flex-end',
+        padding: '48px 52px',
+      }}>
+        {/* Noise texture */}
+        <div style={{
+          position: 'absolute', inset: 0, opacity: 0.025, pointerEvents: 'none',
+          backgroundImage: "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
+          backgroundSize: '200px 200px',
+        }} />
 
-      {/* Ambient glow */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[500px] pointer-events-none" style={{
-        background: 'radial-gradient(ellipse at center, var(--primary) 0%, transparent 65%)',
-        opacity: 0.06,
-      }} />
-
-      <div className="relative w-full max-w-[360px] flex flex-col items-center gap-8">
-
-        {/* Wordmark */}
-        <div className="text-center">
-          <h1 className="font-mono font-bold text-4xl tracking-tight text-foreground">pilot</h1>
-          <p className="text-sm text-muted-foreground mt-2">AI coding agents, under your control</p>
-        </div>
-
-        {/* Card */}
-        <div className="w-full bg-card border border-border/80 rounded-2xl overflow-hidden"
-          style={{ boxShadow: '0 0 0 1px rgba(255,255,255,0.04), 0 24px 60px rgba(0,0,0,0.5)' }}>
-
-          {/* Mode tabs */}
-          <div className="flex border-b border-border/60">
-            {(['login', 'register'] as const).map(m => (
-              <button key={m} onClick={() => { setMode(m); setError('') }}
-                className={cn(
-                  'flex-1 py-3 text-sm font-medium transition-colors cursor-pointer bg-transparent border-none capitalize',
-                  mode === m
-                    ? 'text-foreground border-b-2 border-primary -mb-px'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}>
-                {m === 'login' ? 'Sign in' : 'Register'}
-              </button>
-            ))}
+        <div style={{ position: 'relative', zIndex: 1 }}>
+          {/* Logo */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 52 }}>
+            <span style={{
+              width: 24, height: 24, background: '#e5511a', borderRadius: 7,
+              display: 'grid', placeItems: 'center',
+              fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 800, color: '#fff',
+            }}>p</span>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 14, fontWeight: 700, color: 'rgba(40,20,10,0.45)' }}>pilot</span>
           </div>
 
-          <form onSubmit={submit} className="flex flex-col gap-3 p-6">
-            <Input
+          {/* Headline */}
+          <h1 style={{
+            fontSize: 38, fontWeight: 700, lineHeight: 1.12, letterSpacing: '-0.025em',
+            color: 'rgba(30,12,4,0.88)', margin: '0 0 16px', maxWidth: '13em',
+          }}>
+            AI coding agents,<br />under your control.
+          </h1>
+          <p style={{ fontSize: 15, color: 'rgba(30,12,4,0.45)', lineHeight: 1.6, maxWidth: '28em', margin: 0 }}>
+            Dispatch tasks to Claude and Codex agents. Review diffs, merge changes, ship faster.
+          </p>
+        </div>
+      </div>
+
+      {/* Right: form panel — follows system theme */}
+      <div className="login-form-panel-wrap" style={{
+        width: 420, flexShrink: 0,
+        background: 'var(--bg)',
+        borderLeft: '1px solid var(--rule)',
+        display: 'flex', flexDirection: 'column', justifyContent: 'center',
+        padding: '52px 48px',
+      }}>
+        <h2 style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-0.015em', margin: '0 0 6px', color: 'var(--ink)' }}>
+          {mode === 'login' ? 'Welcome back' : 'Create an account'}
+        </h2>
+        <p style={{ fontSize: 14, color: 'var(--muted)', margin: '0 0 28px' }}>
+          {mode === 'login' ? 'Sign in to your workspace' : 'Self-hosted · Your keys stay on your server'}
+        </p>
+
+        {/* Mode tabs */}
+        <div style={{ display: 'flex', borderBottom: '1px solid var(--rule)', marginBottom: 24 }}>
+          {(['login', 'register'] as const).map(m => (
+            <button
+              key={m}
+              onClick={() => { setMode(m); setError('') }}
+              style={{
+                flex: 1, padding: '10px', fontSize: 13.5,
+                fontWeight: mode === m ? 600 : 500,
+                color: mode === m ? 'var(--ink)' : 'var(--muted)',
+                background: 'none', border: 'none', cursor: 'pointer',
+                borderBottom: `2px solid ${mode === m ? 'var(--ember)' : 'transparent'}`,
+                marginBottom: -1, transition: 'color .12s',
+                fontFamily: 'inherit',
+              }}
+            >
+              {m === 'login' ? 'Sign in' : 'Register'}
+            </button>
+          ))}
+        </div>
+
+        <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div className="field">
+            <label>Email</label>
+            <input
+              className="input"
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
-              placeholder="Email address"
+              placeholder="you@company.com"
               required
               autoFocus
-              className="h-10 bg-muted/40 border-border/60 focus:border-primary/60"
             />
-            <Input
+          </div>
+          <div className="field">
+            <label>Password</label>
+            <input
+              className="input"
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              placeholder="Password"
+              placeholder="••••••••"
               required
               minLength={8}
-              className="h-10 bg-muted/40 border-border/60 focus:border-primary/60"
             />
+          </div>
 
-            {error && (
-              <p className="text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">
-                {error}
-              </p>
-            )}
+          {error && (
+            <p style={{
+              fontSize: 12.5, color: 'var(--red)', margin: 0,
+              background: 'color-mix(in srgb, var(--red) 10%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--red) 22%, transparent)',
+              borderRadius: 8, padding: '9px 12px',
+            }}>{error}</p>
+          )}
 
-            <Button type="submit" disabled={loading} className="h-10 mt-1 font-semibold">
-              {loading ? '…' : mode === 'login' ? 'Sign in' : 'Create account'}
-            </Button>
-          </form>
-        </div>
+          <button
+            type="submit"
+            className="btn primary"
+            disabled={loading}
+            style={{ width: '100%', justifyContent: 'center', padding: '11px', marginTop: 2, fontSize: 14, borderRadius: 9 }}
+          >
+            {loading ? '…' : mode === 'login' ? 'Sign in' : 'Create account'}
+          </button>
 
-        <p className="text-xs text-muted-foreground/50 text-center">
-          Self-hosted · Your keys stay on your server
-        </p>
+          <p style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', margin: 0 }}>
+            Self-hosted · Your keys stay on your server
+          </p>
+        </form>
       </div>
+
+      <style>{`
+        @media (max-width: 720px) {
+          .login-brand-panel { display: none !important; }
+          .login-form-panel-wrap { width: 100% !important; border-left: none !important; padding: 40px 28px !important; }
+        }
+      `}</style>
     </div>
   )
 }

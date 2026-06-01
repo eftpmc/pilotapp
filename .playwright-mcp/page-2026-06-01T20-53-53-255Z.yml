@@ -1,0 +1,88 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - button "p pilot" [ref=e6] [cursor=pointer]:
+      - generic [ref=e7]: p
+      - text: pilot
+    - navigation [ref=e8]:
+      - link "Today 1" [ref=e78] [cursor=pointer]:
+        - /url: /
+        - img [ref=e10]
+        - generic [ref=e13]: Today
+        - generic [ref=e79]: "1"
+      - link "Agents" [ref=e14] [cursor=pointer]:
+        - /url: /employees
+        - img [ref=e15]
+        - generic [ref=e20]: Agents
+      - link "Knowledge" [ref=e21] [cursor=pointer]:
+        - /url: /knowledge
+        - img [ref=e22]
+        - generic [ref=e24]: Knowledge
+      - link "Tools" [ref=e25] [cursor=pointer]:
+        - /url: /tools
+        - img [ref=e26]
+        - generic [ref=e28]: Tools
+      - link "Settings" [ref=e29] [cursor=pointer]:
+        - /url: /settings
+        - img [ref=e30]
+        - generic [ref=e33]: Settings
+      - generic [ref=e34]:
+        - button "Projects 3" [ref=e80] [cursor=pointer]:
+          - img [ref=e36]
+          - generic [ref=e38]: Projects
+          - generic [ref=e81]: "3"
+          - img [ref=e39]
+        - generic [ref=e41]:
+          - link "All projects" [ref=e42] [cursor=pointer]:
+            - /url: /projects
+          - link "ball-sorting 1 to review" [ref=e82] [cursor=pointer]:
+            - /url: /projects/bffc8171-2ef5-4d57-891b-10be8251e215
+            - generic [ref=e83]: ball-sorting
+            - generic "1 to review" [ref=e85]
+          - link "test" [ref=e86] [cursor=pointer]:
+            - /url: /projects/f74fb468-306d-4a63-8afd-9a94b9c340a8
+            - generic [ref=e87]: test
+          - link "test" [ref=e88] [cursor=pointer]:
+            - /url: /projects/14d728ff-a314-4e16-8c0a-e88b2ad9d785
+            - generic [ref=e89]: test
+    - generic [ref=e43]:
+      - button "Search ⌘K" [ref=e44] [cursor=pointer]:
+        - img [ref=e45]
+        - generic [ref=e48]: Search
+        - generic [ref=e49]: ⌘K
+      - button "Dark mode" [ref=e50] [cursor=pointer]:
+        - img [ref=e51]
+        - generic [ref=e53]: Dark mode
+      - button "Sign out" [ref=e54] [cursor=pointer]:
+        - img [ref=e55]
+        - generic [ref=e58]: Sign out
+  - main [ref=e59]:
+    - generic [ref=e60]:
+      - generic [ref=e61]:
+        - button "ball-sorting" [ref=e90] [cursor=pointer]:
+          - img [ref=e63]
+          - text: ball-sorting
+        - generic [ref=e65]:
+          - generic [ref=e66]: AT
+          - generic [ref=e67]:
+            - heading "Ball sorting" [level=1] [ref=e91]
+            - generic [ref=e92]:
+              - generic [ref=e93]: Atlas
+              - generic [ref=e94]: ·
+              - generic [ref=e95]: Merged
+              - generic [ref=e97]: ·
+              - generic [ref=e98]: 69966c7e-10bf-4db8-aa6c-9e3c1f677ea4
+        - generic [ref=e71]:
+          - button "output" [ref=e72] [cursor=pointer]
+          - button "diff" [active] [ref=e73] [cursor=pointer]
+      - generic [ref=e76]:
+        - generic [ref=e99]: "[pilot] No API key set — using machine auth (OAuth subscription) for claude."
+        - generic [ref=e100]: "[pilot] Starting claude in /Users/zack/Documents/GitHub/pilotapp/server/data/projects/bffc8171-2ef5-4d57-891b-10be8251e215/worktrees/69966c7e-10bf-4db8-aa6c-9e3c1f677ea4"
+        - generic [ref=e101]: Writing TASKS.json for a single focused worker task.
+        - generic [ref=e102]: "▸ Write file_path: /Users/zack/Documents/GitHub/pilota content: [ { \"title\": \"Build ball sort"
+        - generic [ref=e103]: "`TASKS.json` written with one worker task. The agent will produce a single `ball-sorter.html` with: - Tube-based color sorting gameplay (pick up / drop ball by clicking tubes) - Smooth animation, win detection, shuffle button, invalid-move feedback - Fully self-contained — no build step or external deps"
+        - generic [ref=e104]: "`TASKS.json` written with one worker task. The agent will produce a single `ball-sorter.html` with: - Tube-based color sorting gameplay (pick up / drop ball by clicking tubes) - Smooth animation, win detection, shuffle button, invalid-move feedback - Fully self-contained — no build step or external deps"
+        - generic [ref=e105]: "[pilot] Finished (exit 0)"
+        - paragraph [ref=e106]: process exited 0 · 20s
+      - generic [ref=e107]:
+        - generic [ref=e108]: Merged ✓
+        - button "← Board" [ref=e109] [cursor=pointer]

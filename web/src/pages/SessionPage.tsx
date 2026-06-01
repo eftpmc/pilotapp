@@ -84,30 +84,45 @@ function ReviewerPickerButton({ agentList, onPick }: { agentList: Employee[]; on
 function inlineWithCode(line: string, key: number) {
   const parts = line.split(/(`[^`]+`)/)
   return (
-    <p key={key} style={{ fontFamily: 'var(--font-display)', fontWeight: 360, fontSize: 16, lineHeight: 1.65, color: 'var(--ink-2)', margin: '4px 0 0' }}>
+    <p key={key} style={{ fontFamily: 'inherit', fontWeight: 400, fontSize: 14, lineHeight: 1.7, color: 'var(--ink-2)', margin: '3px 0 0' }}>
       {parts.map((part, k) =>
         part.startsWith('`') && part.endsWith('`')
-          ? <code key={k} style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--indigo)', background: 'var(--indigo-wash)', padding: '1px 5px', borderRadius: 4 }}>{part.slice(1, -1)}</code>
-          : part
+          ? <code key={k} style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--ember)', background: 'var(--ember-wash)', padding: '1px 5px', borderRadius: 4 }}>{part.slice(1, -1)}</code>
+          : stripInlineMarkdown(part)
       )}
     </p>
   )
 }
 
+function stripInlineMarkdown(text: string) {
+  return text
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/_([^_]+)_/g, '$1')
+}
+
+function journalHeading(line: string) {
+  const trimmed = line.trim()
+  const markdownHeading = trimmed.match(/^#{1,2}\s+(.+)$/)
+  if (markdownHeading) return stripInlineMarkdown(markdownHeading[1]).trim()
+  const boldHeading = trimmed.match(/^(?:\*\*|__)(.+?)(?:\*\*|__):?$/)
+  return boldHeading ? stripInlineMarkdown(boldHeading[1]).trim() : null
+}
+
 function JournalView({ text }: { text: string }) {
-  // Walk line-by-line, grouping body lines into beats under each section heading
   const lines = text.split('\n')
   type Block = { type: 'h1' | 'h2' | 'beat'; content: string[] }
   const blocks: Block[] = []
 
   for (const raw of lines) {
     const line = raw.trimEnd()
-    if (line.startsWith('# ')) {
-      blocks.push({ type: 'h1', content: [line.slice(2)] })
-    } else if (line.startsWith('## ')) {
-      blocks.push({ type: 'h2', content: [line.slice(3)] })
+    const heading = journalHeading(line)
+    if (line.startsWith('# ') && heading) {
+      blocks.push({ type: 'h1', content: [heading] })
+    } else if ((line.startsWith('## ') || heading) && heading) {
+      blocks.push({ type: 'h2', content: [heading] })
     } else if (line === '') {
-      // blank line — start a new beat group if we're in a beat
       if (blocks.length > 0 && blocks[blocks.length - 1].type === 'beat' && blocks[blocks.length - 1].content.length > 0) {
         blocks.push({ type: 'beat', content: [] })
       }
@@ -122,19 +137,23 @@ function JournalView({ text }: { text: string }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxWidth: '38em' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, maxWidth: '44em' }}>
       {blocks.map((block, i) => {
-        if (block.type === 'h1') {
-          return <p key={i} style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 420, letterSpacing: 0, color: 'var(--ink)', margin: '0 0 10px', lineHeight: 1.2 }}>{block.content[0]}</p>
-        }
+        // Skip h1 — the tab label already says "Journal"
+        if (block.type === 'h1') return null
         if (block.type === 'h2') {
-          return <p key={i} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 500, letterSpacing: 0, textTransform: 'uppercase', color: 'var(--muted)', margin: '20px 0 4px' }}>{block.content[0]}</p>
+          return (
+            <p key={i} className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground/50"
+              style={{ margin: '28px 0 10px' }}>
+              {block.content[0]}
+            </p>
+          )
         }
         if (!block.content.length) return null
         return (
-          <div key={i} style={{ display: 'flex', gap: 16, marginBottom: 4 }}>
-            <div style={{ width: 2, flexShrink: 0, borderRadius: 2, background: 'var(--rule)', marginTop: 6 }} />
-            <div style={{ flex: 1, minWidth: 0 }}>
+          <div key={i} className="flex gap-4" style={{ marginBottom: 10 }}>
+            <div className="w-px shrink-0 rounded-full bg-border" style={{ marginTop: 5 }} />
+            <div className="flex-1 min-w-0">
               {block.content.map((line, j) => inlineWithCode(line, j))}
             </div>
           </div>
@@ -148,10 +167,19 @@ function CopyCommand({ text }: { text: string }) {
   const [copied, setCopied] = useState(false)
   return (
     <button onClick={() => { navigator.clipboard.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) }) }}
-      style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--indigo)', background: 'var(--indigo-wash)', border: '1px solid color-mix(in srgb, var(--indigo) 25%, transparent)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--ember)', background: 'var(--ember-wash)', border: '1px solid color-mix(in srgb, var(--ember) 25%, transparent)', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
       {copied ? '✓ Copied' : 'Copy pull command'}
     </button>
   )
+}
+
+function shortBranchName(branch?: string) {
+  if (!branch) return ''
+  const trimmed = branch.replace(/^agent\//, '')
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)) {
+    return `agent/${trimmed.slice(0, 8)}`
+  }
+  return branch.length > 34 ? `${branch.slice(0, 31)}...` : branch
 }
 
 export default function SessionPage() {
@@ -164,6 +192,7 @@ export default function SessionPage() {
   const [activeTab, setActiveTab]   = useState<'output' | 'diff' | 'journal'>('output')
   const [diff, setDiff]             = useState<string | null>(null)
   const [diffLoading, setDiffLoad]  = useState(false)
+  const [diffError, setDiffError]   = useState<string | null>(null)
   const [hint, setHint]             = useState('')
   const [idlePrompt, setIdlePrompt] = useState('')
   const [pushed, setPushed]         = useState(false)
@@ -262,38 +291,49 @@ export default function SessionPage() {
     if (!id || diffLoading) return
     if (diff !== null) { setActiveTab('diff'); return }
     setDiffLoad(true)
-    try { const { diff: d } = await sessions.diff(id); setDiff(d); setActiveTab('diff') }
+    setDiffError(null)
+    setActiveTab('diff')
+    try { const { diff: d } = await sessions.diff(id); setDiff(d) }
+    catch (e) { setDiffError(e instanceof Error ? e.message : 'Could not load diff') }
     finally { setDiffLoad(false) }
   }
 
+  const branchShort = shortBranchName(session?.branch)
+
   return (
-    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', background: 'var(--bg)' }}>
+    <div className="flex-1 flex flex-col bg-background" style={{ minHeight: 0 }}>
 
       {/* Header */}
-      <div style={{ background: 'var(--bg)', borderBottom: '1px solid var(--rule)', padding: '28px 32px 0', maxWidth: 740, marginLeft: 'auto', marginRight: 'auto', width: '100%' }}>
+      <div className="bg-background border-b border-border px-6 pt-5 pb-0">
         <button
           onClick={() => navigate(session?.projectId ? `/projects/${session.projectId}` : -1 as never)}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 500, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginBottom: 18, transition: 'color .12s', fontFamily: 'inherit' }}
-          onMouseOver={e => (e.currentTarget.style.color = 'var(--ink)')}
-          onMouseOut={e => (e.currentTarget.style.color = 'var(--muted)')}
+          className="proj-back mb-4"
         >
-          <ArrowLeft size={14} />
+          <ArrowLeft size={13} />
           {project?.name ?? 'Back'}
         </button>
 
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 16 }}>
-          <AgentAvatar agent={agent} size={36} running={isRunning} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <h1 style={{ fontFamily: '"Space Grotesk Variable", "Geist Variable", system-ui, sans-serif', fontSize: 26, fontWeight: 420, letterSpacing: 0, color: 'var(--ink)', margin: 0, lineHeight: 1.15 }}>
+        <div className="flex items-start gap-3 mb-4 flex-wrap">
+          <AgentAvatar agent={agent} size={34} running={isRunning} />
+          <div className="flex-1 min-w-0">
+            <h1 className="text-lg font-semibold tracking-tight text-foreground leading-snug">
               {task?.title ?? session?.branch ?? 'Session'}
             </h1>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
-              {agent && <span style={{ fontSize: 13.5, color: 'var(--ink-2)', fontWeight: 500 }}>{agent.name}</span>}
+            <div className="flex items-center gap-2.5 mt-1 flex-wrap">
+              {agent && <span className="text-sm text-muted-foreground font-medium">{agent.name}</span>}
+              {agent && session && <span className="text-muted-foreground/30">·</span>}
               {session && <StatusStat status={session.status} />}
-              {isRunning && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--green)', fontVariantNumeric: 'tabular-nums' }}>{fmtSecs(elapsedSecs)}</span>}
+              {isRunning && <span className="text-xs font-mono text-green-500 tabular-nums">{fmtSecs(elapsedSecs)}</span>}
+              {branchShort && (
+                <>
+                  <span className="text-muted-foreground/30">·</span>
+                  <span className="text-xs font-mono text-muted-foreground/60 truncate max-w-[200px]" title={session?.branch}>{branchShort}</span>
+                </>
+              )}
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+
+          <div className="flex gap-2 shrink-0 flex-wrap justify-end max-sm:basis-full max-sm:pl-[46px] max-sm:justify-start">
             {isRunning && <button className="btn sm" onClick={() => stop.mutate()} disabled={stop.isPending}>{stop.isPending ? '…' : 'Stop'}</button>}
             {(isDone || isError) && <button className="btn sm" onClick={loadDiff} disabled={diffLoading}>{diffLoading ? '…' : 'Diff'}</button>}
             {isDone && !session?.reviewVerdict && !isMerged && (
@@ -303,45 +343,36 @@ export default function SessionPage() {
             {session?.reviewVerdict === 'approved' && <span className="chip" style={{ color: 'var(--green)', background: 'color-mix(in srgb, var(--green) 10%, transparent)' }}>Approved ✓</span>}
             {session?.reviewVerdict === 'changes_requested' && <span className="chip" style={{ color: 'var(--amber)', background: 'color-mix(in srgb, var(--amber) 10%, transparent)' }}>Changes Requested</span>}
             {isDone && !isMerged && !session?.parentSessionId && <button className="btn sm primary" onClick={() => merge.mutate()} disabled={merge.isPending}>{merge.isPending ? '…' : 'Merge ✓'}</button>}
-            <button className="btn sm ghost" style={{ color: 'var(--muted)' }}
-              onClick={() => discard.mutate()} disabled={discard.isPending || isMerged}
-              onMouseOver={e => (e.currentTarget.style.color = 'var(--red)')}
-              onMouseOut={e => (e.currentTarget.style.color = 'var(--muted)')}
-            >{discard.isPending ? '…' : 'Discard'}</button>
+            {!isMerged && (
+              <button className="btn sm ghost" style={{ color: 'var(--muted)' }}
+                onClick={() => discard.mutate()} disabled={discard.isPending}
+                onMouseOver={e => (e.currentTarget.style.color = 'var(--red)')}
+                onMouseOut={e => (e.currentTarget.style.color = 'var(--muted)')}
+              >{discard.isPending ? '…' : 'Discard'}</button>
+            )}
           </div>
         </div>
 
-        {/* Telemetry strip */}
-        {session && (
-          <div className="telem">
-            <div className="t">
-              <span className="tv tnum">{fmtSecs(elapsedSecs)}</span>
-              <span className="tl">Elapsed</span>
-            </div>
-            {session.branch && (
-              <div className="t">
-                <span className="tv" style={{ fontSize: 13, fontWeight: 500, letterSpacing: 0, fontFamily: 'var(--font-mono)', marginTop: 2 }}>{session.branch.replace(/^agent\//, '').slice(0, 28)}</span>
-                <span className="tl">Branch</span>
-              </div>
-            )}
-            <div className="t">
-              <span className="tv">{session.status}</span>
-              <span className="tl">Status</span>
-            </div>
-          </div>
-        )}
-
         {/* Tabs */}
-        <div className="tabs">
+        <div className="flex gap-1">
           {(['output', 'diff'] as const).map(t => (
-            <button key={t} className={`tab${activeTab === t ? ' active' : ''}`}
-              onClick={() => t === 'diff' ? loadDiff() : setActiveTab('output')}>
+            <button key={t}
+              onClick={() => t === 'diff' ? loadDiff() : setActiveTab('output')}
+              className={`proj-tab ${activeTab === t ? 'active' : ''}`}
+              style={{ textTransform: 'capitalize' }}
+            >
               {t}
-              {t === 'diff' && diff && <span style={{ marginLeft: 6, fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--indigo)', background: 'var(--indigo-wash)', borderRadius: 999, padding: '1px 6px' }}>ready</span>}
+              {t === 'diff' && diff && (
+                <span className="ml-1.5 text-[10px] font-mono text-primary bg-primary/10 rounded px-1 py-0.5">ready</span>
+              )}
             </button>
           ))}
           {session?.journal && (
-            <button className={`tab${activeTab === 'journal' ? ' active' : ''}`} onClick={() => setActiveTab('journal')}>
+            <button
+              className={`proj-tab ${activeTab === 'journal' ? 'active' : ''}`}
+              onClick={() => setActiveTab('journal')}
+              style={{ textTransform: 'capitalize' }}
+            >
               {session.parentSessionId ? 'review' : 'journal'}
             </button>
           )}
@@ -349,35 +380,38 @@ export default function SessionPage() {
       </div>
 
       {/* Content */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: 'var(--panel)' }}>
-        <div style={{ maxWidth: 740, margin: '0 auto', padding: '24px 32px' }}>
+      <div className="flex-1 overflow-y-auto bg-muted/30" style={{ minHeight: 0 }}>
+        <div style={{ maxWidth: 780, margin: '0 auto', padding: '24px 28px' }}>
           {activeTab === 'journal' && session?.journal ? (
             <JournalView text={session.journal} />
           ) : activeTab === 'diff' ? (
             diffLoading
-              ? <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--muted)' }}>loading diff…</p>
+              ? <p className="text-xs font-mono text-muted-foreground">loading diff…</p>
+              : diffError
+              ? <p className="text-sm text-muted-foreground/60">{diffError}</p>
               : <ColoredDiff raw={diff ?? ''} />
           ) : (
             <div>
               {lines.length === MAX_LINES && (
-                <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--faint)', marginBottom: 16, paddingBottom: 12, borderBottom: '1px solid var(--rule)' }}>
+                <p className="text-[11px] font-mono text-muted-foreground/40 mb-4 pb-3 border-b border-border">
                   ↑ earlier output truncated — showing last {MAX_LINES} lines
                 </p>
               )}
               {lines.length === 0 && !isRunning && !done && (
-                <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--muted)' }}>waiting for output…</p>
+                <p className="text-xs font-mono text-muted-foreground">waiting for output…</p>
               )}
               {lines.map((line, i) => (
                 <div key={i} style={{
-                  fontFamily: 'var(--font-mono)', fontSize: 12.5, lineHeight: 1.85, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                  color: line.kind === 'tool' ? 'var(--indigo)' : line.kind === 'stderr' ? 'var(--muted)' : 'var(--ink-2)',
+                  fontFamily: 'var(--font-mono)', fontSize: 12.5, lineHeight: 1.85,
+                  whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                  color: line.kind === 'tool' ? 'var(--ember)' : line.kind === 'stderr' ? 'var(--muted)' : 'var(--ink-2)',
                 }}>
                   {line.text}
                 </div>
               ))}
               {isRunning && !done && <span className="cursor-blink" style={{ marginTop: 4, display: 'inline-block' }} />}
               {done && (
-                <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--faint)', marginTop: 20, paddingTop: 12, borderTop: '1px solid var(--rule-soft)' }}>
+                <p className="text-[11px] font-mono text-muted-foreground/40 mt-5 pt-3 border-t border-border/50">
                   process exited {exitCode ?? (isError ? '1' : '0')} · {task?.startedAt && task.completedAt
                     ? `${Math.round((new Date(task.completedAt).getTime() - new Date(task.startedAt).getTime()) / 1000)}s`
                     : fmtSecs(elapsedSecs)}
@@ -391,23 +425,23 @@ export default function SessionPage() {
 
       {/* Merged banner */}
       {isMerged && (
-        <div style={{ borderTop: '1px solid color-mix(in srgb, var(--green) 25%, transparent)', background: 'color-mix(in srgb, var(--green) 6%, transparent)', padding: '14px 32px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--green)' }}>Merged ✓</span>
-          <div style={{ flex: 1 }} />
+        <div className="border-t border-green-500/20 bg-green-500/5 px-6 py-3.5 flex items-center gap-3 flex-wrap">
+          <span className="text-sm font-semibold text-green-500">Merged ✓</span>
+          <div className="flex-1" />
           {project?.remoteUrl && !pushed && <button className="btn sm primary" onClick={() => push.mutate()} disabled={push.isPending}>{push.isPending ? '…' : 'Push to remote'}</button>}
-          {project?.remoteUrl && pushed && <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--indigo)' }}>Pushed ✓</span>}
+          {project?.remoteUrl && pushed && <span className="text-sm font-semibold text-primary">Pushed ✓</span>}
           {project?.localPath && <CopyCommand text={`git -C ${project.localPath} pull ${project.repoPath} main`} />}
-          {push.isError && <span style={{ fontSize: 13, color: 'var(--red)' }}>{push.error?.message}</span>}
+          {push.isError && <span className="text-sm text-destructive">{push.error?.message}</span>}
           <button className="btn sm" onClick={() => navigate(`/projects/${project?.id ?? ''}`)}>← Board</button>
         </div>
       )}
 
       {/* Idle prompt */}
       {session?.status === 'idle' && !session.workTaskId && (
-        <div style={{ borderTop: '1px solid var(--rule)', background: 'var(--bg)', padding: '16px 32px' }}>
-          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)', marginBottom: 12 }}>What should this agent do?</p>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
-            <Textarea value={idlePrompt} onChange={e => setIdlePrompt(e.target.value)} placeholder="Describe the task…" rows={3} style={{ flex: 1 }} autoFocus />
+        <div className="border-t border-border bg-background px-6 py-4">
+          <p className="text-sm font-semibold text-foreground mb-3">What should this agent do?</p>
+          <div className="flex gap-3 items-end">
+            <Textarea value={idlePrompt} onChange={e => setIdlePrompt(e.target.value)} placeholder="Describe the task…" rows={3} className="flex-1" autoFocus />
             <button className="btn primary" onClick={() => { if (!idlePrompt.trim()) return; retry.mutate(idlePrompt.trim()); setIdlePrompt('') }} disabled={!idlePrompt.trim() || retry.isPending}>
               {retry.isPending ? '…' : 'Run'}
             </button>
@@ -417,10 +451,10 @@ export default function SessionPage() {
 
       {/* Error panel */}
       {isError && (
-        <div style={{ borderTop: '1px solid color-mix(in srgb, var(--red) 20%, transparent)', background: 'color-mix(in srgb, var(--red) 5%, transparent)', padding: '16px 32px' }}>
-          <p style={{ fontSize: 13, fontWeight: 600, color: 'var(--red)', marginBottom: 12 }}>Session ended with an error</p>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
-            <Textarea value={hint} onChange={e => setHint(e.target.value)} placeholder="Optional: add context before retrying…" rows={2} style={{ flex: 1 }} />
+        <div className="border-t border-destructive/20 bg-destructive/5 px-6 py-4">
+          <p className="text-sm font-semibold text-destructive mb-3">Session ended with an error</p>
+          <div className="flex gap-3 items-end">
+            <Textarea value={hint} onChange={e => setHint(e.target.value)} placeholder="Optional: add context before retrying…" rows={2} className="flex-1" />
             <button className="btn primary" onClick={() => retry.mutate(hint.trim() ? `Continue where you left off.\n\nAdditional context: ${hint.trim()}` : undefined)} disabled={retry.isPending}>
               {retry.isPending ? '…' : 'Retry'}
             </button>

@@ -4,6 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { sessions, employees, tasks } from '../api/client'
 import type { Session, Employee, Task, SessionStatus } from '../api/client'
 import { AgentAvatar } from '@/components/AgentAvatar'
+import { cn } from '@/lib/utils'
 
 function timeAgo(iso: string) {
   const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
@@ -15,44 +16,51 @@ function timeAgo(iso: string) {
   return `${Math.floor(h / 24)}d ago`
 }
 
-const STATUS_DOT: Record<string, string> = {
-  running: 'green pulse',
-  idle:    'idle',
-  done:    'idle',
-  merged:  'indigo',
-  error:   'red',
+const STATUS_CONFIG: Record<string, { dot: string; label: string; color: string; bg: string }> = {
+  running: { dot: 'green pulse', label: 'Running', color: 'var(--green)',  bg: 'color-mix(in srgb, var(--green) 12%, transparent)' },
+  idle:    { dot: 'idle',        label: 'Idle',    color: 'var(--faint)',  bg: 'var(--panel-2)' },
+  done:    { dot: 'idle',        label: 'Done',    color: 'var(--muted)',  bg: 'var(--panel-2)' },
+  merged:  { dot: 'indigo',      label: 'Merged',  color: 'var(--ember)',  bg: 'var(--ember-wash)' },
+  error:   { dot: 'red',         label: 'Error',   color: 'var(--red)',    bg: 'color-mix(in srgb, var(--red) 12%, transparent)' },
 }
 
-const STATUS_LABEL: Record<string, [string, string]> = {
-  running: ['Running', 'var(--green)'],
-  idle:    ['Idle',    'var(--faint)'],
-  done:    ['Done',    'var(--muted)'],
-  merged:  ['Merged',  'var(--indigo)'],
-  error:   ['Error',   'var(--red)'],
-}
-
-function SessionRow({ session, agent, task, onClick }: {
+function SessionCard({ session, agent, task, onClick }: {
   session: Session; agent?: Employee; task?: Task; onClick: () => void
 }) {
-  const dotClass = STATUS_DOT[session.status] ?? 'idle'
-  const [label, color] = STATUS_LABEL[session.status] ?? ['Unknown', 'var(--muted)']
+  const cfg = STATUS_CONFIG[session.status] ?? STATUS_CONFIG.idle
   const isSpec = !!session.specId
+  const title = task?.title ?? (isSpec ? 'Planning session' : session.branch)
 
   return (
-    <button className="row" onClick={onClick}>
-      <span className={`dot ${dotClass}`} />
-      <AgentAvatar agent={agent} size={26} running={session.status === 'running'} />
-      <div className="row-main">
-        <div className="row-title">
-          {task?.title ?? (isSpec ? 'Planning session' : session.branch)}
-        </div>
-        <div className="row-meta">
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{session.branch}</span>
-          {isSpec && <><span className="sep">·</span><span>plan</span></>}
-        </div>
+    <button
+      onClick={onClick}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 14, width: '100%', textAlign: 'left',
+        padding: '14px 16px', background: 'var(--panel)', border: '1px solid var(--rule)',
+        borderRadius: 12, boxShadow: 'var(--shadow-sm)', cursor: 'pointer',
+        transition: 'background .1s, border-color .1s',
+      }}
+      onMouseOver={e => { e.currentTarget.style.background = 'var(--panel-2)' }}
+      onMouseOut={e => { e.currentTarget.style.background = 'var(--panel)' }}
+    >
+      <AgentAvatar agent={agent} size={32} running={session.status === 'running'} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {title}
+        </p>
+        <p style={{ fontSize: 11.5, color: 'var(--muted)', margin: '3px 0 0', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {session.branch}{isSpec && ' · plan'}
+        </p>
       </div>
-      <span className="row-time">{timeAgo(session.createdAt)}</span>
-      <span className="chip" style={{ color, borderColor: 'transparent', background: 'color-mix(in srgb, ' + color + ' 10%, transparent)' }}>{label}</span>
+      <span style={{ fontSize: 11, color: 'var(--faint)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>{timeAgo(session.createdAt)}</span>
+      <span style={{
+        fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, flexShrink: 0,
+        color: cfg.color, background: cfg.bg,
+        display: 'flex', alignItems: 'center', gap: 5,
+      }}>
+        <span className={`dot ${cfg.dot}`} style={{ width: 5, height: 5 }} />
+        {cfg.label}
+      </span>
     </button>
   )
 }
@@ -96,44 +104,42 @@ export default function SessionsPage() {
   const visibleFilters = FILTERS.filter(f => f.key === 'all' || (counts.get(f.key) ?? 0) > 0)
 
   return (
-    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflowY: 'auto', background: 'var(--bg)' }}>
+    <div className="flex-1 overflow-y-auto bg-background">
+      <div className="px-6 pt-6 pb-8 flex flex-col gap-6">
 
-      <div className="page-content narrow" style={{ paddingTop: 32, paddingBottom: 60 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 22 }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 420, letterSpacing: 0, margin: 0 }}>History</h2>
-          <span className="count">{sessionList.length}</span>
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-muted-foreground/50">{sessionList.length} session{sessionList.length !== 1 ? 's' : ''}</p>
+          {visibleFilters.length > 2 && (
+            <div className="flex items-center gap-1 flex-wrap">
+              {visibleFilters.map(f => (
+                <button
+                  key={f.key}
+                  onClick={() => setFilter(f.key)}
+                  className={cn(
+                    'px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer',
+                    filter === f.key
+                      ? 'bg-card border-border text-foreground'
+                      : 'bg-transparent border-transparent text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  {f.label}
+                  {f.key !== 'all' && counts.get(f.key) && (
+                    <span className="ml-1.5 opacity-50 font-mono text-[10px]">{counts.get(f.key)}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
-
-        {visibleFilters.length > 2 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 18, flexWrap: 'wrap' }}>
-          {visibleFilters.map(f => (
-            <button key={f.key} onClick={() => setFilter(f.key)}
-              style={{
-                padding: '5px 9px', borderRadius: 8, fontSize: 13, fontWeight: 500,
-                border: 'none', cursor: 'pointer', background: 'none',
-                color: filter === f.key ? 'var(--ink)' : 'var(--muted)',
-                fontFamily: 'inherit',
-              }}
-              onMouseOver={e => { if (filter !== f.key) e.currentTarget.style.background = 'var(--panel)' }}
-              onMouseOut={e => { if (filter !== f.key) e.currentTarget.style.background = 'none' }}
-            >
-              {f.label}
-              {f.key !== 'all' && counts.get(f.key) && (
-                <span style={{ marginLeft: 5, opacity: 0.45, fontFamily: 'var(--font-mono)', fontSize: 11 }}>{counts.get(f.key)}</span>
-              )}
-            </button>
-          ))}
-        </div>
-        )}
 
         {isLoading ? (
-          <div style={{ color: 'var(--muted)', fontSize: 13, padding: '32px 0' }}>Loading…</div>
+          <p className="text-sm text-muted-foreground">Loading…</p>
         ) : filtered.length === 0 ? (
-          <p className="empty-line">{filter === 'all' ? 'No sessions yet.' : `No ${filter} sessions.`}</p>
+          <p className="text-sm text-muted-foreground/50 py-8 text-center">{filter === 'all' ? 'No sessions yet.' : `No ${filter} sessions.`}</p>
         ) : (
-          <div className="rows">
+          <div className="flex flex-col gap-2">
             {filtered.map(s => (
-              <SessionRow key={s.id} session={s} agent={agentFor(s)} task={taskFor(s)}
+              <SessionCard key={s.id} session={s} agent={agentFor(s)} task={taskFor(s)}
                 onClick={() => navigate(`/sessions/${s.id}`)} />
             ))}
           </div>

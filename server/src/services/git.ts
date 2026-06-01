@@ -65,12 +65,28 @@ export async function removeWorktree(project: Project, worktreePath: string): Pr
 
 export async function getDiff(worktreePath: string, baseBranch: string): Promise<string> {
   const git = simpleGit(worktreePath);
-  const [committed, staged, unstaged] = await Promise.all([
+  const [committed, staged, unstaged, untracked] = await Promise.all([
     git.diff([`${baseBranch}..HEAD`]).catch(() => ''),  // committed on this branch
     git.diff(['--cached']).catch(() => ''),              // staged but not committed
     git.diff().catch(() => ''),                          // modified but not staged
+    untrackedDiff(git),
   ]);
-  return [committed, staged, unstaged].filter(Boolean).join('\n');
+  return [committed, staged, unstaged, untracked].filter(Boolean).join('\n');
+}
+
+async function untrackedDiff(git: ReturnType<typeof simpleGit>): Promise<string> {
+  const files = (await git.raw(['ls-files', '--others', '--exclude-standard']).catch(() => ''))
+    .split('\n')
+    .map(f => f.trim())
+    .filter(Boolean);
+
+  if (files.length === 0) return '';
+
+  const diffs = await Promise.all(
+    files.map(file => git.diff(['--no-index', '--', os.devNull, file]).catch(() => ''))
+  );
+
+  return diffs.filter(Boolean).join('\n');
 }
 
 export async function mergeWorktree(

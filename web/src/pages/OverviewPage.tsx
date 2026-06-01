@@ -5,6 +5,7 @@ import { sessions, tasks, employees, projects, events } from '../api/client'
 import type { CompanyEvent } from '../api/client'
 import { AgentAvatar } from '@/components/AgentAvatar'
 import { useElapsed, fmtSecs } from '@/lib/time'
+import { cn } from '@/lib/utils'
 
 function timeAgo(iso: string) {
   const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000)
@@ -16,19 +17,15 @@ function timeAgo(iso: string) {
 }
 
 const EVENT_VERB: Record<string, [string, string]> = {
-  'session.started':   ['started',  'var(--muted)'],
-  'session.completed': ['finished', 'var(--green)'],
-  'session.failed':    ['failed on','var(--red)'  ],
-  'session.merged':    ['merged',   'var(--indigo)'],
-}
-
-function CaretIcon() {
-  return <svg className="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6"/></svg>
+  'session.started':   ['started',   'text-muted-foreground'],
+  'session.completed': ['finished',  'text-green-500'],
+  'session.failed':    ['failed on', 'text-destructive'],
+  'session.merged':    ['merged',    'text-primary'],
 }
 
 function ElapsedTimer({ createdAt }: { createdAt: string }) {
   const secs = useElapsed(createdAt, true)
-  return <span className="row-time tnum">{fmtSecs(secs)}</span>
+  return <span className="text-xs font-mono text-muted-foreground tabular-nums shrink-0">{fmtSecs(secs)}</span>
 }
 
 export default function OverviewPage() {
@@ -77,157 +74,156 @@ export default function OverviewPage() {
   function projectName(id: string) { return projectList.find(p => p.id === id)?.name ?? 'Unknown' }
   function taskTitle(wid?: string) { return wid ? taskList.find(t => t.id === wid)?.title : undefined }
 
-  const isEmpty = running.length === 0 && review.length === 0
-  const date    = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+  const parts: string[] = []
+  if (running.length) parts.push(`${running.length} agent${running.length !== 1 ? 's' : ''} working`)
+  if (review.length)  parts.push(`${review.length} to review`)
+  if (queued.length)  parts.push(`${queued.length} queued`)
+  const subtitle = parts.length ? parts.join(' · ') : 'Nothing running yet.'
 
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
-  function toggleSection(id: string) {
+  function toggle(id: string) {
     setCollapsed(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
   }
 
-  // lede sentence
-  const lede = review.length > 0
-    ? <><span className="num">{running.length}</span> agent{running.length !== 1 ? 's' : ''} working. <span className="num">{review.length}</span> {review.length === 1 ? 'change needs' : 'changes need'} your review, and <span className="num">{queued.length}</span> queued.</>
-    : running.length > 0
-    ? <><span className="num">{running.length}</span> agent{running.length !== 1 ? 's' : ''} working. Nothing needs review — <span className="num">{queued.length}</span> queued.</>
-    : projectList.length === 0
-    ? <>No projects yet. Add one to get started.</>
-    : <>Nothing running. Open a project to dispatch work.</>
-
   return (
-    <div style={{ overflowY: 'auto', flex: 1 }}>
-      <div className="page-content narrow" style={{ paddingTop: 52, paddingBottom: 80 }}>
+    <div className="flex-1 overflow-y-auto bg-background">
+      <div className="px-6 pt-10 pb-8 flex flex-col gap-8">
 
-        {/* Header */}
-        <div className="eyebrow" style={{ marginBottom: 14 }}>{date}</div>
-        <h1 className="h-page">Today</h1>
-        <p className="lede" style={{ marginTop: 20, maxWidth: '34em' }}>{lede}</p>
+        {/* Header — same pattern as Knowledge / Tools */}
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Today</h1>
+          <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
+        </div>
 
-        {/* Onboarding steps */}
-        {isEmpty && projectList.length === 0 && (
-          <div className="section">
-            <div className="rows">
-              {[
-                { n: '1', label: 'Add a project',  desc: 'Connect a GitHub repo or local path.',              path: '/projects'  },
-                { n: '2', label: 'Add agents',      desc: 'Configure API keys and create named agents.',       path: '/employees' },
-                { n: '3', label: 'Dispatch work',   desc: 'Open a project, create tasks, assign to agents.',  path: '/projects'  },
-              ].map(({ n, label, desc, path }) => (
-                <button key={n} className="row" onClick={() => navigate(path)} style={{ cursor: 'pointer' }}>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--faint)', width: 18, flexShrink: 0 }}>{n}</span>
-                  <div className="row-main">
-                    <div className="row-title">{label}</div>
-                    <div className="row-meta">{desc}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
+        {/* Empty onboarding */}
+        {running.length === 0 && review.length === 0 && projectList.length === 0 && (
+          <section className="flex flex-col gap-2">
+            <p className="text-xs text-muted-foreground/50 mb-1">Get started</p>
+            {[
+              { n: '1', label: 'Add a project',  desc: 'Connect a GitHub repo or local path.', path: '/projects'  },
+              { n: '2', label: 'Add agents',      desc: 'Configure API keys and create named agents.', path: '/employees' },
+              { n: '3', label: 'Dispatch work',   desc: 'Open a project, create tasks, assign to agents.', path: '/projects' },
+            ].map(({ n, label, desc, path }) => (
+              <button
+                key={n}
+                onClick={() => navigate(path)}
+                className="flex items-start gap-4 px-4 py-3.5 bg-card border border-border rounded-xl text-left hover:bg-muted/50 transition-colors w-full"
+              >
+                <span className="w-5 h-5 rounded-md bg-primary/10 text-primary text-[11px] font-bold grid place-items-center shrink-0 mt-0.5">{n}</span>
+                <div>
+                  <p className="text-sm font-semibold text-foreground">{label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
+                </div>
+              </button>
+            ))}
+          </section>
         )}
 
-        {/* Waiting for review */}
+        {/* Needs review */}
         {review.length > 0 && (
-          <div className={`section${collapsed.has('review') ? ' collapsed' : ''}`}>
-            <div className="section-head">
-              <button className="toggle" onClick={() => toggleSection('review')}>
-                <CaretIcon />
-                <h2>Waiting for you</h2>
-                <span className="count">{review.length}</span>
-              </button>
-            </div>
-            <div className="rows accent">
-              {review.map(s => {
-                const agent = agentFor(s.agentId)
-                const title = taskTitle(s.workTaskId)
-                const isError = s.status === 'error'
-                return (
-                  <button key={s.id} className="row" onClick={() => navigate(`/sessions/${s.id}`)}>
-                    <AgentAvatar agent={agent} size={28} />
-                    <div className="row-main">
-                      <div className="row-title">{title ?? s.id.slice(0, 8)}</div>
-                      <div className="row-meta">
-                        <span>{agent?.name ?? '—'}</span>
-                        <span className="sep">·</span>
-                        <span>{projectName(s.projectId)}</span>
-                        <span className="sep">·</span>
-                        {isError
-                          ? <span className="stat red"><span className="dot red" />Error</span>
-                          : <span className="stat amber"><span className="dot amber" />Ready to review</span>
-                        }
+          <section>
+            <button className="flex items-center gap-2 mb-3 group" onClick={() => toggle('review')} aria-expanded={!collapsed.has('review')}>
+              <p className="text-xs font-medium text-muted-foreground/60 group-hover:text-muted-foreground transition-colors">
+                Needs review
+              </p>
+              <span className="count">{review.length}</span>
+            </button>
+            {!collapsed.has('review') && (
+              <div className="flex flex-col gap-2">
+                {review.map(s => {
+                  const agent = agentFor(s.agentId)
+                  const title = taskTitle(s.workTaskId)
+                  const isError = s.status === 'error'
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => navigate(`/sessions/${s.id}`)}
+                      className={cn(
+                        'flex items-center gap-3 px-4 py-3.5 bg-card border rounded-xl hover:bg-muted/50 transition-colors text-left w-full [box-shadow:var(--shadow-sm)]',
+                        isError ? 'border-destructive/25' : 'border-amber-500/25'
+                      )}
+                    >
+                      <AgentAvatar agent={agent} size={28} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-foreground truncate">{title ?? s.id.slice(0, 8)}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{agent?.name ?? '—'} · {projectName(s.projectId)}</p>
                       </div>
-                    </div>
-                    <span className="row-hint">↵</span>
-                    <svg className="row-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
+                      <span className={cn(
+                        'inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-semibold shrink-0',
+                        isError ? 'border-destructive/25 bg-destructive/5 text-destructive' : 'border-amber-500/25 bg-amber-500/10 text-amber-500'
+                      )}>
+                        <span className={cn('dot', isError ? 'red' : 'amber')} />
+                        {isError ? 'Error' : 'Ready'}
+                      </span>
+                      <svg className="w-3.5 h-3.5 text-muted-foreground/30 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </section>
         )}
 
         {/* Running */}
         {running.length > 0 && (
-          <div className={`section${collapsed.has('running') ? ' collapsed' : ''}`}>
-            <div className="section-head">
-              <button className="toggle" onClick={() => toggleSection('running')}>
-                <CaretIcon />
-                <h2>In progress</h2>
-                <span className="count">{running.length}</span>
-              </button>
-            </div>
-            <div className="rows">
-              {running.map(s => {
-                const agent = agentFor(s.agentId)
-                const title = taskTitle(s.workTaskId)
-                return (
-                  <button key={s.id} className="row quiet" onClick={() => navigate(`/sessions/${s.id}`)}>
-                    <span className="dot green pulse" />
-                    <AgentAvatar agent={agent} size={26} running />
-                    <div className="row-main">
-                      <div className="row-title">{title ?? s.id.slice(0, 8)}</div>
-                      <div className="row-meta">
-                        <span>{agent?.name ?? '—'}</span>
-                        <span className="sep">·</span>
-                        <span>{projectName(s.projectId)}</span>
+          <section>
+            <button className="flex items-center gap-2 mb-3 group" onClick={() => toggle('running')}>
+              <p className="text-xs text-muted-foreground/50 group-hover:text-muted-foreground transition-colors">
+                In progress · {running.length}
+              </p>
+            </button>
+            {!collapsed.has('running') && (
+              <div className="flex flex-col gap-2">
+                {running.map(s => {
+                  const agent = agentFor(s.agentId)
+                  const title = taskTitle(s.workTaskId)
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => navigate(`/sessions/${s.id}`)}
+                      className="flex items-center gap-3 px-4 py-3 bg-card border border-border rounded-xl hover:bg-muted/50 transition-colors text-left w-full"
+                    >
+                      <span className="dot green pulse shrink-0" />
+                      <AgentAvatar agent={agent} size={26} running />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">{title ?? s.id.slice(0, 8)}</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">{agent?.name ?? '—'} · {projectName(s.projectId)}</p>
                       </div>
-                    </div>
-                    <ElapsedTimer createdAt={s.createdAt} />
-                    <span className="row-hint">↵</span>
-                    <svg className="row-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
+                      <ElapsedTimer createdAt={s.createdAt} />
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </section>
         )}
 
         {/* Activity */}
         {eventList.length > 0 && (
-          <div className={`section${collapsed.has('activity') ? ' collapsed' : ''}`}>
-            <div className="section-head">
-              <button className="toggle" onClick={() => toggleSection('activity')}>
-                <CaretIcon />
-                <h2>Activity</h2>
-              </button>
-            </div>
-            <div className="feed">
+          <section>
+            <p className="text-xs font-medium text-muted-foreground/60 mb-3">Activity</p>
+            <div className="flex flex-col gap-1">
               {(eventList as CompanyEvent[]).slice(0, 12).map(ev => {
-                const [verb, color] = EVENT_VERB[ev.type] ?? ['updated', 'var(--muted)']
+                const [verb, colorClass] = EVENT_VERB[ev.type] ?? ['updated', 'text-muted-foreground']
                 return (
                   <button
                     key={ev.id}
-                    className="feedrow"
                     onClick={() => ev.sessionId && navigate(`/sessions/${ev.sessionId}`)}
                     disabled={!ev.sessionId}
+                    className="grid grid-cols-[64px_82px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5 bg-card border border-border rounded-lg hover:bg-muted/50 transition-colors text-left w-full disabled:cursor-default max-sm:grid-cols-[54px_minmax(0,1fr)_auto]"
                   >
-                    <span className="who">{ev.data.employeeName ?? '—'}</span>
-                    <span className="verb" style={{ color }}>{verb}</span>
-                    <span className="what">{ev.data.taskTitle ?? ''}</span>
-                    <span className="when">{timeAgo(ev.createdAt)}</span>
+                    <span className="text-xs font-semibold text-foreground truncate">{ev.data.employeeName ?? '—'}</span>
+                    <span className={cn('text-xs font-medium max-sm:hidden', colorClass)}>{verb}</span>
+                    <span className="text-xs text-muted-foreground truncate">
+                      <span className={cn('mr-1 hidden max-sm:inline', colorClass)}>{verb}</span>
+                      {ev.data.taskTitle ?? ''}
+                    </span>
+                    <span className="text-xs text-muted-foreground/40 shrink-0 font-mono">{timeAgo(ev.createdAt)}</span>
                   </button>
                 )
               })}
             </div>
-          </div>
+          </section>
         )}
 
       </div>

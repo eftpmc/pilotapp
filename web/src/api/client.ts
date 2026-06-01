@@ -150,11 +150,24 @@ async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
 // Auth
 // ---------------------------------------------------------------------------
 
+async function authReq<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error ?? `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
 export const auth = {
   login:    (email: string, password: string) =>
-    req<{ token: string }>('/auth/login',    { method: 'POST', body: JSON.stringify({ email, password }) }),
+    authReq<{ token: string }>('/auth/login',    { email, password }),
   register: (email: string, password: string) =>
-    req<{ token: string }>('/auth/register', { method: 'POST', body: JSON.stringify({ email, password }) }),
+    authReq<{ token: string }>('/auth/register', { email, password }),
 };
 
 // ---------------------------------------------------------------------------

@@ -27,67 +27,36 @@ export default function ProjectLayout() {
     refetchInterval: 5000,
   })
 
-  const project     = projectList.find(p => p.id === id)
+  const project      = projectList.find(p => p.id === id)
   const runningCount = sessionList.filter(s => s.status === 'running').length
   const reviewCount  = sessionList.filter(s => !s.specId && (s.status === 'done' || s.status === 'error')).length
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <div style={{
-        padding: '28px 32px 0',
-        borderBottom: '1px solid var(--rule)',
-        background: 'var(--bg)',
-      }}>
-        {/* Back */}
-        <button
-          onClick={() => navigate('/projects')}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: '6px',
-            fontSize: '13px', fontWeight: 500, color: 'var(--muted)',
-            background: 'none', border: 'none', cursor: 'pointer',
-            padding: 0, marginBottom: '18px',
-            transition: 'color .12s',
-          }}
-          onMouseOver={e => (e.currentTarget.style.color = 'var(--ink)')}
-          onMouseOut={e => (e.currentTarget.style.color = 'var(--muted)')}
-        >
-          <ArrowLeft size={14} />
+      <div className="proj-header">
+        <button className="proj-back" onClick={() => navigate('/projects')}>
+          <ArrowLeft size={13} />
           Projects
         </button>
-
-        {/* Project name */}
-        <h1 style={{
-          fontFamily: '"Space Grotesk Variable", "Geist Variable", system-ui, sans-serif',
-          fontWeight: 400, fontSize: '32px', letterSpacing: 0,
-          lineHeight: 1.1, color: 'var(--ink)', margin: '0 0 20px',
-        }}>
-          {project?.name ?? '…'}
-        </h1>
-
-        {/* Tab bar */}
-        <div className="tabs" style={{ margin: 0 }}>
+        <h1 className="proj-name">{project?.name ?? '…'}</h1>
+        <nav className="proj-tabs">
           {TABS.map(({ label, path }) => (
             <NavLink
               key={label}
               to={`/projects/${id}${path}`}
               end={path === ''}
-              className={({ isActive }) => cn('tab', isActive && 'active')}
-              style={{ textDecoration: 'none' }}
+              className={({ isActive }) => cn('proj-tab', isActive && 'active')}
             >
               {label}
               {label === 'Board' && reviewCount > 0 && (
-                <span className="badge" style={{ marginLeft: '5px' }}>{reviewCount}</span>
+                <span className="badge">{reviewCount}</span>
               )}
               {label === 'History' && runningCount > 0 && (
-                <span className="badge" style={{
-                  marginLeft: '5px',
-                  background: 'color-mix(in srgb, var(--green-dot) 15%, transparent)',
-                  color: 'var(--green)',
-                }}>{runningCount}</span>
+                <span className="badge green">{runningCount}</span>
               )}
             </NavLink>
           ))}
-        </div>
+        </nav>
       </div>
 
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
