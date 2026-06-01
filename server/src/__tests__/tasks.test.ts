@@ -6,7 +6,7 @@ import { describe, test, expect } from 'vitest';
 import request from 'supertest';
 import app from '../app';
 import { db } from '../db';
-import { scaffold, seedTask } from './helpers';
+import { scaffold, seedSession, seedTask } from './helpers';
 
 describe('GET /tasks', () => {
   test('returns pending tasks sorted by priority desc then createdAt asc', async () => {
@@ -120,5 +120,20 @@ describe('POST /tasks/:id/assign', () => {
       .send({ agentId: agent.id });
 
     expect(res.status).toBe(400);
+  });
+});
+
+describe('POST /tasks/queue/run', () => {
+  test('does not dispatch to an agent with an idle session', async () => {
+    const { user, agent, project, token } = scaffold();
+    seedSession(user.id, agent.id, project.id, { status: 'idle' });
+    seedTask(user.id, project.id);
+
+    const res = await request(app)
+      .post('/tasks/queue/run')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.dispatched).toEqual([]);
   });
 });

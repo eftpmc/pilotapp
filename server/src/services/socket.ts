@@ -45,9 +45,10 @@ export function attachWebSocket(wss: WebSocketServer): void {
       }
 
       if (msg.type === 'subscribe') {
-        if (subscribeToSession(msg.sessionId, ws)) return;
-
         const session = db.prepare('SELECT * FROM sessions WHERE id = ? AND user_id = ?').get(msg.sessionId, uid) as SessionRow | undefined;
+        if (!session) { send(ws, 'error', 'Session not found', msg.sessionId); return; }
+
+        if (subscribeToSession(msg.sessionId, ws)) return;
 
         if (session && (session.status === 'done' || session.status === 'error')) {
           send(ws, 'done', session.status === 'error' ? '1' : '0', msg.sessionId);
@@ -58,9 +59,9 @@ export function attachWebSocket(wss: WebSocketServer): void {
       }
 
       if (msg.type === 'run') {
-        if (isSessionActive(msg.sessionId)) { subscribeToSession(msg.sessionId, ws); return; }
         const session = db.prepare('SELECT * FROM sessions WHERE id = ? AND user_id = ?').get(msg.sessionId, uid) as SessionRow | undefined;
         if (!session) { send(ws, 'error', 'Session not found'); return; }
+        if (isSessionActive(msg.sessionId)) { subscribeToSession(msg.sessionId, ws); return; }
         void runAgent(toSession(session), msg.prompt, uid);
         subscribeToSession(msg.sessionId, ws);
       }

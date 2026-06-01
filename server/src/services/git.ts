@@ -47,14 +47,14 @@ export async function pushToRemote(project: Project, remoteUrl: string, token: s
 export async function createWorktree(
   project: Project,
   sessionId: string,
-  baseBranch = 'main'
+  baseBranch = 'main',
+  branchName = `agent/${sessionId}`
 ): Promise<string> {
   const worktreePath = path.join(PROJECTS_ROOT, project.id, 'worktrees', sessionId);
   await fs.mkdir(path.dirname(worktreePath), { recursive: true });
 
   const git = simpleGit(project.repoPath);
-  const branch = `agent/${sessionId}`;
-  await git.raw(['worktree', 'add', '-b', branch, worktreePath, baseBranch]);
+  await git.raw(['worktree', 'add', '-b', branchName, worktreePath, baseBranch]);
   return worktreePath;
 }
 

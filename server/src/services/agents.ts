@@ -9,6 +9,7 @@ import { resolveApiKey } from '../routes/settings';
 import { markConnectionQuotaExceeded } from '../routes/connections';
 import { writeEvent } from './events';
 import { createWorktree, removeWorktree } from './git';
+import { assignTaskToSession, markSessionFinished, markSessionMerged, markSessionRunning, markTaskDone } from './lifecycle';
 
 const QUOTA_PATTERNS = [
   /rate.?limit/i, /429/, /too.?many.?requests/i,
@@ -45,20 +46,6 @@ export interface SessionRef {
 // ---------------------------------------------------------------------------
 // Persistence helpers — synchronous DB updates
 // ---------------------------------------------------------------------------
-
-function updateSessionStatus(sessionId: string, status: string): void {
-  db.prepare('UPDATE sessions SET status = ? WHERE id = ?').run(status, sessionId);
-}
-
-function updateTaskStatusForSession(sessionId: string, status: string): void {
-  const session = db.prepare('SELECT work_task_id FROM sessions WHERE id = ?').get(sessionId) as
-    | { work_task_id: string | null }
-    | undefined;
-  if (!session?.work_task_id) return;
-  db.prepare('UPDATE tasks SET status = ?, completed_at = ? WHERE id = ?').run(
-    status, new Date().toISOString(), session.work_task_id
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Binary resolution
@@ -296,9 +283,7 @@ async function advanceShift(shiftId: string, agentId: string, userId: string): P
     db.prepare(
       'INSERT INTO sessions (id, user_id, agent_id, project_id, work_task_id, provider, branch, worktree_path, status, shift_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     ).run(sessionId, userId, agentId, project.id, nextTask.id, agent.provider, branch, worktreePath, 'idle', shiftId, now);
-    db.prepare(
-      'UPDATE tasks SET status = ?, agent_id = ?, session_id = ?, started_at = ? WHERE id = ?'
-    ).run('running', agentId, sessionId, now, nextTask.id);
+    assignTaskToSession(nextTask.id, agentId, sessionId, now);
 
     const session = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId) as any;
     // Import toSession inline to avoid circular deps with _helpers
@@ -349,8 +334,7 @@ async function autoAssignTask(
     db.prepare(
       'INSERT INTO sessions (id, user_id, agent_id, project_id, work_task_id, provider, branch, worktree_path, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     ).run(sessionId, userId, agent.id, projectId, taskId, agent.provider, branch, worktreePath, 'idle', now);
-    db.prepare('UPDATE tasks SET status = ?, agent_id = ?, session_id = ?, started_at = ? WHERE id = ?')
-      .run('running', agent.id, sessionId, now, taskId);
+    assignTaskToSession(taskId, agent.id, sessionId, now);
 
     const sessionRef: SessionRef = {
       id: sessionId, agentId: agent.id, projectId,
@@ -396,9 +380,9 @@ async function captureTasks(session: SessionRef, userId: string): Promise<void> 
 
     // Auto-dismiss the lead session — it has no mergeable code, just planning artifacts.
     // Mark it merged and clean up the worktree so it doesn't appear in the Review column.
-    db.prepare("UPDATE sessions SET status = 'merged' WHERE id = ?").run(session.id);
+    markSessionMerged(session.id);
     if (session.workTaskId) {
-      db.prepare("UPDATE tasks SET status = 'done', completed_at = ? WHERE id = ?").run(new Date().toISOString(), session.workTaskId);
+      markTaskDone(session.workTaskId);
     }
     const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(session.projectId) as { id: string; name: string; repo_path: string; role: string; created_at: string } | undefined;
     if (project) {
@@ -500,8 +484,7 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
     active.delete(session.id);
     completed.set(session.id, [...entry.buffer]);
     setTimeout(() => completed.delete(session.id), COMPLETED_TTL_MS);
-    updateSessionStatus(session.id, 'error');
-    updateTaskStatusForSession(session.id, 'failed');
+    markSessionFinished(session.id, 1);
     return;
   }
 
@@ -510,7 +493,7 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
 
   const proc = spawn(bin, args, { cwd: session.worktreePath, env, stdio: ['ignore', 'pipe', 'pipe'] });
   entry.proc = proc;
-  updateSessionStatus(session.id, 'running');
+  markSessionRunning(session.id);
 
   proc.stdout.on('data', (chunk: Buffer) => broadcast('stdout', chunk.toString()));
   proc.stderr.on('data', (chunk: Buffer) => {
@@ -530,8 +513,7 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
     completed.set(session.id, [...entry.buffer]);
     setTimeout(() => completed.delete(session.id), COMPLETED_TTL_MS);
     active.delete(session.id);
-    updateSessionStatus(session.id, exitCode === 0 ? 'done' : 'error');
-    updateTaskStatusForSession(session.id, exitCode === 0 ? 'done' : 'failed');
+    markSessionFinished(session.id, exitCode);
     writeEvent(userId, exitCode === 0 ? 'session.completed' : 'session.failed', { sessionId: session.id, taskId: session.workTaskId, projectId: session.projectId, agentId: session.agentId });
     if (mcpConfigPath) { try { fs.unlinkSync(mcpConfigPath); } catch { /* already gone */ } }
     if (session.specId) captureSpec(session.specId, session.worktreePath);

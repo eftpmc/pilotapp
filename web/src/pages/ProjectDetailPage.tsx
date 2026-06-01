@@ -85,7 +85,7 @@ export default function ProjectDetailPage() {
   const project   = projectList.find(p => p.id === projectId)
 
   const codeSessions  = sessionList.filter(s => !s.specId && !s.parentSessionId)
-  const busyIds       = new Set(codeSessions.filter(s => s.status === 'running').map(s => s.agentId))
+  const busyIds       = new Set(codeSessions.filter(s => s.status === 'running' || s.status === 'idle').map(s => s.agentId))
   const quotaConnIds  = new Set(connectionList.filter(c => c.quotaStatus === 'exceeded').map(c => c.id))
   const idleAgents    = agentList.filter(a => !busyIds.has(a.id) && !quotaConnIds.has(a.connectionId ?? ''))
   const queue         = taskList.filter(t => t.status === 'pending').sort((a, b) => {
@@ -201,6 +201,7 @@ export default function ProjectDetailPage() {
                 const agent = agentFor(s)
                 const task  = taskFor(s)
                 const isMerging = mergeSession.isPending || mergePushSession.isPending
+                const canMerge = s.status === 'done'
                 return (
                   <div key={s.id} className="row" style={{ cursor: 'default' }}>
                     <AgentAvatar agent={agent} size={28} />
@@ -218,7 +219,7 @@ export default function ProjectDetailPage() {
                         <ReviewerPickerButton agentList={agentList.filter(a => a.id !== s.agentId)}
                           onPick={agentId => requestReview.mutate({ sessionId: s.id, agentId })} />
                       )}
-                      {project?.remoteUrl ? (
+                      {canMerge && project?.remoteUrl ? (
                         <>
                           <button className="btn sm" onClick={() => mergeSession.mutate(s.id)} disabled={isMerging}>
                             {isMerging ? '…' : 'Merge'}
@@ -227,11 +228,11 @@ export default function ProjectDetailPage() {
                             <Upload size={12} />{isMerging ? '…' : 'Push'}
                           </button>
                         </>
-                      ) : (
+                      ) : canMerge ? (
                         <button className="btn sm primary" onClick={() => mergeSession.mutate(s.id)} disabled={isMerging}>
                           {isMerging ? '…' : 'Merge ✓'}
                         </button>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 )

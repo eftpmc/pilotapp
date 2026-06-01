@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { db } from '../db';
 import { createWorktree } from '../services/git';
 import { runAgent } from '../services/agents';
+import { assignTaskToSession } from '../services/lifecycle';
 import { authMiddleware, userId } from '../middleware/auth';
 import { SessionRow, toSession } from './_helpers';
 
@@ -98,8 +99,7 @@ router.post('/', async (req: Request, res: Response) => {
     'INSERT INTO sessions (id, user_id, agent_id, project_id, work_task_id, provider, branch, worktree_path, status, shift_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   ).run(sessionId, uid, agent.id, project.id, first.id, agent.provider, branch, worktreePath, 'idle', shiftId, now);
 
-  db.prepare('UPDATE tasks SET status = ?, agent_id = ?, session_id = ?, started_at = ? WHERE id = ?')
-    .run('running', agent.id, sessionId, now, first.id);
+  assignTaskToSession(first.id, agent.id, sessionId, now);
 
   const session = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId) as SessionRow;
   void runAgent(toSession(session), first.prompt, uid, agent.id);

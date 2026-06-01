@@ -7,6 +7,7 @@ import { db } from '../db';
 import { createWorktree, removeWorktree, getDiff, mergeWorktree, commitWorktree } from '../services/git';
 import { killAgent, runAgent } from '../services/agents';
 import { writeEvent } from '../services/events';
+import { markSessionMerged, resetErroredSessionForRetry, resetTaskAfterSessionDiscard } from '../services/lifecycle';
 import { authMiddleware, userId } from '../middleware/auth';
 import { SessionRow, toSession } from './_helpers';
 
@@ -118,6 +119,8 @@ router.post('/:id/merge', async (req: Request, res: Response) => {
   const row     = db.prepare('SELECT * FROM sessions WHERE id = ? AND user_id = ?').get(req.params.id, uid) as SessionRow | undefined;
   const project = row ? db.prepare('SELECT * FROM projects WHERE id = ?').get(row.project_id) as ProjectRow | undefined : undefined;
   if (!row || !project) { res.status(404).json({ error: 'Not found' }); return; }
+  if (row.status !== 'done') { res.status(400).json({ error: 'Only completed sessions can be merged' }); return; }
+  if (row.parent_session_id) { res.status(400).json({ error: 'Review sessions cannot be merged' }); return; }
 
   const task = row.work_task_id
     ? db.prepare('SELECT base_branch FROM tasks WHERE id = ?').get(row.work_task_id) as { base_branch: string } | undefined
@@ -125,10 +128,17 @@ router.post('/:id/merge', async (req: Request, res: Response) => {
   const targetBranch = task?.base_branch ?? 'main';
 
   const projectObj = { id: project.id, name: project.name, repoPath: project.repo_path, role: project.role as any, createdAt: project.created_at };
-  await commitWorktree(row.worktree_path).catch(() => {});
-  await mergeWorktree(projectObj, row.branch, targetBranch);
+  try {
+    await commitWorktree(row.worktree_path).catch(() => {});
+    await mergeWorktree(projectObj, row.branch, targetBranch);
+  } catch (err: any) {
+    const message = String(err?.message ?? err ?? 'Merge failed');
+    const conflict = /conflict|merge failed|automatic merge failed/i.test(message);
+    res.status(conflict ? 409 : 500).json({ error: message });
+    return;
+  }
   removeWorktree(projectObj, row.worktree_path).catch(() => {});
-  db.prepare("UPDATE sessions SET status = 'merged' WHERE id = ?").run(row.id);
+  markSessionMerged(row.id);
   writeEvent(uid, 'session.merged', { sessionId: row.id, taskId: row.work_task_id ?? undefined, projectId: row.project_id, agentId: row.agent_id });
   res.json({ merged: true });
 });
@@ -179,7 +189,7 @@ Review the changes carefully. After your review, write a REVIEW.md file in the p
   const reviewBranch = `review/${reviewId}`;
   const projectObj   = { id: project.id, name: project.name, repoPath: project.repo_path, role: project.role as any, createdAt: project.created_at };
 
-  const worktreePath = await createWorktree(projectObj, reviewId, baseBranch);
+  const worktreePath = await createWorktree(projectObj, reviewId, baseBranch, reviewBranch);
   const now = new Date().toISOString();
 
   db.prepare(
@@ -211,10 +221,7 @@ router.post('/:id/run', (req: Request, res: Response) => {
 
   // Reset errored session back to idle before re-running
   if (row.status === 'error') {
-    db.prepare("UPDATE sessions SET status = 'idle' WHERE id = ?").run(row.id);
-    if (row.work_task_id) {
-      db.prepare("UPDATE tasks SET status = 'running', completed_at = NULL WHERE id = ?").run(row.work_task_id);
-    }
+    resetErroredSessionForRetry(row.id);
   }
 
   let prompt = parsed.data.prompt;
@@ -243,9 +250,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
   if (row.work_task_id) {
     const task = db.prepare('SELECT status FROM tasks WHERE id = ?').get(row.work_task_id) as TaskRow | undefined;
     if (task?.status === 'running' || task?.status === 'failed') {
-      db.prepare(
-        "UPDATE tasks SET status = 'pending', agent_id = NULL, session_id = NULL, started_at = NULL, completed_at = NULL WHERE id = ?"
-      ).run(row.work_task_id);
+      resetTaskAfterSessionDiscard(row.work_task_id);
     }
   }
 

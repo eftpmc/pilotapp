@@ -167,6 +167,7 @@ export default function SessionPage() {
   const [hint, setHint]             = useState('')
   const [idlePrompt, setIdlePrompt] = useState('')
   const [pushed, setPushed]         = useState(false)
+  const [exitCode, setExitCode]     = useState<string | null>(null)
   const bottomRef   = useRef<HTMLDivElement>(null)
   const bufferRef   = useRef('')
   const notifiedRef = useRef(false)
@@ -194,7 +195,7 @@ export default function SessionPage() {
   const requestReview = useMutation({ mutationFn: (agentId: string) => sessions.requestReview(id!, agentId), onSuccess: () => refetchSession() })
   const retry         = useMutation({
     mutationFn: (prompt?: string) => sessions.run(id!, prompt),
-    onSuccess: () => { setLines([]); setDone(false); setDiff(null); setHint(''); bufferRef.current = ''; refetchSession() },
+    onSuccess: () => { setLines([]); setDone(false); setExitCode(null); setDiff(null); setHint(''); bufferRef.current = ''; refetchSession() },
   })
 
   useEffect(() => { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission() }, [])
@@ -215,11 +216,11 @@ export default function SessionPage() {
       if (!token) return
       const proto = location.protocol === 'https:' ? 'wss' : 'ws'
       ws = new WebSocket(`${proto}://${location.host}/ws?token=${token}`)
-      ws.onopen = () => { delay = 1000; setLines([]); setDone(false); bufferRef.current = ''; ws!.send(JSON.stringify({ type: 'subscribe', sessionId: id })) }
+      ws.onopen = () => { delay = 1000; setLines([]); setDone(false); setExitCode(null); bufferRef.current = ''; ws!.send(JSON.stringify({ type: 'subscribe', sessionId: id })) }
       ws.onmessage = (e) => {
         try {
           const msg = JSON.parse(e.data)
-          if (msg.type === 'done') { setDone(true); refetchSession(); return }
+          if (msg.type === 'done') { setDone(true); setExitCode(String(msg.data ?? '0')); refetchSession(); return }
           if (msg.type === 'stdout') processChunk(msg.data)
           if (msg.type === 'stderr') addLine(msg.data, 'stderr')
         } catch {}
@@ -301,7 +302,7 @@ export default function SessionPage() {
             {session?.reviewVerdict === 'pending' && <span className="chip" style={{ color: 'var(--muted)' }}>Reviewing…</span>}
             {session?.reviewVerdict === 'approved' && <span className="chip" style={{ color: 'var(--green)', background: 'color-mix(in srgb, var(--green) 10%, transparent)' }}>Approved ✓</span>}
             {session?.reviewVerdict === 'changes_requested' && <span className="chip" style={{ color: 'var(--amber)', background: 'color-mix(in srgb, var(--amber) 10%, transparent)' }}>Changes Requested</span>}
-            {isDone && !isMerged && <button className="btn sm primary" onClick={() => merge.mutate()} disabled={merge.isPending}>{merge.isPending ? '…' : 'Merge ✓'}</button>}
+            {isDone && !isMerged && !session?.parentSessionId && <button className="btn sm primary" onClick={() => merge.mutate()} disabled={merge.isPending}>{merge.isPending ? '…' : 'Merge ✓'}</button>}
             <button className="btn sm ghost" style={{ color: 'var(--muted)' }}
               onClick={() => discard.mutate()} disabled={discard.isPending || isMerged}
               onMouseOver={e => (e.currentTarget.style.color = 'var(--red)')}
@@ -377,7 +378,7 @@ export default function SessionPage() {
               {isRunning && !done && <span className="cursor-blink" style={{ marginTop: 4, display: 'inline-block' }} />}
               {done && (
                 <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--faint)', marginTop: 20, paddingTop: 12, borderTop: '1px solid var(--rule-soft)' }}>
-                  process exited 0 · {task?.startedAt && task.completedAt
+                  process exited {exitCode ?? (isError ? '1' : '0')} · {task?.startedAt && task.completedAt
                     ? `${Math.round((new Date(task.completedAt).getTime() - new Date(task.startedAt).getTime()) / 1000)}s`
                     : fmtSecs(elapsedSecs)}
                 </p>

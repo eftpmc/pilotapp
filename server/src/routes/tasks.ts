@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { db } from '../db';
 import { createWorktree } from '../services/git';
 import { runAgent } from '../services/agents';
+import { assignTaskToSession } from '../services/lifecycle';
 import { authMiddleware, userId } from '../middleware/auth';
 import { SessionRow, toSession } from './_helpers';
 
@@ -103,7 +104,7 @@ router.post('/queue/run', async (req: Request, res: Response) => {
   ).all(uid) as TaskRow[];
 
   const busyAgentIds = new Set(
-    (db.prepare("SELECT agent_id FROM sessions WHERE user_id = ? AND status = 'running'").all(uid) as { agent_id: string }[])
+    (db.prepare("SELECT agent_id FROM sessions WHERE user_id = ? AND status IN ('idle', 'running')").all(uid) as { agent_id: string }[])
       .map((r) => r.agent_id)
   );
 
@@ -131,9 +132,7 @@ router.post('/queue/run', async (req: Request, res: Response) => {
       'INSERT INTO sessions (id, user_id, agent_id, project_id, work_task_id, provider, branch, worktree_path, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     ).run(sessionId, uid, agent.id, project.id, next.id, agent.provider, branch, worktreePath, 'idle', now);
 
-    db.prepare(
-      'UPDATE tasks SET status = ?, agent_id = ?, session_id = ?, started_at = ? WHERE id = ?'
-    ).run('running', agent.id, sessionId, now, next.id);
+    assignTaskToSession(next.id, agent.id, sessionId, now);
 
     const updatedTask    = db.prepare('SELECT * FROM tasks WHERE id = ?').get(next.id) as TaskRow;
     const updatedSession = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId) as SessionRow;
@@ -225,9 +224,7 @@ router.post('/:id/assign', async (req: Request, res: Response) => {
     'INSERT INTO sessions (id, user_id, agent_id, project_id, work_task_id, provider, branch, worktree_path, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   ).run(sessionId, uid, agent.id, project.id, task.id, agent.provider, branch, worktreePath, 'idle', now);
 
-  db.prepare(
-    'UPDATE tasks SET status = ?, agent_id = ?, session_id = ?, started_at = ? WHERE id = ?'
-  ).run('running', agent.id, sessionId, now, task.id);
+  assignTaskToSession(task.id, agent.id, sessionId, now);
 
   const updatedTask    = db.prepare('SELECT * FROM tasks WHERE id = ?').get(task.id) as TaskRow;
   const updatedSession = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId) as SessionRow;

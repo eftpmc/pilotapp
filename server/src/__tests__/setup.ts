@@ -1,4 +1,4 @@
-import { vi } from 'vitest';
+import { afterAll, afterEach, vi } from 'vitest';
 import os from 'os';
 import fs from 'fs';
 import path from 'path';
