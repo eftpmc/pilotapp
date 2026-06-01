@@ -1,0 +1,13 @@
+- generic [ref=e5]:
+  - generic [ref=e6]:
+    - heading "pilot" [level=1] [ref=e7]
+    - paragraph [ref=e8]: AI coding agents, under your control
+  - generic [ref=e9]:
+    - generic [ref=e10]:
+      - button "Sign in" [ref=e11] [cursor=pointer]
+      - button "Register" [ref=e12] [cursor=pointer]
+    - generic [ref=e13]:
+      - textbox "Email address" [active] [ref=e14]
+      - textbox "Password" [ref=e15]
+      - button "Sign in" [ref=e16] [cursor=pointer]
+  - paragraph [ref=e17]: Self-hosted · Your keys stay on your server

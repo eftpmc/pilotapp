@@ -24,11 +24,11 @@ export default defineConfig({
   server: {
     proxy: {
       '/auth':        'http://localhost:3000',
-      '/projects':    'http://localhost:3000',
+      '/projects':    { target: 'http://localhost:3000', bypass: spaBypass },
       '/agents':      'http://localhost:3000',
       '/brains':      'http://localhost:3000',
       '/tasks':       'http://localhost:3000',
-      '/sessions':    'http://localhost:3000',
+      '/sessions':    { target: 'http://localhost:3000', bypass: spaBypass },
       '/connections': 'http://localhost:3000',
       '/specs':       'http://localhost:3000',
       '/github':      'http://localhost:3000',

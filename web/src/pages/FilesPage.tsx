@@ -3,9 +3,6 @@ import { useQuery } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import { Highlight, themes } from 'prism-react-renderer'
 import { projects } from '../api/client'
-import { useTheme } from '../theme'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { ViewToggle, type ViewMode } from '@/components/ViewToggle'
 import { cn } from '@/lib/utils'
 import {
   File, FileCode2, FileText, Braces, Paintbrush, Globe, Image,
@@ -84,7 +81,7 @@ function groupByDir(files: string[]): DirGroup[] {
 // ---------------------------------------------------------------------------
 
 function CodePreview({ content, filePath }: { content: string; filePath: string }) {
-  const { isDark } = useTheme()
+  const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches
   const ext = filePath.split('.').pop()?.toLowerCase() ?? ''
   const language = PRISM_LANG[ext] ?? 'plain'
   const theme = isDark ? themes.oneDark : themes.oneLight
@@ -114,67 +111,26 @@ function CodePreview({ content, filePath }: { content: string; filePath: string 
   )
 }
 
-// ---------------------------------------------------------------------------
-// Grid card
-// ---------------------------------------------------------------------------
-
-function FileGridCard({ path, selected, onClick }: { path: string; selected: boolean; onClick: () => void }) {
-  const name = path.split('/').pop() ?? path
-  const { icon: Icon, color } = fileMeta(name)
-  const ext = name.split('.').pop()?.toLowerCase() ?? ''
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        'flex flex-col items-center gap-2 p-3 rounded-xl cursor-pointer border-none transition-all text-center group',
-        selected
-          ? 'bg-primary/10 ring-1 ring-primary/30'
-          : 'bg-transparent hover:bg-muted/60'
-      )}
-    >
-      <div
-        className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
-        style={{ background: color + '15' }}
-      >
-        <Icon className="h-6 w-6" style={{ color }} />
-      </div>
-      <div className="w-full">
-        <p className={cn(
-          'font-mono text-[11px] leading-tight truncate',
-          selected ? 'text-primary' : 'text-foreground'
-        )} title={path}>{name}</p>
-        {ext && (
-          <span className="font-mono text-[10px] text-muted-foreground uppercase tracking-wide">{ext}</span>
-        )}
-      </div>
-    </button>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// List row
-// ---------------------------------------------------------------------------
-
 function FileListRow({ path, selected, onClick, indent = false }: {
   path: string; selected: boolean; onClick: () => void; indent?: boolean
 }) {
   const name = path.split('/').pop() ?? path
   const { icon: Icon, color } = fileMeta(name)
+  const ext = name.includes('.') ? name.split('.').pop()?.toLowerCase() : ''
   return (
     <button
       onClick={onClick}
       className={cn(
-        'w-full flex items-center gap-2.5 px-4 py-1.5 cursor-pointer border-none text-left transition-colors',
-        indent && 'pl-8',
-        selected
-          ? 'bg-primary/8 text-primary'
-          : 'bg-transparent text-foreground hover:bg-muted/50'
+        'row quiet',
+        selected && 'selected'
       )}
+      style={indent ? { paddingLeft: 30 } : undefined}
     >
-      <div className="w-4 h-4 rounded flex items-center justify-center shrink-0" style={{ background: color + '18' }}>
-        <Icon className="h-2.5 w-2.5" style={{ color }} />
+      <Icon size={15} style={{ color, flexShrink: 0 }} />
+      <div className="row-main">
+        <div className="row-title" style={{ fontFamily: 'var(--font-mono)', fontSize: 13, color: selected ? 'var(--indigo)' : 'var(--ink)' }}>{path}</div>
       </div>
-      <span className="font-mono text-xs flex-1 truncate">{path}</span>
+      {ext && <span className="chip mono">{ext}</span>}
     </button>
   )
 }
@@ -185,7 +141,6 @@ function FileListRow({ path, selected, onClick, indent = false }: {
 
 export default function FilesPage() {
   const { id: projectId } = useParams<{ id: string }>()
-  const [mode, setMode]           = useState<ViewMode>('list')
   const [selectedFile, setSelected] = useState<string | null>(null)
   const [fileContent, setContent]   = useState<string | null>(null)
   const [loading, setLoading]       = useState(false)
@@ -219,7 +174,11 @@ export default function FilesPage() {
   function toggleDir(dir: string) {
     setOpenDirs(prev => {
       const next = new Set(prev)
-      next.has(dir) ? next.delete(dir) : next.add(dir)
+      if (next.has(dir)) {
+        next.delete(dir)
+      } else {
+        next.add(dir)
+      }
       return next
     })
   }
@@ -227,89 +186,68 @@ export default function FilesPage() {
   const previewOpen = selectedFile !== null
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col bg-background">
+    <div style={{ overflowY: 'auto', flex: 1, background: 'var(--bg)' }}>
+      <div className="page-content" style={{ paddingTop: 32, paddingBottom: 80 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 26 }}>
+          <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: 24, fontWeight: 420, letterSpacing: '-0.02em', margin: 0 }}>Files</h2>
+          {fileList.length > 0 && <span className="count">{fileList.length}</span>}
+        </div>
 
-      {/* Top bar */}
-      <div className="h-14 shrink-0 flex items-center gap-3 px-6 border-b border-border/60">
-        <span className="text-sm font-semibold text-foreground">Files</span>
-        {fileList.length > 0 && (
-          <span className="font-mono text-xs text-muted-foreground">{fileList.length}</span>
-        )}
-        <div className="flex-1" />
-        {fileList.length > 0 && <ViewToggle mode={mode} onChange={setMode} />}
-      </div>
-
-      {/* Body */}
-      <div className="flex-1 min-h-0 flex overflow-hidden">
-
-        {/* Browser */}
-        <div className={cn('flex flex-col overflow-hidden transition-all', previewOpen ? 'w-72 shrink-0 border-r border-border/60' : 'flex-1')}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: previewOpen ? 'minmax(260px, 0.85fr) minmax(0, 1.35fr)' : '1fr',
+          gap: previewOpen ? 28 : 0,
+          alignItems: 'start',
+        }}>
+          <div>
           {fileList.length === 0 ? (
-            <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center p-8">
-              <FolderOpen className="h-8 w-8 text-muted-foreground/40" />
-              <p className="text-sm font-medium text-foreground">No files yet</p>
-              <p className="text-xs text-muted-foreground">Files appear here once an agent commits something.</p>
-            </div>
-          ) : mode === 'grid' ? (
-            <ScrollArea className="flex-1">
-              <div className="p-4 grid gap-1.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(96px, 1fr))' }}>
-                {fileList.map(f => (
-                  <FileGridCard key={f} path={f} selected={selectedFile === f} onClick={() => selectFile(f)} />
-                ))}
-              </div>
-            </ScrollArea>
+            <p className="empty-line"><FolderOpen size={15} style={{ display: 'inline', marginRight: 8, verticalAlign: -2 }} />Files appear here once an agent commits something.</p>
           ) : (
-            <ScrollArea className="flex-1">
-              <div className="py-2">
+            <div className="rows">
                 {groups.map(({ dir, files }) => (
                   <div key={dir || '__root__'}>
-                    {/* Directory header */}
                     {dir && (
                       <button
                         onClick={() => toggleDir(dir)}
-                        className="w-full flex items-center gap-2 px-4 py-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors cursor-pointer bg-transparent border-none text-left"
+                        className="row quiet"
                       >
-                        <ChevronRight className={cn('h-3 w-3 transition-transform shrink-0', openDirs.has(dir) && 'rotate-90')} />
-                        <FolderOpen className="h-3 w-3 shrink-0" />
-                        {dir}
-                        <span className="ml-auto font-mono text-[10px] text-muted-foreground/60">{files.length}</span>
+                        <ChevronRight size={13} className={cn('transition-transform', openDirs.has(dir) && 'rotate-90')} style={{ color: 'var(--faint)' }} />
+                        <FolderOpen size={14} style={{ color: 'var(--muted)' }} />
+                        <div className="row-main">
+                          <div className="row-title" style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--muted)' }}>{dir}</div>
+                        </div>
+                        <span className="row-time">{files.length}</span>
                       </button>
                     )}
-                    {/* Files — root always shown, subdirs toggle */}
                     {(dir === '' || openDirs.has(dir)) && files.map(f => (
                       <FileListRow key={f} path={f} selected={selectedFile === f} onClick={() => selectFile(f)} indent={!!dir} />
                     ))}
                   </div>
                 ))}
-              </div>
-            </ScrollArea>
+            </div>
           )}
-        </div>
+          </div>
 
-        {/* Preview panel */}
-        {previewOpen && (
-          <div className="flex-1 min-w-0 flex flex-col">
-            {/* Preview header */}
-            <div className="h-9 shrink-0 flex items-center gap-2 px-4 border-b border-border/60 bg-muted/20">
-              {(() => { const { icon: Icon, color } = fileMeta(selectedFile!); return <Icon className="h-3.5 w-3.5 shrink-0" style={{ color }} />; })()}
-              <span className="font-mono text-xs text-muted-foreground flex-1 truncate">{selectedFile}</span>
+          {previewOpen && (
+            <div style={{ minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 0 12px', borderBottom: '1px solid var(--rule)' }}>
+                {(() => { const { icon: Icon, color } = fileMeta(selectedFile!); return <Icon size={15} style={{ color, flexShrink: 0 }} />; })()}
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--muted)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedFile}</span>
               <button
                 onClick={() => { setSelected(null); setContent(null) }}
-                className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer bg-transparent border-none"
+                style={{ color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', padding: 4 }}
               >
-                <X className="h-3.5 w-3.5" />
+                <X size={15} />
               </button>
             </div>
-            {/* Preview content */}
-            <ScrollArea className="flex-1 bg-muted/10">
-              <div className="py-4">
+              <div style={{ paddingTop: 18, overflowX: 'auto' }}>
                 {loading
-                  ? <p className="font-mono text-xs text-muted-foreground px-4">Loading…</p>
+                  ? <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--muted)' }}>Loading…</p>
                   : <CodePreview content={fileContent ?? ''} filePath={selectedFile ?? ''} />}
               </div>
-            </ScrollArea>
-          </div>
-        )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

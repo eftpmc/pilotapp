@@ -1,0 +1,90 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - button "pilot" [ref=e5] [cursor=pointer]:
+      - img [ref=e6]
+      - text: pilot
+    - generic [ref=e11]:
+      - link "Today" [ref=e12] [cursor=pointer]:
+        - /url: /
+      - link "Agents" [ref=e13] [cursor=pointer]:
+        - /url: /employees
+      - link "Projects" [ref=e14] [cursor=pointer]:
+        - /url: /projects
+      - link "Settings" [ref=e15] [cursor=pointer]:
+        - /url: /settings
+    - button "Sign out" [ref=e17] [cursor=pointer]
+  - main [ref=e18]:
+    - generic [ref=e19]:
+      - generic [ref=e20]:
+        - button "test" [ref=e37] [cursor=pointer]:
+          - img [ref=e22]
+          - text: test
+        - generic [ref=e24]:
+          - generic [ref=e25]: CA
+          - generic [ref=e26]:
+            - heading "Polish and harden ball-sort visualizer" [level=1] [ref=e38]
+            - generic [ref=e39]:
+              - generic [ref=e40]: Carl
+              - generic [ref=e41]: Merged
+          - button "Discard" [disabled] [ref=e29] [cursor=pointer]
+        - generic [ref=e30]:
+          - button "output" [ref=e31] [cursor=pointer]
+          - button "diff" [ref=e32] [cursor=pointer]
+          - button "journal" [active] [ref=e43] [cursor=pointer]
+      - generic [ref=e44]:
+        - paragraph [ref=e45]: Journal
+        - paragraph [ref=e46]: What was completed
+        - generic [ref=e49]:
+          - paragraph [ref=e50]:
+            - text: "- Previous sessions: created five plain text files (1.txt–5.txt) and"
+            - code [ref=e51]: index.html
+            - text: (self-contained animated ball-sort visualizer).
+          - paragraph [ref=e52]:
+            - text: "- This session (2026-05-31): polished and hardened"
+            - code [ref=e53]: index.html
+            - text: per review feedback.
+        - paragraph [ref=e54]: Key decisions
+        - generic [ref=e57]:
+          - paragraph [ref=e58]:
+            - text: "- Changed sorted-state status label from"
+            - code [ref=e59]: "'Sorted!'"
+            - text: to
+            - code [ref=e60]: "'Sorted ✓'"
+            - text: — the ✓ makes completion clearer at a glance.
+          - paragraph [ref=e61]:
+            - text: "- Added"
+            - code [ref=e62]: "max-width: 100%"
+            - text: to the canvas CSS rule so the page doesn't clip on viewports narrower than 900 px; the internal canvas coordinate system (900×600) is untouched, so all JS logic is unaffected.
+          - paragraph [ref=e63]:
+            - text: "- Speed-slider live-update and shuffle velocity-reset were already correct:"
+            - code [ref=e64]: startSwapTimer()
+            - text: clears and restarts the interval immediately on slider input, and
+            - code [ref=e65]: createBalls()
+            - text: constructs fresh objects with
+            - code [ref=e66]: vx
+            - text: /
+            - code [ref=e67]: vy
+            - text: = 0 on every shuffle.
+        - paragraph [ref=e68]: Issues encountered
+        - paragraph [ref=e72]: "- None; existing logic for speed slider and velocity reset was already correct — only the status text and responsive CSS needed fixing."
+        - paragraph [ref=e73]: What a future session should know
+        - generic [ref=e76]:
+          - paragraph [ref=e77]:
+            - text: "- The bubble-sort swap sequence is pre-computed at init; animation just steps through"
+            - code [ref=e78]: swaps[]
+            - text: — the sorted result is deterministic and always correct.
+          - paragraph [ref=e79]:
+            - text: "-"
+            - code [ref=e80]: 1.txt
+            - text: through
+            - code [ref=e81]: 5.txt
+            - text: must not be modified or deleted per task constraints.
+          - paragraph [ref=e82]:
+            - text: "- No build step needed — open"
+            - code [ref=e83]: index.html
+            - text: directly via
+            - code [ref=e84]: file://
+            - text: or any static server.
+      - generic [ref=e85]:
+        - generic [ref=e86]: Merged ✓
+        - button "← Board" [ref=e87] [cursor=pointer]

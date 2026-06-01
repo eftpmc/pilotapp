@@ -1,0 +1,39 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - button "pilot" [ref=e5] [cursor=pointer]:
+      - img [ref=e6]
+      - text: pilot
+    - generic [ref=e11]:
+      - link "Today" [ref=e12] [cursor=pointer]:
+        - /url: /
+      - link "Agents" [ref=e13] [cursor=pointer]:
+        - /url: /employees
+      - link "Projects" [ref=e14] [cursor=pointer]:
+        - /url: /projects
+      - link "Settings" [ref=e15] [cursor=pointer]:
+        - /url: /settings
+    - button "Sign out" [ref=e17] [cursor=pointer]
+  - main [ref=e18]:
+    - generic [ref=e20]:
+      - generic [ref=e21]:
+        - heading "Projects" [level=1] [ref=e22]
+        - button "+ New" [ref=e23] [cursor=pointer]
+      - generic [ref=e24]:
+        - button "test local Idle" [ref=e25] [cursor=pointer]:
+          - generic [ref=e26]:
+            - generic [ref=e27]: test
+            - generic [ref=e29]: local
+          - generic [ref=e31]: Idle
+          - img [ref=e32]
+        - button "sewing-studio local Idle" [ref=e34] [cursor=pointer]:
+          - generic [ref=e35]:
+            - generic [ref=e36]: sewing-studio
+            - generic [ref=e38]: local
+          - generic [ref=e40]: Idle
+          - img [ref=e41]
+        - button "test local Idle" [ref=e43] [cursor=pointer]:
+          - generic [ref=e44]:
+            - generic [ref=e45]: test
+            - generic [ref=e47]: local
+          - generic [ref=e49]: Idle
+          - img [ref=e50]

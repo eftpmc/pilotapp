@@ -3,17 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
 import { sessions, employees, tasks } from '../api/client'
 import type { Session, Employee, Task, SessionStatus } from '../api/client'
-import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { EmptyState } from '@/components/EmptyState'
-import { RowSkeleton } from '@/components/Skeleton'
 import { AgentAvatar } from '@/components/AgentAvatar'
-import { cn } from '@/lib/utils'
-import { History, GitBranch } from 'lucide-react'
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function timeAgo(iso: string) {
   const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
@@ -25,67 +15,47 @@ function timeAgo(iso: string) {
   return `${Math.floor(h / 24)}d ago`
 }
 
-const STATUS_CONFIG = {
-  running: { label: 'Running', variant: 'success'     as const, dot: 'bg-green-500 animate-[pulse_1.6s_ease-out_infinite]', glow: 'var(--glow-green)' },
-  idle:    { label: 'Idle',    variant: 'outline'     as const, dot: 'bg-muted-foreground/40',                               glow: 'none' },
-  done:    { label: 'Done',    variant: 'outline'     as const, dot: 'bg-muted-foreground/40',                               glow: 'none' },
-  merged:  { label: 'Merged',  variant: 'outline'     as const, dot: 'bg-primary/50',                                        glow: 'none' },
-  error:   { label: 'Error',   variant: 'destructive' as const, dot: 'bg-red-500',                                           glow: 'var(--glow-red)' },
+const STATUS_DOT: Record<string, string> = {
+  running: 'green pulse',
+  idle:    'idle',
+  done:    'idle',
+  merged:  'indigo',
+  error:   'red',
 }
 
-// ---------------------------------------------------------------------------
-// Session row
-// ---------------------------------------------------------------------------
+const STATUS_LABEL: Record<string, [string, string]> = {
+  running: ['Running', 'var(--green)'],
+  idle:    ['Idle',    'var(--faint)'],
+  done:    ['Done',    'var(--muted)'],
+  merged:  ['Merged',  'var(--indigo)'],
+  error:   ['Error',   'var(--red)'],
+}
 
 function SessionRow({ session, agent, task, onClick }: {
   session: Session; agent?: Employee; task?: Task; onClick: () => void
 }) {
-  const cfg = STATUS_CONFIG[session.status] ?? STATUS_CONFIG.idle
+  const dotClass = STATUS_DOT[session.status] ?? 'idle'
+  const [label, color] = STATUS_LABEL[session.status] ?? ['Unknown', 'var(--muted)']
   const isSpec = !!session.specId
 
   return (
-    <button
-      onClick={onClick}
-      className="w-full flex items-center gap-3.5 px-5 py-3.5 text-left transition-colors hover:bg-muted/30 cursor-pointer bg-transparent border-none border-b border-border/40 last:border-0"
-      style={cfg.glow !== 'none' ? { boxShadow: `inset 3px 0 0 var(--${session.status === 'running' ? 'green' : 'destructive'})` } : { boxShadow: 'inset 3px 0 0 transparent' }}
-    >
-      {/* Status dot */}
-      <span className={cn('w-2 h-2 rounded-full shrink-0', cfg.dot)} />
-
-      {/* Avatar */}
-      <AgentAvatar agent={agent} size={28} />
-
-      {/* Content */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-foreground truncate">
-            {task?.title ?? (isSpec ? 'Planning session' : session.branch)}
-          </span>
-          {isSpec && (
-            <span className="text-[10px] font-mono text-muted-foreground/60 shrink-0">plan</span>
-          )}
+    <button className="row" onClick={onClick}>
+      <span className={`dot ${dotClass}`} />
+      <AgentAvatar agent={agent} size={26} running={session.status === 'running'} />
+      <div className="row-main">
+        <div className="row-title">
+          {task?.title ?? (isSpec ? 'Planning session' : session.branch)}
         </div>
-        <div className="flex items-center gap-1.5 mt-0.5">
-          <GitBranch className="h-3 w-3 text-muted-foreground/50 shrink-0" />
-          <span className="font-mono text-[11px] text-muted-foreground truncate">{session.branch}</span>
+        <div className="row-meta">
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{session.branch}</span>
+          {isSpec && <><span className="sep">·</span><span>plan</span></>}
         </div>
       </div>
-
-      {/* Right */}
-      <div className="flex items-center gap-3 shrink-0">
-        <span
-        className="text-xs text-muted-foreground tabular-nums"
-        title={new Date(session.createdAt).toLocaleString()}
-      >{timeAgo(session.createdAt)}</span>
-        <Badge variant={cfg.variant} className="text-[10px] shrink-0">{cfg.label}</Badge>
-      </div>
+      <span className="row-time">{timeAgo(session.createdAt)}</span>
+      <span className="chip" style={{ color, borderColor: 'transparent', background: 'color-mix(in srgb, ' + color + ' 10%, transparent)' }}>{label}</span>
     </button>
   )
 }
-
-// ---------------------------------------------------------------------------
-// Page
-// ---------------------------------------------------------------------------
 
 type Filter = 'all' | SessionStatus
 
@@ -108,8 +78,8 @@ export default function SessionsPage() {
     enabled: !!projectId,
     refetchInterval: 5000,
   })
-  const { data: agentList  = [] } = useQuery({ queryKey: ['employees'],         queryFn: () => employees.list() })
-  const { data: taskList   = [] } = useQuery({ queryKey: ['tasks', projectId], queryFn: () => tasks.list({ projectId }), enabled: !!projectId })
+  const { data: agentList = [] } = useQuery({ queryKey: ['employees'],         queryFn: () => employees.list() })
+  const { data: taskList  = [] } = useQuery({ queryKey: ['tasks', projectId], queryFn: () => tasks.list({ projectId }), enabled: !!projectId })
 
   function agentFor(s: Session) { return agentList.find(a => a.id === s.agentId) }
   function taskFor(s: Session)  { return taskList.find(t => t.id === s.workTaskId) }
@@ -117,69 +87,58 @@ export default function SessionsPage() {
   const sorted = [...sessionList].sort((a, b) => {
     const order: Record<string, number> = { running: 0, idle: 1, error: 2, done: 3, merged: 4 }
     const od = (order[a.status] ?? 5) - (order[b.status] ?? 5)
-    if (od !== 0) return od
-    return b.createdAt.localeCompare(a.createdAt)
+    return od !== 0 ? od : b.createdAt.localeCompare(a.createdAt)
   })
 
   const filtered = filter === 'all' ? sorted : sorted.filter(s => s.status === filter)
-
-  // Only show filter tabs that have at least one session
-  const activeCounts = new Map<string, number>()
-  for (const s of sessionList) activeCounts.set(s.status, (activeCounts.get(s.status) ?? 0) + 1)
-  const visibleFilters = FILTERS.filter(f => f.key === 'all' || (activeCounts.get(f.key) ?? 0) > 0)
+  const counts = new Map<string, number>()
+  for (const s of sessionList) counts.set(s.status, (counts.get(s.status) ?? 0) + 1)
+  const visibleFilters = FILTERS.filter(f => f.key === 'all' || (counts.get(f.key) ?? 0) > 0)
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col bg-background">
-      <div className="h-14 shrink-0 flex items-center gap-3 px-6 border-b border-border/60">
-        <span className="text-sm font-semibold text-foreground">Sessions</span>
-        {sessionList.length > 0 && (
-          <span className="font-mono text-xs text-muted-foreground">{sessionList.length}</span>
-        )}
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflowY: 'auto', background: 'var(--bg)' }}>
+
+      <div className="page-content narrow" style={{ paddingTop: 32, paddingBottom: 60 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 22 }}>
+          <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: 24, fontWeight: 420, letterSpacing: '-0.02em', margin: 0 }}>History</h2>
+          <span className="count">{sessionList.length}</span>
+        </div>
+
         {visibleFilters.length > 2 && (
-          <div className="flex items-center gap-1 ml-2">
-            {visibleFilters.map(f => (
-              <button key={f.key} onClick={() => setFilter(f.key)}
-                className={cn(
-                  'px-2.5 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer border-none',
-                  filter === f.key
-                    ? 'bg-primary/15 text-primary'
-                    : 'bg-transparent text-muted-foreground hover:text-foreground hover:bg-muted/60'
-                )}>
-                {f.label}
-                {f.key !== 'all' && activeCounts.get(f.key) && (
-                  <span className="ml-1 font-mono opacity-60">{activeCounts.get(f.key)}</span>
-                )}
-              </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 18, flexWrap: 'wrap' }}>
+          {visibleFilters.map(f => (
+            <button key={f.key} onClick={() => setFilter(f.key)}
+              style={{
+                padding: '5px 9px', borderRadius: 8, fontSize: 13, fontWeight: 500,
+                border: 'none', cursor: 'pointer', background: 'none',
+                color: filter === f.key ? 'var(--ink)' : 'var(--muted)',
+                fontFamily: 'inherit',
+              }}
+              onMouseOver={e => { if (filter !== f.key) e.currentTarget.style.background = 'var(--panel)' }}
+              onMouseOut={e => { if (filter !== f.key) e.currentTarget.style.background = 'none' }}
+            >
+              {f.label}
+              {f.key !== 'all' && counts.get(f.key) && (
+                <span style={{ marginLeft: 5, opacity: 0.45, fontFamily: 'var(--font-mono)', fontSize: 11 }}>{counts.get(f.key)}</span>
+              )}
+            </button>
+          ))}
+        </div>
+        )}
+
+        {isLoading ? (
+          <div style={{ color: 'var(--muted)', fontSize: 13, padding: '32px 0' }}>Loading…</div>
+        ) : filtered.length === 0 ? (
+          <p className="empty-line">{filter === 'all' ? 'No sessions yet.' : `No ${filter} sessions.`}</p>
+        ) : (
+          <div className="rows">
+            {filtered.map(s => (
+              <SessionRow key={s.id} session={s} agent={agentFor(s)} task={taskFor(s)}
+                onClick={() => navigate(`/sessions/${s.id}`)} />
             ))}
           </div>
         )}
       </div>
-
-      <ScrollArea className="flex-1">
-        {isLoading ? (
-          <div className="flex flex-col">
-            {Array.from({ length: 5 }).map((_, i) => <RowSkeleton key={i} />)}
-          </div>
-        ) : filtered.length === 0 ? (
-          <EmptyState
-            icon={History}
-            title={filter === 'all' ? 'No sessions yet' : `No ${filter} sessions`}
-            description={filter === 'all' ? 'Sessions are created when you assign a task to an agent from the Board.' : 'Try a different filter.'}
-          />
-        ) : (
-          <div className="flex flex-col">
-            {filtered.map(s => (
-              <SessionRow
-                key={s.id}
-                session={s}
-                agent={agentFor(s)}
-                task={taskFor(s)}
-                onClick={() => navigate(`/sessions/${s.id}`)}
-              />
-            ))}
-          </div>
-        )}
-      </ScrollArea>
     </div>
   )
 }

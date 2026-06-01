@@ -1,31 +1,26 @@
 import * as React from 'react'
-import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
-const badgeVariants = cva(
-  'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors',
-  {
-    variants: {
-      variant: {
-        default:     'bg-primary/8 text-primary',
-        pill:        'bg-primary/8 text-primary',
-        secondary:   'bg-secondary text-secondary-foreground',
-        outline:     'bg-muted text-muted-foreground border-0',
-        success:     'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400',
-        warning:     'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400',
-        destructive: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400',
-      },
-    },
-    defaultVariants: { variant: 'default' },
-  }
-)
-
-export interface BadgeProps
-  extends React.HTMLAttributes<HTMLDivElement>,
-    VariantProps<typeof badgeVariants> {}
-
-function Badge({ className, variant, ...props }: BadgeProps) {
-  return <div className={cn(badgeVariants({ variant }), className)} {...props} />
+export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
+  variant?: 'default' | 'secondary' | 'outline' | 'success' | 'warning' | 'destructive' | 'pill'
 }
 
-export { Badge, badgeVariants }
+const variantStyle: Record<string, React.CSSProperties> = {
+  default:     { color: 'var(--indigo)',   background: 'var(--indigo-wash)' },
+  pill:        { color: 'var(--indigo)',   background: 'var(--indigo-wash)' },
+  secondary:   { color: 'var(--ink-2)',    background: 'var(--panel-2)', border: '1px solid var(--rule)' },
+  outline:     { color: 'var(--muted)',    background: 'var(--panel)',   border: '1px solid var(--rule)' },
+  success:     { color: 'var(--green)',    background: 'color-mix(in srgb, var(--green) 10%, transparent)' },
+  warning:     { color: 'var(--amber)',    background: 'color-mix(in srgb, var(--amber) 10%, transparent)' },
+  destructive: { color: 'var(--red)',      background: 'color-mix(in srgb, var(--red)   10%, transparent)' },
+}
+
+export function Badge({ className, variant = 'default', style, ...props }: BadgeProps) {
+  return (
+    <span
+      className={cn('chip', className)}
+      style={{ ...variantStyle[variant], ...style }}
+      {...props}
+    />
+  )
+}

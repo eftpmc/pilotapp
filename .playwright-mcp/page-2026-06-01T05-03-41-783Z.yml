@@ -1,0 +1,67 @@
+- generic [ref=e2]:
+  - navigation [ref=e295]:
+    - button "pilot" [ref=e296] [cursor=pointer]:
+      - img [ref=e297]
+      - text: pilot
+    - generic [ref=e302]:
+      - button "Today 2" [ref=e303] [cursor=pointer]:
+        - text: Today
+        - generic [ref=e304]: "2"
+      - button "Agents" [ref=e305] [cursor=pointer]
+      - button "Projects" [ref=e306] [cursor=pointer]
+      - button "Knowledge" [ref=e307] [cursor=pointer]
+    - generic [ref=e308]:
+      - button "⌘K" [ref=e309] [cursor=pointer]:
+        - img [ref=e310]
+        - generic [ref=e313]: ⌘K
+      - button "Toggle theme" [ref=e314] [cursor=pointer]:
+        - img [ref=e315]
+      - button "New task" [ref=e317] [cursor=pointer]:
+        - img [ref=e318]
+        - generic [ref=e320]: New task
+      - generic "You" [ref=e321]: JD
+  - generic [ref=e323]:
+    - button "Acme App" [ref=e324] [cursor=pointer]:
+      - img [ref=e325]
+      - text: Acme App
+    - generic [ref=e327]:
+      - generic [ref=e328]:
+        - generic [ref=e329]: Refactor the auth session flow
+        - generic [ref=e330]:
+          - generic [ref=e331]: DV
+          - text: Devon
+          - generic [ref=e332]: ·
+          - generic [ref=e333]: Running
+      - generic [ref=e335]:
+        - button "Stop" [ref=e336] [cursor=pointer]
+        - button "Discard" [ref=e337] [cursor=pointer]
+    - generic [ref=e338]:
+      - generic [ref=e339]:
+        - generic [ref=e340]: 4:21:22
+        - generic [ref=e341]: Elapsed
+      - generic [ref=e342]:
+        - generic [ref=e343]: 38.2k
+        - generic [ref=e344]: Tokens
+      - generic [ref=e345]:
+        - generic [ref=e346]: "7"
+        - generic [ref=e347]: Files
+      - generic [ref=e348]:
+        - generic [ref=e349]: $0.42
+        - generic [ref=e350]: Cost
+    - generic [ref=e351]:
+      - button "Story" [ref=e352] [cursor=pointer]
+      - button "Output" [ref=e353] [cursor=pointer]
+      - button "Diff" [ref=e354] [cursor=pointer]
+    - generic [ref=e356]:
+      - paragraph [ref=e359]:
+        - text: I started by reading through how sessions are created today, mapping every place a token gets minted.
+        - text: Read · src/auth/session.ts
+      - paragraph [ref=e362]: There were three separate call sites doing it by hand. I pulled them into a single issueToken() helper so the rules live in one place.
+      - paragraph [ref=e365]:
+        - text: Then I threaded the new helper through the login, refresh, and impersonation paths, deleting the duplicated expiry math as I went.
+        - text: Edit · src/auth/session.ts
+      - paragraph [ref=e368]: Ran the suite — 41 passing, nothing red. I also added a focused test for the refresh edge case that used to be implicit.
+      - paragraph [ref=e371]:
+        - text: "Last thing: a short changelog note so the next person knows the token shape moved."
+        - text: Write · CHANGELOG.md
+      - generic [ref=e372]: still working…

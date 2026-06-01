@@ -1,35 +1,161 @@
-import { useEffect, useState } from 'react'
-import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { sessions } from '../api/client'
+import { sessions, employees, projects, tasks } from '../api/client'
 import { cn } from '@/lib/utils'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import {
-  Home, LayoutGrid, Users, FolderOpen, BookOpen, Wrench, Settings, LogOut,
+  BookOpen, ChevronRight, FolderOpen, Home, LogOut, Moon, Search,
+  Settings, Sun, Users, Wrench,
 } from 'lucide-react'
 
-const COMPANY_NAV = [
-  { label: 'Overview',  icon: Home,       path: '/',          end: true  },
-  { label: 'Work',      icon: LayoutGrid, path: '/work',      end: false },
-  { label: 'Employees', icon: Users,      path: '/employees', end: false },
-  { label: 'Projects',  icon: FolderOpen, path: '/projects',  end: false },
-  { label: 'Knowledge', icon: BookOpen,   path: '/knowledge', end: false },
-  { label: 'Tools',     icon: Wrench,     path: '/tools',     end: false },
+const NAV = [
+  { label: 'Today',    path: '/',          end: true,  icon: Home },
+  { label: 'Agents',   path: '/employees', end: false, icon: Users },
+  { label: 'Knowledge', path: '/knowledge', end: false, icon: BookOpen },
+  { label: 'Tools', path: '/tools', end: false, icon: Wrench },
+  { label: 'Settings', path: '/settings', end: false, icon: Settings },
 ]
 
-function useIsDesktop() {
-  const [yes, setYes] = useState(() => window.innerWidth >= 768)
-  useEffect(() => {
-    const mq = window.matchMedia('(min-width: 768px)')
-    const handler = () => setYes(mq.matches)
-    mq.addEventListener('change', handler)
-    return () => mq.removeEventListener('change', handler)
-  }, [])
-  return yes
+// ── Theme ──────────────────────────────────────────────────────────────────────
+function getTheme(): 'light' | 'dark' {
+  const stored = localStorage.getItem('pilot.theme')
+  if (stored === 'light' || stored === 'dark') return stored
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
+function applyTheme(t: 'light' | 'dark') {
+  document.documentElement.classList.toggle('dark', t === 'dark')
+  localStorage.setItem('pilot.theme', t)
 }
 
+// ── Command palette ────────────────────────────────────────────────────────────
+interface CmdItem {
+  kind: string
+  label: string
+  sub: string
+  path: string
+}
+
+function CommandPalette({ onClose }: { onClose: () => void }) {
+  const navigate = useNavigate()
+  const [query, setQuery]   = useState('')
+  const [active, setActive] = useState(0)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const listRef  = useRef<HTMLDivElement>(null)
+
+  const { data: projectList  = [] } = useQuery({ queryKey: ['projects'],  queryFn: () => projects.list() })
+  const { data: employeeList = [] } = useQuery({ queryKey: ['employees'], queryFn: () => employees.list() })
+  const { data: sessionList  = [] } = useQuery({ queryKey: ['sessions'],  queryFn: () => sessions.list() })
+  const { data: taskList     = [] } = useQuery({ queryKey: ['tasks'],     queryFn: () => tasks.list() })
+
+  const taskTitle = (id?: string) => id ? taskList.find(t => t.id === id)?.title : undefined
+
+  const all: CmdItem[] = [
+    ...projectList.map(p => ({ kind: 'Project', label: p.name, sub: 'local', path: `/projects/${p.id}` })),
+    ...employeeList.map(e => ({ kind: 'Agent', label: e.name, sub: e.provider ?? '', path: '/employees' })),
+    ...sessionList.slice(0, 40).map(s => ({
+      kind: 'Session',
+      label: taskTitle(s.workTaskId) ?? s.branch ?? s.id.slice(0, 8),
+      sub: s.status,
+      path: `/sessions/${s.id}`,
+    })),
+  ]
+
+  const q = query.toLowerCase().trim()
+  const filtered = q ? all.filter(i => i.label.toLowerCase().includes(q) || i.kind.toLowerCase().includes(q) || i.sub.toLowerCase().includes(q)) : all
+
+  useEffect(() => { inputRef.current?.focus() }, [])
+  useEffect(() => { setActive(0) }, [query])
+
+  function go(item: CmdItem) {
+    navigate(item.path)
+    onClose()
+  }
+
+  function onKey(e: React.KeyboardEvent) {
+    if (e.key === 'ArrowDown')  { e.preventDefault(); setActive(a => Math.min(a + 1, filtered.length - 1)) }
+    if (e.key === 'ArrowUp')    { e.preventDefault(); setActive(a => Math.max(a - 1, 0)) }
+    if (e.key === 'Enter')      { if (filtered[active]) go(filtered[active]) }
+    if (e.key === 'Escape')     { onClose() }
+  }
+
+  useEffect(() => {
+    const el = listRef.current?.querySelector(`[data-idx="${active}"]`) as HTMLElement | null
+    el?.scrollIntoView({ block: 'nearest' })
+  }, [active])
+
+  return (
+    <div className="cmdk-overlay" onClick={onClose}>
+      <div className="cmdk" onClick={e => e.stopPropagation()}>
+        <input
+          ref={inputRef}
+          className="cmdk-input"
+          placeholder="Search agents, projects, sessions…"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={onKey}
+          autoComplete="off"
+          spellCheck={false}
+        />
+        <div className="cmdk-list" ref={listRef}>
+          {filtered.length === 0
+            ? <div className="cmdk-empty">Nothing found</div>
+            : filtered.map((item, i) => (
+              <div
+                key={i}
+                data-idx={i}
+                className={cn('cmdk-item', i === active && 'active')}
+                onMouseEnter={() => setActive(i)}
+                onClick={() => go(item)}
+              >
+                <span className="cmdk-kind">{item.kind}</span>
+                <span className="cmdk-label">{item.label}</span>
+                <span className="cmdk-sub">{item.sub}</span>
+              </div>
+            ))
+          }
+        </div>
+        <div className="cmdk-foot">
+          <span>↑↓ navigate</span>
+          <span>↵ open</span>
+          <span>esc close</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Layout ─────────────────────────────────────────────────────────────────────
 export default function Layout() {
-  const navigate  = useNavigate()
-  const isDesktop = useIsDesktop()
+  const navigate = useNavigate()
+  const location = useLocation()
+
+  const [theme, setTheme]     = useState<'light' | 'dark'>(getTheme)
+  const [paletteOpen, setPalette] = useState(false)
+  const [projectsOpen, setProjectsOpen] = useState(() => localStorage.getItem('pilot.sidebar.projects') !== 'closed')
+
+  function toggleTheme() {
+    const next = theme === 'dark' ? 'light' : 'dark'
+    setTheme(next)
+    applyTheme(next)
+  }
+
+  const openPalette  = useCallback(() => setPalette(true), [])
+  const closePalette = useCallback(() => setPalette(false), [])
+
+  // ⌘K / ctrl+K global shortcut
+  useEffect(() => {
+    function handler(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        setPalette(p => !p)
+      }
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [])
+
+  // Apply saved theme on mount
+  useEffect(() => { applyTheme(theme) }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data: sessionList = [] } = useQuery({
     queryKey: ['sessions'],
@@ -37,16 +163,34 @@ export default function Layout() {
     refetchInterval: 5000,
     staleTime: 3000,
   })
+  const { data: projectList = [] } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => projects.list(),
+  })
+  const { data: taskList = [] } = useQuery({
+    queryKey: ['tasks'],
+    queryFn: () => tasks.list(),
+    refetchInterval: 8000,
+  })
 
+  const reviewCount = sessionList.filter(
+    s => !s.specId && (s.status === 'done' || s.status === 'error')
+  ).length
   const runningCount = sessionList.filter(s => s.status === 'running').length
-  const reviewCount  = sessionList.filter(s => !s.specId && (s.status === 'done' || s.status === 'error')).length
 
-  function badge(label: string) {
-    if (label === 'Work') {
-      if (runningCount > 0) return <span className="ml-auto font-mono text-[11px] tabular-nums text-green-500">{runningCount}</span>
-      if (reviewCount  > 0) return <span className="ml-auto font-mono text-[11px] tabular-nums text-amber-500">{reviewCount}</span>
-    }
-    return null
+  function toggleProjects() {
+    setProjectsOpen(open => {
+      const next = !open
+      localStorage.setItem('pilot.sidebar.projects', next ? 'open' : 'closed')
+      return next
+    })
+  }
+
+  function projectStats(projectId: string) {
+    const running = sessionList.filter(s => s.projectId === projectId && s.status === 'running').length
+    const review = sessionList.filter(s => s.projectId === projectId && !s.specId && (s.status === 'done' || s.status === 'error')).length
+    const queued = taskList.filter(t => t.projectId === projectId && t.status === 'pending').length
+    return { running, review, queued }
   }
 
   function signOut() {
@@ -55,111 +199,91 @@ export default function Layout() {
   }
 
   return (
-    <div className="h-dvh flex bg-background text-foreground overflow-hidden">
+    <div className="app-shell">
+      <aside className="sidebar">
+        <div className="sidebar-brand">
+          <button className="wordmark" onClick={() => navigate('/')}>
+            <span className="pilot-mark">p</span>
+            pilot
+          </button>
+        </div>
 
-      {isDesktop && (
-        <aside className="flex w-52 shrink-0 flex-col border-r border-border bg-background">
-          <div className="h-14 flex items-center px-5 shrink-0">
-            <button
-              onClick={() => navigate('/')}
-              className="font-mono font-black text-xl tracking-tighter text-foreground select-none bg-transparent border-none cursor-pointer hover:opacity-75 transition-opacity p-0"
-            >
-              pilot
-            </button>
-          </div>
-
-          <nav className="px-3 flex flex-col gap-0.5">
-            {COMPANY_NAV.map(({ label, icon: Icon, path, end }) => (
-              <NavLink
-                key={label}
-                to={path}
-                end={end}
-                className={({ isActive }) => cn(
-                  'flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium transition-colors',
-                  isActive
-                    ? 'bg-primary/10 text-primary font-semibold'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                )}
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                <span className="flex-1">{label}</span>
-                {badge(label)}
-              </NavLink>
-            ))}
-          </nav>
-
-          <div className="flex-1" />
-
-          <div className="px-3 pb-4 flex flex-col gap-0.5 border-t border-border/70 pt-4 mt-2">
-            <NavLink
-              to="/settings"
-              className={({ isActive }) => cn(
-                'flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium transition-colors',
-                isActive
-                  ? 'bg-primary/10 text-primary font-semibold'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-              )}
-            >
-              <Settings className="h-4 w-4 shrink-0" />
-              Settings
+        <nav className="sidebar-nav">
+          {NAV.map(({ label, path, end, icon: Icon }) => (
+            <NavLink key={label} to={path} end={end} className={({ isActive }) => cn('side-link', isActive && 'active')}>
+              <Icon size={15} />
+              <span>{label}</span>
+              {label === 'Today' && reviewCount > 0 && <span className="side-count amber">{reviewCount}</span>}
+              {label === 'Today' && reviewCount === 0 && runningCount > 0 && <span className="side-count green">{runningCount}</span>}
             </NavLink>
-            <button
-              onClick={signOut}
-              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors cursor-pointer bg-transparent border-none text-left w-full"
-            >
-              <LogOut className="h-4 w-4 shrink-0" />
-              Sign out
-            </button>
-          </div>
-        </aside>
-      )}
+          ))}
 
-      <main
-        className="flex-1 min-w-0 overflow-hidden flex flex-col bg-background"
-        style={{ paddingBottom: isDesktop ? 0 : 'calc(3.5rem + env(safe-area-inset-bottom, 0px))' }}
-      >
+          <div className="side-group">
+            <button
+              className={cn('side-link side-disclosure', (location.pathname === '/projects' || location.pathname.startsWith('/projects/')) && 'active')}
+              onClick={toggleProjects}
+            >
+              <FolderOpen size={15} />
+              <span>Projects</span>
+              {projectList.length > 0 && <span className="side-count">{projectList.length}</span>}
+              <ChevronRight size={14} className={cn('side-caret', projectsOpen && 'open')} />
+            </button>
+
+            {projectsOpen && (
+              <div className="project-list">
+                <NavLink to="/projects" end className={({ isActive }) => cn('project-link', isActive && 'active')}>
+                  All projects
+                </NavLink>
+                {projectList.map(project => {
+                  const stats = projectStats(project.id)
+                  return (
+                    <NavLink key={project.id} to={`/projects/${project.id}`} className={({ isActive }) => cn('project-link', isActive && 'active')}>
+                      <span className="project-name">{project.name}</span>
+                      <span className="project-pips">
+                        {stats.running > 0 && <span className="mini-dot green" title={`${stats.running} running`} />}
+                        {stats.review > 0 && <span className="mini-dot amber" title={`${stats.review} to review`} />}
+                        {stats.queued > 0 && <span className="mini-dot idle" title={`${stats.queued} queued`} />}
+                      </span>
+                    </NavLink>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </nav>
+
+        <div className="sidebar-footer">
+          <button className="side-link" onClick={openPalette}>
+            <Search size={15} />
+            <span>Search</span>
+            <span className="kbd">⌘K</span>
+          </button>
+          <button className="side-link" onClick={toggleTheme}>
+            {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+            <span>{theme === 'dark' ? 'Light' : 'Dark'} mode</span>
+          </button>
+          <button className="side-link" onClick={signOut}>
+            <LogOut size={15} />
+            <span>Sign out</span>
+          </button>
+        </div>
+      </aside>
+
+      <header className="mobile-topbar">
+        <button className="wordmark" onClick={() => navigate('/')}>
+          <span className="pilot-mark">p</span>
+          pilot
+        </button>
+        <button className="navtool" onClick={openPalette} title="Search">
+          <Search size={15} />
+        </button>
+      </header>
+
+      <main className="app-main">
         <Outlet />
       </main>
 
-      {!isDesktop && (
-        <nav
-          className="fixed bottom-0 inset-x-0 z-50 bg-background border-t border-border/60 flex flex-col"
-          style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
-        >
-          <div className="flex">
-            {[COMPANY_NAV[0], COMPANY_NAV[1], COMPANY_NAV[3]].map(({ label, icon: Icon, path, end }) => (
-              <NavLink
-                key={label}
-                to={path}
-                end={end}
-                className={({ isActive }) => cn(
-                  'flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-[10px] font-medium transition-colors relative',
-                  isActive ? 'text-primary' : 'text-muted-foreground'
-                )}
-              >
-                <Icon className="h-[22px] w-[22px]" />
-                {label}
-                {label === 'Work' && runningCount > 0 && (
-                  <span className="absolute top-2 right-[calc(50%-14px)] w-1.5 h-1.5 rounded-full bg-green-500" />
-                )}
-                {label === 'Work' && runningCount === 0 && reviewCount > 0 && (
-                  <span className="absolute top-2 right-[calc(50%-14px)] w-1.5 h-1.5 rounded-full bg-amber-400" />
-                )}
-              </NavLink>
-            ))}
-            <NavLink
-              to="/settings"
-              className={({ isActive }) => cn(
-                'flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 text-[10px] font-medium transition-colors',
-                isActive ? 'text-primary' : 'text-muted-foreground'
-              )}
-            >
-              <Settings className="h-[22px] w-[22px]" />
-              Settings
-            </NavLink>
-          </div>
-        </nav>
-      )}
+      {paletteOpen && <CommandPalette onClose={closePalette} />}
     </div>
   )
 }

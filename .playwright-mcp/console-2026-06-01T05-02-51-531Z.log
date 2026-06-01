@@ -1,0 +1,5 @@
+[     138ms] [ERROR] Failed to load resource: the server responded with a status of 404 (File not found) @ http://localhost:8744/pilot/pilot/pilot.css:0
+[     139ms] [ERROR] Failed to load resource: the server responded with a status of 404 (File not found) @ http://localhost:8744/pilot/pilot/pilot-app.js:0
+[     140ms] [ERROR] Failed to load resource: the server responded with a status of 404 (File not found) @ http://localhost:8744/pilot/pilot/pilot-ui.js:0
+[     140ms] [ERROR] Failed to load resource: the server responded with a status of 404 (File not found) @ http://localhost:8744/pilot/pilot/pilot-data.js:0
+[     177ms] [ERROR] Failed to load resource: the server responded with a status of 404 (File not found) @ http://localhost:8744/favicon.ico:0

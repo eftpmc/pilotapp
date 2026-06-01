@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -110,7 +109,7 @@ function PersonalityPicker({ value, onChange, compact = false }: {
         value={value}
         onChange={e => onChange(e.target.value)}
         rows={compact ? 2 : 2}
-        placeholder="Describe how this employee should approach their work, or pick a preset above."
+        placeholder="Describe how this agent should approach their work, or pick a preset above."
         className={cn('resize-none', compact && 'text-xs')}
       />
     </div>
@@ -195,11 +194,11 @@ function AddEmployeeDialog({ open, brainList, deptList, defaultDeptId, onClose, 
   return (
     <Dialog open={open} onOpenChange={o => !o && onClose()}>
       <DialogContent>
-        <DialogHeader><DialogTitle>Add Employee</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>Add Agent</DialogTitle></DialogHeader>
         {brainList.length === 0 ? (
           <div className="flex flex-col gap-3">
             <p className="text-sm text-muted-foreground">
-              You need a brain (API connection) before you can add employees.
+              You need a connection (API key) before you can add agents.
             </p>
             <div className="flex gap-2">
               <Button variant="outline" onClick={onClose}>Cancel</Button>
@@ -216,7 +215,7 @@ function AddEmployeeDialog({ open, brainList, deptList, defaultDeptId, onClose, 
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
-                <Label>Brain</Label>
+                <Label>Connection</Label>
                 <Select value={effectiveConnId} onValueChange={setConnId}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -257,7 +256,7 @@ function AddEmployeeDialog({ open, brainList, deptList, defaultDeptId, onClose, 
               <Button variant="outline" onClick={onClose}>Cancel</Button>
               <Button className="flex-1" disabled={!name || !effectiveConnId || loading}
                 onClick={() => onCreate({ name, connectionId: effectiveConnId, personality: personality.trim() || undefined, role, departmentId: departmentId || undefined })}>
-                {loading ? '…' : 'Add Employee'}
+                {loading ? '…' : 'Add Agent'}
               </Button>
             </div>
           </div>
@@ -290,7 +289,7 @@ function KnowledgeDocDialog({ open, doc, onClose, onSave, loading, error }: {
           <div className="flex flex-col gap-1.5">
             <Label>Content</Label>
             <Textarea value={content} onChange={e => setContent(e.target.value)} rows={8}
-              placeholder="Markdown injected only when this employee works." className="font-mono text-xs resize-y" />
+              placeholder="Markdown injected only when this agent works." className="font-mono text-xs resize-y" />
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="flex gap-2">
@@ -328,167 +327,142 @@ function EmployeeCard({ employee, brain, deptList, activeSession, activeTaskTitl
   const [role,        setRole]    = useState<EmployeeRole>(employee.role ?? 'any')
   const [deptId,      setDeptId]  = useState(employee.departmentId ?? '')
 
-  if (confirmDelete) {
-    return (
-      <div className="flex items-center gap-3 px-4 py-3 bg-destructive/5">
-        <p className="text-xs text-muted-foreground flex-1">Delete <span className="font-semibold text-foreground">{employee.name}</span>? Active sessions will be removed.</p>
-        <Button size="sm" variant="outline" onClick={() => setConfDel(false)}>Cancel</Button>
-        <Button size="sm" variant="destructive" onClick={() => { onDelete(); setConfDel(false) }}>Delete</Button>
-      </div>
-    )
+  const isActive = !!activeSession
+
+  const panelStyle: React.CSSProperties = {
+    padding: '14px 4px 14px 52px',
+    borderTop: '1px solid var(--rule-soft)',
+    background: 'var(--panel)',
+    display: 'flex', flexDirection: 'column', gap: 12,
   }
 
   return (
     <div>
       {/* Main row */}
-      <div className="flex items-center gap-3 px-4 py-3.5">
-        <div className="relative shrink-0">
-          <AgentAvatar agent={employee} size={32} />
-          {activeSession && <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-500 border-2 border-card" />}
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-foreground">{employee.name}</span>
+      <div className="row" style={{ cursor: 'default', alignItems: 'center' }}>
+        <AgentAvatar agent={employee} size={32} running={isActive} />
+        <div className="row-main">
+          <div className="row-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {employee.name}
             {employee.role && employee.role !== 'any' && (
-              <Badge variant="outline" className="text-[10px] font-mono capitalize">{employee.role}</Badge>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--faint)', fontWeight: 400 }}>{employee.role}</span>
             )}
           </div>
-          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+          <div className="row-meta">
             {brain && <ProviderBadge type={brain.type} />}
-            {brain?.model && <span className="font-mono text-[10px] text-muted-foreground">{brain.model}</span>}
-            {activeSession
-              ? <LiveBadge createdAt={activeSession.createdAt} />
-              : <span className="text-[10px] text-muted-foreground/50">Idle</span>}
-            {activeSession && activeTaskTitle && (
-              <span className="text-[10px] text-muted-foreground truncate max-w-[140px]">{activeTaskTitle}</span>
-            )}
+            {brain?.model && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--muted)' }}>{brain.model}</span>}
+            {isActive ? <LiveBadge createdAt={activeSession!.createdAt} /> : <span style={{ fontSize: 10, color: 'var(--faint)' }}>idle</span>}
+            {isActive && activeTaskTitle && <span style={{ fontSize: 10, color: 'var(--muted)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{activeTaskTitle}</span>}
           </div>
         </div>
-        <div className="flex items-center gap-1 shrink-0">
-          <Button size="sm" variant="ghost" className={cn('h-7 px-2 text-xs', showT ? 'text-primary' : 'text-muted-foreground hover:text-foreground')} onClick={() => setShowT(s => !s)}>
-            {assignedTools.length > 0 ? `${assignedTools.length} tool${assignedTools.length !== 1 ? 's' : ''}` : 'tools'}
-          </Button>
-          <Button size="sm" variant="ghost" className={cn('h-7 px-2 text-xs', showK ? 'text-primary' : 'text-muted-foreground hover:text-foreground')} onClick={() => setShowK(s => !s)}>
-            {knowledgeDocs.length > 0 ? `${knowledgeDocs.length} docs` : 'knowledge'}
-          </Button>
-          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground" onClick={() => setEditing(e => !e)}>
-            {editing ? 'Done' : 'Edit'}
-          </Button>
-          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive" onClick={() => setConfDel(true)}>
-            Delete
-          </Button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+          {[
+            { key: 'tools',     label: assignedTools.length > 0 ? `${assignedTools.length} tools` : 'tools',           active: showT, toggle: () => setShowT(s => !s) },
+            { key: 'knowledge', label: knowledgeDocs.length > 0 ? `${knowledgeDocs.length} docs` : 'knowledge',        active: showK, toggle: () => setShowK(s => !s) },
+            { key: 'edit',      label: editing ? 'done' : 'edit',                                                       active: editing, toggle: () => setEditing(e => !e) },
+          ].map(({ key, label, active, toggle }) => (
+            <button key={key} onClick={toggle} style={{
+              fontSize: 12, padding: '4px 10px', borderRadius: 7, border: 'none', cursor: 'pointer',
+              background: active ? 'var(--panel-2)' : 'none',
+              color: active ? 'var(--ink)' : 'var(--muted)',
+              fontFamily: 'inherit', transition: 'color .12s, background .12s',
+            }}>{label}</button>
+          ))}
+          {confirmDelete ? (
+            <>
+              <button onClick={() => setConfDel(false)} style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>cancel</button>
+              <button onClick={() => { onDelete(); setConfDel(false) }} style={{ fontSize: 12, color: 'var(--red)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>confirm</button>
+            </>
+          ) : (
+            <button onClick={() => setConfDel(true)} style={{ fontSize: 12, color: 'var(--faint)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', transition: 'color .12s' }}
+              onMouseOver={e => (e.currentTarget.style.color = 'var(--red)')}
+              onMouseOut={e => (e.currentTarget.style.color = 'var(--faint)')}
+            >delete</button>
+          )}
         </div>
       </div>
 
       {/* Edit panel */}
       {editing && (
-        <>
-          <Separator />
-          <div className="flex flex-col gap-3 px-4 py-3.5 bg-muted/20">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1">
-                <Label className="text-xs">Name</Label>
-                <Input value={name} onChange={e => setName(e.target.value)} className="h-8 text-xs" />
-              </div>
-              <div className="flex flex-col gap-1">
-                <Label className="text-xs">Department</Label>
-                <Select value={deptId || undefined} onValueChange={setDeptId}>
-                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="None" /></SelectTrigger>
-                  <SelectContent>
-                    {deptList.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs">Default Role</Label>
-              <div className="grid grid-cols-5 gap-1">
-                {ROLES.map(r => (
-                  <button key={r.value} type="button" onClick={() => setRole(r.value)} className={cn(
-                    'py-1 px-1.5 rounded border text-[10px] font-semibold transition-colors cursor-pointer',
-                    role === r.value ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-transparent text-muted-foreground hover:text-foreground'
-                  )}>{r.label}</button>
-                ))}
-              </div>
-            </div>
-            <div className="flex flex-col gap-1">
-              <Label className="text-xs">Personality</Label>
-              <PersonalityPicker value={personality} onChange={setPersona} compact />
-            </div>
-            <div className="flex gap-2 justify-end">
-              <Button size="sm" variant="outline" onClick={() => { setEditing(false); setName(employee.name); setPersona(employee.personality ?? ''); setRole(employee.role ?? 'any'); setDeptId(employee.departmentId ?? '') }}>Cancel</Button>
-              <Button size="sm" onClick={() => { onUpdate({ name: name.trim(), personality: personality.trim() || undefined, role, departmentId: deptId || null }); setEditing(false) }}>Save</Button>
+        <div style={panelStyle}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div className="field"><Label>Name</Label><Input value={name} onChange={e => setName(e.target.value)} /></div>
+            <div className="field">
+              <Label>Department</Label>
+              <Select value={deptId || undefined} onValueChange={setDeptId}>
+                <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                <SelectContent>{deptList.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent>
+              </Select>
             </div>
           </div>
-        </>
+          <div className="field">
+            <Label>Default Role</Label>
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+              {ROLES.map(r => (
+                <button key={r.value} type="button" onClick={() => setRole(r.value)}
+                  className={cn('btn sm', role === r.value ? 'primary' : 'ghost')}>{r.label}</button>
+              ))}
+            </div>
+          </div>
+          <div className="field"><Label>Personality</Label><PersonalityPicker value={personality} onChange={setPersona} compact /></div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button className="btn sm" onClick={() => { setEditing(false); setName(employee.name); setPersona(employee.personality ?? ''); setRole(employee.role ?? 'any'); setDeptId(employee.departmentId ?? '') }}>Cancel</button>
+            <button className="btn sm primary" onClick={() => { onUpdate({ name: name.trim(), personality: personality.trim() || undefined, role, departmentId: deptId || null }); setEditing(false) }}>Save</button>
+          </div>
+        </div>
       )}
 
       {/* Tools panel */}
       {showT && (
-        <>
-          <Separator />
-          <div className="px-4 py-3 bg-muted/10 flex flex-col gap-2">
-            <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Equipment</span>
-            {allTools.length === 0 ? (
-              <p className="text-xs text-muted-foreground/60">No tools configured yet. Add MCP tools in <a href="/settings" className="underline underline-offset-2 text-foreground">Settings</a>.</p>
-            ) : (
-              <div className="flex flex-col gap-1">
-                {allTools.map(tool => {
-                  const assigned = assignedTools.some(t => t.id === tool.id)
-                  return (
-                    <div key={tool.id} className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => assigned ? onUnassignTool(tool.id) : onAssignTool(tool.id)}
-                        className={cn(
-                          'flex items-center gap-2 flex-1 text-left px-2 py-1.5 rounded-lg border text-xs transition-colors cursor-pointer bg-transparent',
-                          assigned ? 'border-primary/40 bg-primary/5 text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/40'
-                        )}
-                      >
-                        <span className={cn('w-3.5 h-3.5 rounded border shrink-0 flex items-center justify-center text-[9px] font-bold',
-                          assigned ? 'border-primary bg-primary text-primary-foreground' : 'border-border')}>
-                          {assigned ? '✓' : ''}
-                        </span>
-                        <span className="font-medium">{tool.name}</span>
-                        {tool.description && <span className="text-[10px] text-muted-foreground/60 truncate">{tool.description}</span>}
-                      </button>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        </>
+        <div style={panelStyle}>
+          <p style={{ fontSize: 11, color: 'var(--muted)', margin: 0, fontFamily: 'var(--font-mono)', letterSpacing: '.08em', textTransform: 'uppercase' }}>Tools</p>
+          {allTools.length === 0 ? (
+            <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: 0 }}>No tools yet. <a href="/settings" style={{ color: 'var(--indigo)' }}>Add in Settings.</a></p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {allTools.map(tool => {
+                const assigned = assignedTools.some(t => t.id === tool.id)
+                return (
+                  <button key={tool.id} type="button" onClick={() => assigned ? onUnassignTool(tool.id) : onAssignTool(tool.id)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 7, border: `1px solid ${assigned ? 'color-mix(in srgb, var(--indigo) 30%, transparent)' : 'transparent'}`, background: assigned ? 'var(--indigo-wash)' : 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', width: '100%', transition: 'background .12s' }}
+                    onMouseOver={e => { if (!assigned) e.currentTarget.style.background = 'var(--panel-2)' }}
+                    onMouseOut={e => { if (!assigned) e.currentTarget.style.background = 'none' }}
+                  >
+                    <span style={{ width: 14, height: 14, borderRadius: 4, border: `1px solid ${assigned ? 'var(--indigo)' : 'var(--rule)'}`, background: assigned ? 'var(--indigo)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 9, color: 'var(--on-indigo)' }}>{assigned ? '✓' : ''}</span>
+                    <span style={{ fontSize: 13, color: 'var(--ink)' }}>{tool.name}</span>
+                    {tool.description && <span style={{ fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tool.description}</span>}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Knowledge panel */}
       {showK && (
-        <>
-          <Separator />
-          <div className="px-4 py-3 bg-muted/10 flex flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Personal Knowledge</span>
-              <div className="flex-1" />
-              <Button size="sm" variant="ghost" className="h-6 px-2 text-[11px] text-primary" onClick={onAddKnowledge}>+ Add</Button>
-            </div>
-            {knowledgeDocs.length === 0 ? (
-              <p className="text-xs text-muted-foreground/60">No personal knowledge yet.</p>
-            ) : (
-              <div className="flex flex-col gap-1.5">
-                {knowledgeDocs.map(doc => (
-                  <div key={doc.id} className="flex items-center gap-2">
-                    <div className="flex-1 min-w-0">
-                      <span className="text-xs font-medium text-foreground">{doc.title}</span>
-                      {doc.content && <span className="text-[11px] text-muted-foreground ml-2 truncate">{doc.content.split('\n')[0].slice(0, 60)}</span>}
-                    </div>
-                    <button onClick={() => onEditKnowledge(doc)} className="text-[11px] text-muted-foreground hover:text-foreground cursor-pointer bg-transparent border-none px-1">edit</button>
-                    <button onClick={() => onDeleteKnowledge(doc.id)} className="text-[11px] text-muted-foreground hover:text-destructive cursor-pointer bg-transparent border-none px-1">×</button>
-                  </div>
-                ))}
-              </div>
-            )}
+        <div style={panelStyle}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <p style={{ fontSize: 11, color: 'var(--muted)', margin: 0, fontFamily: 'var(--font-mono)', letterSpacing: '.08em', textTransform: 'uppercase', flex: 1 }}>Personal knowledge</p>
+            <button onClick={onAddKnowledge} style={{ fontSize: 12.5, color: 'var(--indigo)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>+ Add</button>
           </div>
-        </>
+          {knowledgeDocs.length === 0 ? (
+            <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: 0 }}>No personal knowledge yet.</p>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {knowledgeDocs.map(doc => (
+                <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <span style={{ fontSize: 13, color: 'var(--ink)' }}>{doc.title}</span>
+                    {doc.content && <span style={{ fontSize: 11, color: 'var(--muted)', marginLeft: 8 }}>{doc.content.split('\n')[0].slice(0, 60)}</span>}
+                  </div>
+                  <button onClick={() => onEditKnowledge(doc)} style={{ fontSize: 11, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '0 4px', fontFamily: 'inherit' }}>edit</button>
+                  <button onClick={() => onDeleteKnowledge(doc.id)} style={{ fontSize: 13, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '0 4px', fontFamily: 'inherit', lineHeight: 1 }}>×</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </div>
   )
@@ -540,64 +514,57 @@ function DepartmentSection({ dept, employeesInDept, brainList, deptList, session
   const isUnassigned = dept === null
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="section" style={{ marginTop: 36 }}>
       {/* Section header */}
-      <div className="flex items-center gap-2 px-1">
-        {!isUnassigned && (
-          <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: dept.color }} />
-        )}
-        <span className={cn('text-xs font-semibold', isUnassigned ? 'text-muted-foreground' : 'text-foreground')}>
+      <div className="section-head" style={{ marginBottom: 4 }}>
+        <h2 style={{ fontSize: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+          {!isUnassigned && <span style={{ width: 8, height: 8, borderRadius: 2, background: dept.color, flexShrink: 0, display: 'inline-block' }} />}
           {isUnassigned ? 'Unassigned' : dept.name}
-        </span>
-        <span className="font-mono text-[10px] text-muted-foreground">{employeesInDept.length}</span>
-        <div className="flex-1" />
+        </h2>
+        <span className="count">{employeesInDept.length}</span>
+        <div style={{ flex: 1 }} />
         {!isUnassigned && !confirmDelDept && (
           <>
-            <button onClick={() => mutations.editDept(dept)} className="text-[11px] text-muted-foreground hover:text-foreground cursor-pointer bg-transparent border-none px-1">edit</button>
-            <button onClick={() => setConfirmDelDept(true)} className="text-[11px] text-muted-foreground hover:text-destructive cursor-pointer bg-transparent border-none px-1">delete</button>
+            <button onClick={() => mutations.editDept(dept)} style={{ fontSize: 12, color: 'var(--faint)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', transition: 'color .12s' }} onMouseOver={e => (e.currentTarget.style.color = 'var(--muted)')} onMouseOut={e => (e.currentTarget.style.color = 'var(--faint)')}>edit</button>
+            <button onClick={() => setConfirmDelDept(true)} style={{ fontSize: 12, color: 'var(--faint)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', transition: 'color .12s' }} onMouseOver={e => (e.currentTarget.style.color = 'var(--red)')} onMouseOut={e => (e.currentTarget.style.color = 'var(--faint)')}>delete</button>
           </>
         )}
         {confirmDelDept && (
           <>
-            <span className="text-[11px] text-muted-foreground">Delete {dept?.name}?</span>
-            <button onClick={() => setConfirmDelDept(false)} className="text-[11px] text-muted-foreground cursor-pointer bg-transparent border-none px-1">cancel</button>
-            <button onClick={() => { mutations.deleteDept(dept!.id); setConfirmDelDept(false) }} className="text-[11px] text-destructive cursor-pointer bg-transparent border-none px-1 font-medium">delete</button>
+            <span style={{ fontSize: 12, color: 'var(--muted)' }}>Delete {dept?.name}?</span>
+            <button onClick={() => setConfirmDelDept(false)} style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>cancel</button>
+            <button onClick={() => { mutations.deleteDept(dept!.id); setConfirmDelDept(false) }} style={{ fontSize: 12, color: 'var(--red)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>delete</button>
           </>
         )}
       </div>
 
-      {/* Employee cards */}
-      {employeesInDept.length > 0 && (
-        <div className="bg-card rounded-2xl overflow-hidden [box-shadow:var(--shadow-card)]">
-          {employeesInDept.map((emp, i) => (
-            <div key={emp.id}>
-              <EmployeeCard
-                employee={emp} brain={brainFor(emp)} deptList={deptList}
-                activeSession={activeSessionFor(emp.id)} activeTaskTitle={activeTaskFor(emp.id)}
-                knowledgeDocs={knowledgeFor(emp.id)}
-                allTools={allTools}
-                assignedTools={assignedToolsMap.get(emp.id) ?? []}
-                onUpdate={body => mutations.updateEmployee(emp.id, body)}
-                onDelete={() => mutations.deleteEmployee(emp.id)}
-                onAddKnowledge={() => setKnowledgeDialog({ open: true, doc: undefined, employeeId: emp.id })}
-                onEditKnowledge={doc => setKnowledgeDialog({ open: true, doc, employeeId: emp.id })}
-                onDeleteKnowledge={id => mutations.deleteKnowledge(id)}
-                onAssignTool={toolId => mutations.assignTool(toolId, emp.id)}
-                onUnassignTool={toolId => mutations.unassignTool(toolId, emp.id)}
-              />
-              {i < employeesInDept.length - 1 && <Separator />}
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Employee rows */}
+      <div className="rows">
+        {employeesInDept.map(emp => (
+          <EmployeeCard
+            key={emp.id}
+            employee={emp} brain={brainFor(emp)} deptList={deptList}
+            activeSession={activeSessionFor(emp.id)} activeTaskTitle={activeTaskFor(emp.id)}
+            knowledgeDocs={knowledgeFor(emp.id)}
+            allTools={allTools}
+            assignedTools={assignedToolsMap.get(emp.id) ?? []}
+            onUpdate={body => mutations.updateEmployee(emp.id, body)}
+            onDelete={() => mutations.deleteEmployee(emp.id)}
+            onAddKnowledge={() => setKnowledgeDialog({ open: true, doc: undefined, employeeId: emp.id })}
+            onEditKnowledge={doc => setKnowledgeDialog({ open: true, doc, employeeId: emp.id })}
+            onDeleteKnowledge={id => mutations.deleteKnowledge(id)}
+            onAssignTool={toolId => mutations.assignTool(toolId, emp.id)}
+            onUnassignTool={toolId => mutations.unassignTool(toolId, emp.id)}
+          />
+        ))}
+      </div>
 
-      {/* Add employee to this dept */}
-      <button
-        onClick={() => onAddEmployee(dept?.id)}
-        className="text-[11px] text-muted-foreground hover:text-foreground cursor-pointer bg-transparent border-none text-left px-1 py-0.5 w-fit transition-colors"
-      >
-        + Add employee{!isUnassigned ? ` to ${dept?.name}` : ''}
-      </button>
+      {/* Add agent */}
+      <button onClick={() => onAddEmployee(dept?.id)}
+        style={{ fontSize: 12.5, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', padding: '10px 0', transition: 'color .12s', display: 'block' }}
+        onMouseOver={e => (e.currentTarget.style.color = 'var(--indigo)')}
+        onMouseOut={e => (e.currentTarget.style.color = 'var(--muted)')}
+      >+ Add agent{!isUnassigned && dept ? ` to ${dept.name}` : ''}</button>
 
       <KnowledgeDocDialog
         open={knowledgeDialog.open}
@@ -713,21 +680,20 @@ export default function EmployeesPage() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-background">
-      <div className="max-w-3xl mx-auto px-6 py-8 flex flex-col gap-8">
+    <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)' }}>
+      <div className="page-content" style={{ paddingTop: 52, paddingBottom: 80 }}>
 
-        <div className="flex items-start">
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 8 }}>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Employees</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              {employeeList.length} employee{employeeList.length !== 1 ? 's' : ''}
-              {busyCount > 0 && <> · <span className="text-green-500 font-medium">{busyCount} working</span></>}
+            <h1 className="h-page">Agents</h1>
+            <p className="lede" style={{ marginTop: 12, fontSize: 15 }}>
+              {employeeList.length} agent{employeeList.length !== 1 ? 's' : ''}
+              {busyCount > 0 && <> · <span className="num">{busyCount} working</span></>}
             </p>
           </div>
-          <div className="flex-1" />
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setDeptDialog({ open: true })}>+ Department</Button>
-            <Button size="sm" onClick={() => setAddEmpDialog({ open: true })}>+ Employee</Button>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0, marginTop: 8 }}>
+            <button className="btn sm" onClick={() => setDeptDialog({ open: true })}>+ Department</button>
+            <button className="btn sm primary" onClick={() => setAddEmpDialog({ open: true })}>+ Agent</button>
           </div>
         </div>
 
@@ -760,11 +726,8 @@ export default function EmployeesPage() {
           />
         )}
 
-        {/* Empty state — no departments and no employees */}
         {deptList.length === 0 && employeeList.length === 0 && brainList.length > 0 && (
-          <p className="text-sm text-muted-foreground">
-            No employees yet. Create a department to organize your team, or add an employee directly.
-          </p>
+          <p className="empty-line">No agents yet. Create a department or add an agent directly.</p>
         )}
 
       </div>

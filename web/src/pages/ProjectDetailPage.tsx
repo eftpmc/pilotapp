@@ -1,93 +1,62 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
-import {
-  DndContext, closestCenter, PointerSensor, useSensor, useSensors,
-  type DragEndEvent,
-} from '@dnd-kit/core'
-import {
-  SortableContext, verticalListSortingStrategy, useSortable, arrayMove,
-} from '@dnd-kit/sortable'
-import { restrictToVerticalAxis, restrictToParentElement } from '@dnd-kit/modifiers'
-import { CSS } from '@dnd-kit/utilities'
 import { tasks, employees, sessions, projects, brains } from '../api/client'
 import type { Task, Employee, Session, TaskSize } from '../api/client'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { EmptyState } from '@/components/EmptyState'
-import { CardSkeleton } from '@/components/Skeleton'
 import { AgentAvatar } from '@/components/AgentAvatar'
-import { fmtSecs, useElapsed } from '@/lib/time'
+import { useElapsed, fmtSecs } from '@/lib/time'
 import { cn } from '@/lib/utils'
-import { ListTodo, Loader2, GitMerge, Upload, GripVertical, ChevronDown } from 'lucide-react'
+import { Upload } from 'lucide-react'
 
-// ---------------------------------------------------------------------------
-// Column header
-// ---------------------------------------------------------------------------
-
-const COL_DOT: Record<string, string> = {
-  Queue: 'bg-muted-foreground/40',
-  Working: 'bg-green-500',
-  Review: 'bg-amber-400',
+function CaretIcon() {
+  return <svg className="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 6l6 6-6 6"/></svg>
 }
 
-function ColHead({ title, count }: { title: string; count: number }) {
-  return (
-    <div className="flex items-center gap-2 pb-3 shrink-0">
-      <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', COL_DOT[title] ?? 'bg-muted-foreground/40')} />
-      <span className="text-xs font-semibold text-foreground">{title}</span>
-      <span className="font-mono text-xs text-muted-foreground">{count}</span>
-    </div>
-  )
+function ElapsedTimer({ createdAt }: { createdAt: string }) {
+  const secs = useElapsed(createdAt, true)
+  return <span className="row-time tnum">{fmtSecs(secs)}</span>
 }
 
-// ---------------------------------------------------------------------------
-// Kanban cards
-// ---------------------------------------------------------------------------
-
-const SIZE_COLORS: Record<TaskSize, string> = {
-  xs: 'text-muted-foreground/60 bg-muted/40',
-  s:  'text-blue-500/70 bg-blue-500/8',
-  m:  'text-foreground/60 bg-muted/50',
-  l:  'text-amber-500/80 bg-amber-500/10',
-  xl: 'text-red-500/80 bg-red-500/10',
-}
-
-function SizeChip({ size }: { size?: TaskSize }) {
-  if (!size || size === 'm') return null
-  return (
-    <span className={cn('font-mono text-[9px] uppercase rounded px-1 py-0.5 font-bold', SIZE_COLORS[size])}>
-      {size}
-    </span>
-  )
-}
-
-function AgentPicker({ agentList, onAssign }: { agentList: Employee[]; onAssign: (id: string) => void }) {
+function AgentPickerDropdown({ agentList, onAssign }: { agentList: Employee[]; onAssign: (id: string) => void }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (!open) return
-    function down(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    const down = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
     document.addEventListener('mousedown', down)
     return () => document.removeEventListener('mousedown', down)
   }, [open])
   return (
-    <div ref={ref} className="relative">
-      <button onClick={() => setOpen(o => !o)}
-        className="text-[11px] font-semibold text-primary hover:text-primary/80 cursor-pointer bg-transparent border-none transition-colors">
-        Assign ›
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        className="btn sm"
+        onClick={e => { e.stopPropagation(); setOpen(o => !o) }}
+        style={{ color: 'var(--indigo)', borderColor: 'var(--indigo)', background: 'var(--indigo-wash)' }}
+      >
+        Assign
       </button>
       {open && (
-        <div className="absolute right-0 top-[calc(100%+4px)] z-30 bg-card border border-border rounded-xl shadow-xl overflow-hidden min-w-[130px]">
+        <div style={{
+          position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 30,
+          background: 'var(--bg)', border: '1px solid var(--rule)',
+          borderRadius: 10, overflow: 'hidden', minWidth: 140,
+          boxShadow: 'var(--shadow-dialog)',
+        }}>
           {agentList.map(a => (
             <button key={a.id} onClick={() => { onAssign(a.id); setOpen(false) }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors cursor-pointer bg-transparent border-none text-left">
-              <AgentAvatar agent={a} size={18} />
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                padding: '9px 14px', fontSize: 13, fontWeight: 500, color: 'var(--ink)',
+                background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left',
+              }}
+              onMouseOver={e => (e.currentTarget.style.background = 'var(--panel)')}
+              onMouseOut={e => (e.currentTarget.style.background = 'none')}
+            >
+              <AgentAvatar agent={a} size={22} />
               {a.name}
             </button>
           ))}
@@ -96,225 +65,42 @@ function AgentPicker({ agentList, onAssign }: { agentList: Employee[]; onAssign:
     </div>
   )
 }
-
-function QueueCard({ task, agentList, onAssign, onDelete }: {
-  task: Task; agentList: Employee[]; onAssign: (id: string) => void; onDelete: () => void
-}) {
-  const [expanded, setExpanded] = useState(false)
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id })
-  const style = { transform: CSS.Transform.toString(transform), transition }
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={cn(
-        'bg-card rounded-xl [box-shadow:var(--shadow-card)] border border-dashed border-border/50 select-none',
-        isDragging && 'opacity-50 shadow-2xl ring-1 ring-primary/30',
-      )}
-    >
-      <div className="flex items-start gap-2 p-3.5">
-        {/* Drag handle */}
-        <button
-          {...attributes}
-          {...listeners}
-          className="mt-0.5 text-muted-foreground/40 hover:text-muted-foreground cursor-grab active:cursor-grabbing bg-transparent border-none p-0 shrink-0 touch-none"
-          tabIndex={-1}
-        >
-          <GripVertical className="h-4 w-4" />
-        </button>
-
-        <div className="flex-1 min-w-0 flex flex-col gap-2">
-          {/* Title row */}
-          <div className="flex items-start gap-2">
-            <p className="text-sm font-medium text-foreground leading-snug flex-1">{task.title}</p>
-            {task.prompt && (
-              <button
-                onClick={() => setExpanded(e => !e)}
-                className={cn(
-                  'shrink-0 text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer bg-transparent border-none p-0 mt-0.5',
-                )}
-              >
-                <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', expanded && 'rotate-180')} />
-              </button>
-            )}
-          </div>
-
-          {/* Expanded prompt */}
-          {expanded && task.prompt && (
-            <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap bg-muted/40 rounded-lg px-2.5 py-2">
-              {task.prompt}
-            </p>
-          )}
-
-          {/* Bottom row */}
-          <div className="flex items-center gap-2">
-            <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-[11px] font-mono">
-              {task.baseBranch || 'main'}
-            </span>
-            <SizeChip size={task.size} />
-            <div className="flex-1" />
-            {agentList.length > 0
-              ? <AgentPicker agentList={agentList} onAssign={onAssign} />
-              : <span className="text-[11px] text-muted-foreground">No agents</span>}
-            <button
-              onClick={onDelete}
-              className="text-muted-foreground/50 hover:text-destructive transition-colors cursor-pointer bg-transparent border-none text-base leading-none"
-            >×</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function WorkingCard({ session, agent, task, onClick }: {
-  session: Session; agent?: Employee; task?: Task; onClick: () => void
-}) {
-  const secs = useElapsed(session.createdAt, true)
-  const shortId = session.id.slice(0, 7)
-  return (
-    <button onClick={onClick}
-      className="w-full text-left bg-card rounded-xl p-3.5 flex flex-col gap-2.5 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.99] [box-shadow:var(--shadow-card)] border border-green-500/20">
-      <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2 min-h-[2.5rem]">
-        {task?.title ?? session.branch}
-      </p>
-      <div className="flex items-center gap-2">
-        <AgentAvatar agent={agent} size={18} />
-        <span className="text-xs text-muted-foreground truncate">{agent?.name ?? '—'}</span>
-        <span className="font-mono text-[10px] text-muted-foreground/40">#{shortId}</span>
-        <div className="flex-1" />
-        <span className="font-mono text-[11px] text-green-500 tabular-nums">{fmtSecs(secs)}</span>
-        <Badge variant="success" className="gap-1 shrink-0 text-[10px] px-1.5">
-          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-[pulse_1.6s_ease-out_infinite]" />
-          Live
-        </Badge>
-      </div>
-    </button>
-  )
-}
-
-function ReviewerPicker({ agentList, onPick }: { agentList: Employee[]; onPick: (id: string) => void }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (!open) return
-    function down(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
-    document.addEventListener('mousedown', down)
-    return () => document.removeEventListener('mousedown', down)
-  }, [open])
-  return (
-    <div ref={ref} className="relative">
-      <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={e => { e.stopPropagation(); setOpen(o => !o) }}>
-        Request Review
-      </Button>
-      {open && (
-        <div className="absolute right-0 top-[calc(100%+4px)] z-30 bg-card border border-border rounded-xl shadow-xl overflow-hidden min-w-[150px]">
-          <p className="text-[10px] text-muted-foreground px-3 py-2 border-b border-border/60">Pick reviewer</p>
-          {agentList.map(a => (
-            <button key={a.id} onClick={() => { onPick(a.id); setOpen(false) }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors cursor-pointer bg-transparent border-none text-left">
-              <AgentAvatar agent={a} size={16} />
-              {a.name}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function ReviewCard({ session, agent, task, hasRemote, allAgents, onMerge, onMergePush, onClick, isMerging, onRequestReview }: {
-  session: Session; agent?: Employee; task?: Task
-  hasRemote: boolean; allAgents: Employee[]
-  onMerge: () => void; onMergePush: () => void; onClick: () => void; isMerging?: boolean
-  onRequestReview: (agentId: string) => void
-}) {
-  const isError   = session.status === 'error'
-  const shortId   = session.id.slice(0, 7)
-  const verdict   = session.reviewVerdict
-  const isPending = verdict === 'pending'
-  const approved  = verdict === 'approved'
-  return (
-    <div onClick={onClick}
-      className={cn(
-        'bg-card rounded-xl p-3.5 flex flex-col gap-2.5 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 [box-shadow:var(--shadow-card)]',
-        isError ? 'border border-red-500/25' : approved ? 'border border-green-500/20' : 'border border-amber-400/20'
-      )}>
-      <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2 min-h-[2.5rem]">
-        {task?.title ?? session.branch}
-      </p>
-      <div className="flex items-center gap-2">
-        <AgentAvatar agent={agent} size={18} />
-        <span className="text-xs text-muted-foreground truncate">{agent?.name ?? '—'}</span>
-        <span className="font-mono text-[10px] text-muted-foreground/40">#{shortId}</span>
-        <div className="flex-1" />
-        {approved  && <Badge variant="success"     className="shrink-0 text-[10px]">Approved ✓</Badge>}
-        {verdict === 'changes_requested' && <Badge variant="warning" className="shrink-0 text-[10px]">Changes Requested</Badge>}
-        {isPending && <Badge variant="outline"     className="shrink-0 text-[10px] text-muted-foreground">Reviewing…</Badge>}
-        {!verdict  && !isError && <Badge variant="warning" className="shrink-0 text-[10px]">Review</Badge>}
-        {isError   && <Badge variant="destructive" className="shrink-0 text-[10px]">Error</Badge>}
-      </div>
-      <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
-        {isError ? (
-          <Button size="sm" className="h-7 px-2.5 text-xs flex-1" onClick={onClick}>View & Retry</Button>
-        ) : isPending ? (
-          <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground flex-1" onClick={onClick}>View Output</Button>
-        ) : (
-          <>
-            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground" onClick={onClick}>Log</Button>
-            {!verdict && <ReviewerPicker agentList={allAgents.filter(a => a.id !== session.agentId)} onPick={onRequestReview} />}
-            {hasRemote ? (
-              <>
-                <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs flex-1" onClick={onMerge} disabled={isMerging}>
-                  {isMerging ? '…' : 'Merge'}
-                </Button>
-                <Button size="sm" className="h-7 px-2.5 text-xs gap-1 flex-1" onClick={onMergePush} disabled={isMerging}>
-                  <Upload className="h-3 w-3" />{isMerging ? '…' : 'Push'}
-                </Button>
-              </>
-            ) : (
-              <Button size="sm" className="h-7 px-2.5 text-xs flex-1" onClick={onMerge} disabled={isMerging}>
-                {isMerging ? '…' : 'Merge ✓'}
-              </Button>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Main page
-// ---------------------------------------------------------------------------
-
-type MobileCol = 'Queue' | 'Working' | 'Review'
 
 export default function ProjectDetailPage() {
   const { id: projectId } = useParams<{ id: string }>()
   const qc = useQueryClient()
   const navigate = useNavigate()
-  const [showNew,   setShowNew]   = useState(false)
-  const [mobileCol, setMobileCol] = useState<MobileCol>('Queue')
+  const [showNew, setShowNew] = useState(false)
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const toggleSection = useCallback((id: string) => {
+    setCollapsed(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+  }, [])
 
-  const { data: taskList      = [], isLoading: tasksLoading   } = useQuery({ queryKey: ['tasks',    projectId], queryFn: () => tasks.list({ projectId }),    refetchInterval: 4000 })
-  const { data: agentList     = []                             } = useQuery({ queryKey: ['employees'],           queryFn: () => employees.list() })
-  const { data: sessionList   = [], isLoading: sessionsLoading } = useQuery({ queryKey: ['sessions', projectId], queryFn: () => sessions.list({ projectId }), refetchInterval: 4000 })
-  const { data: projectList   = []                             } = useQuery({ queryKey: ['projects'],             queryFn: () => projects.list() })
-  const { data: connectionList = []                            } = useQuery({ queryKey: ['brains'],              queryFn: () => brains.list() })
-  const isLoading = tasksLoading || sessionsLoading
+  const { data: taskList       = [] } = useQuery({ queryKey: ['tasks',    projectId], queryFn: () => tasks.list({ projectId }),    refetchInterval: 4000 })
+  const { data: agentList      = [] } = useQuery({ queryKey: ['employees'],            queryFn: () => employees.list() })
+  const { data: sessionList    = [] } = useQuery({ queryKey: ['sessions', projectId], queryFn: () => sessions.list({ projectId }), refetchInterval: 4000 })
+  const { data: projectList    = [] } = useQuery({ queryKey: ['projects'],             queryFn: () => projects.list() })
+  const { data: connectionList = [] } = useQuery({ queryKey: ['brains'],               queryFn: () => brains.list() })
+
   const project   = projectList.find(p => p.id === projectId)
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }))
+  const codeSessions  = sessionList.filter(s => !s.specId && !s.parentSessionId)
+  const busyIds       = new Set(codeSessions.filter(s => s.status === 'running').map(s => s.agentId))
+  const quotaConnIds  = new Set(connectionList.filter(c => c.quotaStatus === 'exceeded').map(c => c.id))
+  const idleAgents    = agentList.filter(a => !busyIds.has(a.id) && !quotaConnIds.has(a.connectionId ?? ''))
+  const queue         = taskList.filter(t => t.status === 'pending').sort((a, b) => {
+    const pd = (b.priority ?? 0) - (a.priority ?? 0)
+    return pd !== 0 ? pd : a.createdAt.localeCompare(b.createdAt)
+  })
+  const working       = codeSessions.filter(s => s.status === 'running' || s.status === 'idle')
+  const review        = codeSessions.filter(s => s.status === 'done' || s.status === 'error')
 
-  const runQueue    = useMutation({ mutationFn: () => tasks.runQueue(), onSuccess: () => { qc.invalidateQueries({ queryKey: ['tasks', projectId] }); qc.invalidateQueries({ queryKey: ['sessions', projectId] }) } })
-  const deleteTask  = useMutation({ mutationFn: (id: string) => tasks.delete(id), onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks', projectId] }) })
-  const assignTask  = useMutation({
+  const runQueue     = useMutation({ mutationFn: () => tasks.runQueue(), onSuccess: () => { qc.invalidateQueries({ queryKey: ['tasks', projectId] }); qc.invalidateQueries({ queryKey: ['sessions', projectId] }) } })
+  const deleteTask   = useMutation({ mutationFn: (id: string) => tasks.delete(id), onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks', projectId] }) })
+  const assignTask   = useMutation({
     mutationFn: ({ taskId, agentId }: { taskId: string; agentId: string }) => tasks.assign(taskId, agentId),
     onSuccess: ({ session }) => { qc.invalidateQueries({ queryKey: ['tasks', projectId] }); qc.invalidateQueries({ queryKey: ['sessions', projectId] }); navigate(`/sessions/${session.id}`) },
   })
-  const setPriority = useMutation({ mutationFn: ({ taskId, priority }: { taskId: string; priority: number }) => tasks.update(taskId, { priority }) })
   const mergeSession = useMutation({
     mutationFn: (id: string) => sessions.merge(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['sessions', projectId] }),
@@ -328,94 +114,45 @@ export default function ProjectDetailPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['sessions', projectId] }),
   })
 
-  const codeSessions    = sessionList.filter(s => !s.specId && !s.parentSessionId)
-  const busyIds         = new Set(codeSessions.filter(s => s.status === 'running').map(s => s.agentId))
-  const quotaConnIds    = new Set(connectionList.filter(c => c.quotaStatus === 'exceeded').map(c => c.id))
-  const idleAgents      = agentList.filter(a => !busyIds.has(a.id) && !quotaConnIds.has(a.connectionId ?? ''))
-  const queue        = taskList.filter(t => t.status === 'pending').sort((a, b) => {
-    if ((b.priority ?? 0) !== (a.priority ?? 0)) return (b.priority ?? 0) - (a.priority ?? 0)
-    return a.createdAt.localeCompare(b.createdAt)
-  })
-  const working      = codeSessions.filter(s => s.status === 'running' || s.status === 'idle')
-  const review       = codeSessions.filter(s => s.status === 'done' || s.status === 'error')
-
-  function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event
-    if (!over || active.id === over.id) return
-    const oldIndex = queue.findIndex(t => t.id === active.id)
-    const newIndex = queue.findIndex(t => t.id === over.id)
-    const reordered = arrayMove(queue, oldIndex, newIndex)
-    reordered.forEach((task, i) => {
-      const newPriority = reordered.length - i
-      if ((task.priority ?? 0) !== newPriority) {
-        setPriority.mutate({ taskId: task.id, priority: newPriority })
-      }
-    })
-  }
-
-  function agentFor(s: Session) { return agentList.find(a => a.id === s.agentId) }
-  function taskFor(s: Session)  { return taskList.find(t => t.id === s.workTaskId) }
-
-  // Real-time: one stable WS per project, subscribe new sessions as they appear
+  // WebSocket
   const invalidateRef = useRef<() => void>(() => {})
-  invalidateRef.current = () => {
-    qc.invalidateQueries({ queryKey: ['sessions', projectId] })
-    qc.invalidateQueries({ queryKey: ['tasks', projectId] })
-  }
+  invalidateRef.current = () => { qc.invalidateQueries({ queryKey: ['sessions', projectId] }); qc.invalidateQueries({ queryKey: ['tasks', projectId] }) }
   const wsRef = useRef<WebSocket | null>(null)
   const subscribedRef = useRef(new Set<string>())
   const currentIdsRef = useRef<string[]>([])
   currentIdsRef.current = working.map(s => s.id)
 
   useEffect(() => {
-    let dead = false
-    let retryDelay = 2000
-
+    let dead = false, delay = 2000
     function connect() {
       if (dead) return
       const token = localStorage.getItem('token')
       if (!token) return
       const proto = location.protocol === 'https:' ? 'wss' : 'ws'
       const ws = new WebSocket(`${proto}://${location.host}/ws?token=${token}`)
-      wsRef.current = ws
-      subscribedRef.current = new Set()
-
-      ws.onopen = () => {
-        retryDelay = 2000
-        for (const id of currentIdsRef.current) {
-          ws.send(JSON.stringify({ type: 'subscribe', sessionId: id }))
-          subscribedRef.current.add(id)
-        }
-      }
+      wsRef.current = ws; subscribedRef.current = new Set()
+      ws.onopen = () => { delay = 2000; for (const id of currentIdsRef.current) { ws.send(JSON.stringify({ type: 'subscribe', sessionId: id })); subscribedRef.current.add(id) } }
       ws.onmessage = (e) => { try { if (JSON.parse(e.data).type === 'done') invalidateRef.current() } catch {} }
-      ws.onclose = () => {
-        if (!dead) { setTimeout(connect, retryDelay); retryDelay = Math.min(retryDelay * 2, 30_000) }
-      }
+      ws.onclose = () => { if (!dead) { setTimeout(connect, delay); delay = Math.min(delay * 2, 30_000) } }
       ws.onerror = () => ws.close()
     }
-
     connect()
     return () => { dead = true; wsRef.current?.close(); wsRef.current = null }
-  }, [projectId]) // stable — only recreates on project change
+  }, [projectId])
 
-  // Subscribe newly-appeared sessions without tearing down the connection
   const runningKey = working.map(s => s.id).join(',')
   useEffect(() => {
     const ws = wsRef.current
     if (!ws || ws.readyState !== WebSocket.OPEN) return
     for (const id of currentIdsRef.current) {
-      if (!subscribedRef.current.has(id)) {
-        ws.send(JSON.stringify({ type: 'subscribe', sessionId: id }))
-        subscribedRef.current.add(id)
-      }
+      if (!subscribedRef.current.has(id)) { ws.send(JSON.stringify({ type: 'subscribe', sessionId: id })); subscribedRef.current.add(id) }
     }
   }, [runningKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Keyboard shortcuts: n = new task, r = run queue
   useEffect(() => {
     function handler(e: KeyboardEvent) {
       const tag = (e.target as HTMLElement).tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || e.metaKey || e.ctrlKey || e.altKey) return
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || e.metaKey || e.ctrlKey) return
       if (e.key === 'n' && !showNew && agentList.length > 0) { e.preventDefault(); setShowNew(true) }
       if (e.key === 'r' && queue.length > 0 && idleAgents.length > 0 && !runQueue.isPending) { e.preventDefault(); runQueue.mutate() }
     }
@@ -423,129 +160,166 @@ export default function ProjectDetailPage() {
     return () => document.removeEventListener('keydown', handler)
   }, [showNew, queue.length, idleAgents.length, agentList.length, runQueue.isPending])
 
-  const stats = [
-    { label: 'Queue',   value: queue.length,     cls: 'text-foreground'       },
-    { label: 'Working', value: working.length,    cls: 'text-green-500'        },
-    { label: 'Review',  value: review.length,     cls: 'text-amber-400'        },
-    { label: 'Free',    value: idleAgents.length, cls: 'text-muted-foreground' },
-  ]
+  function agentFor(s: Session) { return agentList.find(a => a.id === s.agentId) }
+  function taskFor(s: Session)  { return taskList.find(t => t.id === s.workTaskId) }
 
-  const COLS: { title: MobileCol; count: number }[] = [
-    { title: 'Queue',   count: queue.length   },
-    { title: 'Working', count: working.length },
-    { title: 'Review',  count: review.length  },
-  ]
+  const verdictChip = (s: Session) => {
+    if (s.reviewVerdict === 'approved')         return <span className="stat green"><span className="dot green" />Approved</span>
+    if (s.reviewVerdict === 'changes_requested') return <span className="stat amber"><span className="dot amber" />Changes needed</span>
+    if (s.reviewVerdict === 'pending')           return <span className="stat" style={{ color: 'var(--muted)' }}><span className="dot idle" />Reviewing…</span>
+    if (s.status === 'error')                    return <span className="stat red"><span className="dot red" />Error</span>
+    return <span className="stat amber"><span className="dot amber" />Ready to review</span>
+  }
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col bg-background">
+    <div style={{ overflowY: 'auto', flex: 1, background: 'var(--bg)' }}>
+      <div className="page-content board-content" style={{ paddingTop: 24, paddingBottom: 80 }}>
 
-      {/* Top bar */}
-      <div className="h-14 shrink-0 flex items-center gap-4 px-4 md:px-6 border-b border-border/60">
-        <div className="flex items-center gap-3">
-          {stats.map(({ label, value, cls }) => (
-            <div key={label} className="flex items-center gap-1.5">
-              <span className={cn('text-sm font-semibold tabular-nums', cls)}>{value}</span>
-              <span className="text-xs text-muted-foreground hidden sm:inline">{label}</span>
-            </div>
-          ))}
-        </div>
-        <div className="flex-1" />
-        <div className="flex items-center gap-2">
-          {queue.length > 0 && idleAgents.length > 0 && (
-            <Button variant="outline" size="sm" onClick={() => runQueue.mutate()} disabled={runQueue.isPending}>
-              {runQueue.isPending ? '…' : '▶ Run queue'}
-            </Button>
-          )}
-          <Button size="sm" disabled={agentList.length === 0} onClick={() => setShowNew(true)}>
-            + New task <span className="hidden md:inline ml-1 opacity-40 font-mono text-[10px]">n</span>
-          </Button>
-        </div>
-      </div>
-
-      {/* Mobile column tabs */}
-      <div className="md:hidden flex shrink-0 border-b border-border/40">
-        {COLS.map(col => (
-          <button key={col.title} onClick={() => setMobileCol(col.title)}
-            className={cn(
-              'flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors cursor-pointer bg-transparent border-none border-b-2 -mb-px',
-              mobileCol === col.title ? 'text-foreground border-primary' : 'text-muted-foreground border-transparent'
-            )}>
-            <span className={cn('w-1.5 h-1.5 rounded-full', COL_DOT[col.title])} />
-            {col.title}
-            {col.count > 0 && <span className="font-mono text-[10px] text-muted-foreground">({col.count})</span>}
-          </button>
-        ))}
-      </div>
-
-      {/* Kanban */}
-      <div className="flex-1 min-h-0 flex gap-3 px-3 md:px-4 pt-4 pb-2 overflow-hidden">
-        {COLS.map(({ title, count }) => (
-          <div key={title} className={cn(
-            'min-w-0 flex-col overflow-hidden',
-            title === mobileCol ? 'flex flex-1' : 'hidden',
-            'md:flex md:flex-1'
-          )}>
-            <ColHead title={title} count={count} />
-            <ScrollArea className="flex-1">
-              <div className="flex flex-col gap-2.5 pb-3">
-                {isLoading ? (
-                  Array.from({ length: 2 }).map((_, i) => <CardSkeleton key={i} />)
-                ) : title === 'Queue' ? (
-                  queue.length === 0
-                    ? <EmptyState icon={ListTodo} title="Queue is empty" description="Add a task to get started." />
-                    : (
-                      <DndContext
-                        sensors={sensors}
-                        collisionDetection={closestCenter}
-                        modifiers={[restrictToVerticalAxis, restrictToParentElement]}
-                        onDragEnd={handleDragEnd}
-                      >
-                        <SortableContext items={queue.map(t => t.id)} strategy={verticalListSortingStrategy}>
-                          {queue.map(task => (
-                            <QueueCard key={task.id} task={task} agentList={idleAgents}
-                              onAssign={agentId => assignTask.mutate({ taskId: task.id, agentId })}
-                              onDelete={() => deleteTask.mutate(task.id)} />
-                          ))}
-                        </SortableContext>
-                      </DndContext>
-                    )
-                ) : title === 'Working' ? (
-                  working.length === 0
-                    ? <EmptyState icon={Loader2} title="Nobody working" description="Assign a task from the Queue to an agent." />
-                    : working.map(s => <WorkingCard key={s.id} session={s} agent={agentFor(s)} task={taskFor(s)} onClick={() => navigate(`/sessions/${s.id}`)} />)
-                ) : (
-                  review.length === 0
-                    ? <EmptyState icon={GitMerge} title="Nothing to review" description="Completed sessions will appear here." />
-                    : review.map(s => (
-                        <ReviewCard key={s.id} session={s} agent={agentFor(s)} task={taskFor(s)}
-                          hasRemote={!!project?.remoteUrl} allAgents={agentList}
-                          onMerge={() => mergeSession.mutate(s.id)}
-                          onMergePush={() => mergePushSession.mutate(s.id)}
-                          onClick={() => navigate(`/sessions/${s.id}`)}
-                          isMerging={mergeSession.isPending || mergePushSession.isPending}
-                          onRequestReview={agentId => requestReview.mutate({ sessionId: s.id, agentId })} />
-                      ))
-                )}
-              </div>
-            </ScrollArea>
+        {(working.length > 0 || review.length > 0 || queue.length > 0) && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24, minHeight: 30 }}>
+            {working.length > 0 && <span className="stat green"><span className="dot green pulse" />{working.length} working</span>}
+            {review.length  > 0 && <span className="stat amber">{review.length} in review</span>}
+            {queue.length   > 0 && <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{queue.length} queued</span>}
+            <div style={{ flex: 1 }} />
+            {queue.length > 0 && idleAgents.length > 0 && (
+              <button className="btn sm" onClick={() => runQueue.mutate()} disabled={runQueue.isPending}>
+                {runQueue.isPending ? '…' : 'Run queue'}
+              </button>
+            )}
           </div>
-        ))}
-      </div>
+        )}
 
-      {/* Error banners */}
-      {(mergeSession.isError || mergePushSession.isError || assignTask.isError) && (
-        <div className="shrink-0 border-t border-destructive/30 bg-destructive/5 px-5 py-2.5 flex items-center gap-3">
-          <span className="text-xs text-destructive flex-1">
-            {(mergeSession.error ?? mergePushSession.error ?? assignTask.error)?.message}
-          </span>
-          <button
-            className="text-xs text-muted-foreground hover:text-foreground cursor-pointer bg-transparent border-none"
-            onClick={() => { mergeSession.reset(); mergePushSession.reset(); assignTask.reset() }}
-          >
-            Dismiss
-          </button>
+        <div className="board-grid">
+        {/* Waiting for review */}
+          <div className={`section board-review${collapsed.has('review') ? ' collapsed' : ''}`}>
+            <div className="section-head"><button className="toggle" onClick={() => toggleSection('review')}><CaretIcon /><h2>Review</h2><span className="count">{review.length}</span></button></div>
+            {review.length === 0 ? (
+              <p className="empty-line">Nothing to review.</p>
+            ) : (
+            <div className="rows accent">
+              {review.map(s => {
+                const agent = agentFor(s)
+                const task  = taskFor(s)
+                const isMerging = mergeSession.isPending || mergePushSession.isPending
+                return (
+                  <div key={s.id} className="row" style={{ cursor: 'default' }}>
+                    <AgentAvatar agent={agent} size={28} />
+                    <button className="row-main" style={{ textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', padding: 0, minWidth: 0 }}
+                      onClick={() => navigate(`/sessions/${s.id}`)}>
+                      <div className="row-title">{task?.title ?? s.branch}</div>
+                      <div className="row-meta">
+                        <span>{agent?.name ?? '—'}</span>
+                        <span className="sep">·</span>
+                        {verdictChip(s)}
+                      </div>
+                    </button>
+                    <div className="board-row-actions" onClick={e => e.stopPropagation()}>
+                      {s.reviewVerdict !== 'pending' && !s.reviewVerdict && (
+                        <ReviewerPickerButton agentList={agentList.filter(a => a.id !== s.agentId)}
+                          onPick={agentId => requestReview.mutate({ sessionId: s.id, agentId })} />
+                      )}
+                      {project?.remoteUrl ? (
+                        <>
+                          <button className="btn sm" onClick={() => mergeSession.mutate(s.id)} disabled={isMerging}>
+                            {isMerging ? '…' : 'Merge'}
+                          </button>
+                          <button className="btn sm primary" onClick={() => mergePushSession.mutate(s.id)} disabled={isMerging}>
+                            <Upload size={12} />{isMerging ? '…' : 'Push'}
+                          </button>
+                        </>
+                      ) : (
+                        <button className="btn sm primary" onClick={() => mergeSession.mutate(s.id)} disabled={isMerging}>
+                          {isMerging ? '…' : 'Merge ✓'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            )}
+          </div>
+
+        {/* Running */}
+          <div className={`section board-running${collapsed.has('running') ? ' collapsed' : ''}`}>
+            <div className="section-head"><button className="toggle" onClick={() => toggleSection('running')}><CaretIcon /><h2>Working</h2><span className="count">{working.length}</span></button></div>
+            {working.length === 0 ? (
+              <p className="empty-line">No agents running.</p>
+            ) : (
+            <div className="rows">
+              {working.map(s => {
+                const agent = agentFor(s)
+                const task  = taskFor(s)
+                return (
+                  <button key={s.id} className="row" onClick={() => navigate(`/sessions/${s.id}`)}>
+                    <span className="dot green pulse" />
+                    <AgentAvatar agent={agent} size={26} running />
+                    <div className="row-main">
+                      <div className="row-title">{task?.title ?? s.branch}</div>
+                      <div className="row-meta"><span>{agent?.name ?? '—'}</span></div>
+                    </div>
+                    {s.status === 'running' && <ElapsedTimer createdAt={s.createdAt} />}
+                    <span className="row-hint">↵</span>
+                    <svg className="row-go" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                  </button>
+                )
+              })}
+            </div>
+            )}
+          </div>
+
+        {/* Queue */}
+        <div className={`section board-queue${collapsed.has('queue') ? ' collapsed' : ''}`}>
+          <div className="section-head">
+            <button className="toggle" onClick={() => toggleSection('queue')}><CaretIcon /><h2>Queue</h2>{queue.length > 0 && <span className="count">{queue.length}</span>}</button>
+            <button className="board-add" onClick={() => setShowNew(true)}>
+              + Add
+            </button>
+          </div>
+          {queue.length === 0 ? (
+            <p className="empty-line" style={{ color: 'var(--muted)' }}>Queue is empty — add a task to get started.</p>
+          ) : (
+            <div className="rows">
+              {queue.map((task: Task) => (
+                <div key={task.id} className="row" style={{ cursor: 'default' }}>
+                  <span className="dot idle" />
+                  <div className="row-main">
+                    <div className="row-title">{task.title}</div>
+                    {task.prompt && <div className="row-meta" style={{ WebkitLineClamp: 1, overflow: 'hidden' }}>{task.prompt}</div>}
+                  </div>
+                  {task.size && (
+                    <span className="chip mono">{task.size}</span>
+                  )}
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    {idleAgents.length > 0
+                      ? <AgentPickerDropdown agentList={idleAgents} onAssign={agentId => assignTask.mutate({ taskId: task.id, agentId })} />
+                      : <span style={{ fontSize: 12, color: 'var(--faint)' }}>No agents</span>
+                    }
+                    <button onClick={() => deleteTask.mutate(task.id)}
+                      style={{ fontSize: 18, lineHeight: 1, color: 'var(--faint)', background: 'none', border: 'none', cursor: 'pointer', padding: '0 4px' }}
+                      onMouseOver={e => (e.currentTarget.style.color = 'var(--red)')}
+                      onMouseOut={e => (e.currentTarget.style.color = 'var(--faint)')}
+                    >×</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-      )}
+        </div>
+
+        {/* Errors */}
+        {(mergeSession.isError || mergePushSession.isError || assignTask.isError) && (
+          <div style={{ marginTop: 16, padding: '10px 14px', borderRadius: 8, border: '1px solid color-mix(in srgb, var(--red) 30%, transparent)', background: 'color-mix(in srgb, var(--red) 6%, transparent)', display: 'flex', gap: 12, alignItems: 'center' }}>
+            <span style={{ fontSize: 13, color: 'var(--red)', flex: 1 }}>
+              {(mergeSession.error ?? mergePushSession.error ?? assignTask.error)?.message}
+            </span>
+            <button style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}
+              onClick={() => { mergeSession.reset(); mergePushSession.reset(); assignTask.reset() }}>Dismiss</button>
+          </div>
+        )}
+
+      </div>
 
       {showNew && projectId && (
         <NewTaskDialog
@@ -553,22 +327,43 @@ export default function ProjectDetailPage() {
           hasIdleAgent={idleAgents.length > 0}
           onClose={() => setShowNew(false)}
           onCreate={async body => { await tasks.create(body); qc.invalidateQueries({ queryKey: ['tasks', projectId] }); setShowNew(false) }}
-          onCreateAndRun={async body => {
-            await tasks.create(body)
-            await tasks.runQueue()
-            qc.invalidateQueries({ queryKey: ['tasks', projectId] })
-            qc.invalidateQueries({ queryKey: ['sessions', projectId] })
-            setShowNew(false)
-          }}
+          onCreateAndRun={async body => { await tasks.create(body); await tasks.runQueue(); qc.invalidateQueries({ queryKey: ['tasks', projectId] }); qc.invalidateQueries({ queryKey: ['sessions', projectId] }); setShowNew(false) }}
         />
       )}
     </div>
   )
 }
 
-// ---------------------------------------------------------------------------
-// New task dialog
-// ---------------------------------------------------------------------------
+function ReviewerPickerButton({ agentList, onPick }: { agentList: Employee[]; onPick: (id: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const down = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    document.addEventListener('mousedown', down)
+    return () => document.removeEventListener('mousedown', down)
+  }, [open])
+  if (agentList.length === 0) return null
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button className="btn sm" onClick={e => { e.stopPropagation(); setOpen(o => !o) }}>Request Review</button>
+      {open && (
+        <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 30, background: 'var(--bg)', border: '1px solid var(--rule)', borderRadius: 10, overflow: 'hidden', minWidth: 150, boxShadow: 'var(--shadow-dialog)' }}>
+          <p style={{ fontSize: 11, color: 'var(--muted)', padding: '8px 12px', borderBottom: '1px solid var(--rule-soft)', margin: 0 }}>Pick reviewer</p>
+          {agentList.map(a => (
+            <button key={a.id} onClick={() => { onPick(a.id); setOpen(false) }}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', fontSize: 13, color: 'var(--ink)', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+              onMouseOver={e => (e.currentTarget.style.background = 'var(--panel)')}
+              onMouseOut={e => (e.currentTarget.style.background = 'none')}
+            >
+              <AgentAvatar agent={a} size={20} />{a.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 const SIZES: { value: TaskSize; label: string; desc: string }[] = [
   { value: 'xs', label: 'XS', desc: '<30m' },
@@ -579,17 +374,15 @@ const SIZES: { value: TaskSize; label: string; desc: string }[] = [
 ]
 
 function NewTaskDialog({ projectId, hasIdleAgent, onClose, onCreate, onCreateAndRun }: {
-  projectId: string
-  hasIdleAgent: boolean
-  onClose: () => void
+  projectId: string; hasIdleAgent: boolean; onClose: () => void
   onCreate: (body: { projectId: string; title: string; prompt: string; baseBranch: string; size: TaskSize }) => Promise<void>
   onCreateAndRun: (body: { projectId: string; title: string; prompt: string; baseBranch: string; size: TaskSize }) => Promise<void>
 }) {
-  const [title,      setTitle]      = useState('')
-  const [prompt,     setPrompt]     = useState('')
-  const [baseBranch, setBaseBranch] = useState('main')
-  const [size,       setSize]       = useState<TaskSize>('m')
-  const [loading,    setLoading]    = useState(false)
+  const [title, setTitle]           = useState('')
+  const [prompt, setPrompt]         = useState('')
+  const [baseBranch, setBranch]     = useState('main')
+  const [size, setSize]             = useState<TaskSize>('m')
+  const [loading, setLoading]       = useState(false)
   const isValid = title.trim().length > 2
 
   async function submit(fn: typeof onCreate) {
@@ -603,46 +396,45 @@ function NewTaskDialog({ projectId, hasIdleAgent, onClose, onCreate, onCreateAnd
     <Dialog open onOpenChange={o => !o && onClose()}>
       <DialogContent>
         <DialogHeader><DialogTitle>New task</DialogTitle></DialogHeader>
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className="field">
             <Label>Title</Label>
             <Input autoFocus value={title} onChange={e => setTitle(e.target.value)}
               placeholder="What should the agent do?"
               onKeyDown={e => { if (e.key === 'Enter' && isValid) void submit(onCreate) }} />
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Prompt <span className="text-muted-foreground font-normal">(optional)</span></Label>
+          <div className="field">
+            <Label>Prompt <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(optional)</span></Label>
             <Textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={3}
               placeholder="Additional context, requirements, or constraints…" />
           </div>
-          <div className="flex gap-3">
-            <div className="flex flex-col gap-1.5 flex-1">
+          <div style={{ display: 'flex', gap: 12 }}>
+            <div className="field" style={{ flex: 1 }}>
               <Label>Base branch</Label>
-              <Input value={baseBranch} onChange={e => setBaseBranch(e.target.value)} className="font-mono text-xs" />
+              <Input value={baseBranch} onChange={e => setBranch(e.target.value)} style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }} />
             </div>
-            <div className="flex flex-col gap-1.5">
+            <div className="field">
               <Label>Size</Label>
-              <div className="flex gap-1">
+              <div style={{ display: 'flex', gap: 4 }}>
                 {SIZES.map(s => (
-                  <button key={s.value} type="button" onClick={() => setSize(s.value)} className={cn(
-                    'flex flex-col items-center px-2 py-1 rounded-lg border text-xs font-bold transition-colors cursor-pointer min-w-[36px]',
-                    size === s.value ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-transparent text-muted-foreground hover:text-foreground'
-                  )}>
-                    {s.label}
-                    <span className="font-normal text-[9px] opacity-70">{s.desc}</span>
+                  <button key={s.value} type="button" onClick={() => setSize(s.value)}
+                    className={cn('btn sm', size === s.value ? 'primary' : 'ghost')}
+                    style={{ flexDirection: 'column', gap: 1, minWidth: 36, padding: '6px 8px' }}>
+                    <span style={{ fontSize: 12, fontWeight: 600 }}>{s.label}</span>
+                    <span style={{ fontSize: 9, opacity: 0.7 }}>{s.desc}</span>
                   </button>
                 ))}
               </div>
             </div>
           </div>
-          <div className="flex gap-2 pt-1">
-            <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button variant="outline" className="flex-1" disabled={!isValid || loading} onClick={() => void submit(onCreate)}>
+          <div style={{ display: 'flex', gap: 8, paddingTop: 4 }}>
+            <button className="btn" onClick={onClose}>Cancel</button>
+            <button className="btn" style={{ flex: 1, justifyContent: 'center' }} disabled={!isValid || loading} onClick={() => void submit(onCreate)}>
               {loading ? '…' : 'Queue'}
-            </Button>
-            <Button className="flex-1" disabled={!isValid || loading || !hasIdleAgent} onClick={() => void submit(onCreateAndRun)}>
+            </button>
+            <button className="btn primary" style={{ flex: 1, justifyContent: 'center' }} disabled={!isValid || loading || !hasIdleAgent} onClick={() => void submit(onCreateAndRun)}>
               {loading ? '…' : 'Dispatch ↗'}
-            </Button>
+            </button>
           </div>
         </div>
       </DialogContent>

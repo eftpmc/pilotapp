@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AgentAvatar } from '@/components/AgentAvatar'
@@ -31,8 +30,8 @@ function KnowledgeDocDialog({ open, doc, scopeLabel, onClose, onSave, loading, e
           {!doc && (
             <p className="text-xs text-muted-foreground -mt-1">
               {scopeLabel === 'Company Library'
-                ? 'Injected into every employee\'s prompts.'
-                : `Injected only when this employee works.`}
+                ? "Injected into every agent's prompt."
+                : `Injected only when this agent works.`}
             </p>
           )}
           <div className="flex flex-col gap-1.5">
@@ -43,7 +42,7 @@ function KnowledgeDocDialog({ open, doc, scopeLabel, onClose, onSave, loading, e
           <div className="flex flex-col gap-1.5">
             <Label>Content</Label>
             <Textarea value={content} onChange={e => setContent(e.target.value)} rows={10}
-              placeholder="Markdown — included verbatim in the employee's prompt context."
+              placeholder="Markdown — included verbatim in the agent's prompt context."
               className="font-mono text-xs resize-y" />
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
@@ -103,7 +102,7 @@ function DeptSection({ dept, docs, onAdd, onEdit, onDelete }: {
 }) {
   const [open, setOpen] = useState(false)
   return (
-    <div className="bg-card rounded-2xl overflow-hidden [box-shadow:var(--shadow-card)]">
+    <div className="bg-card rounded-xl border border-border/50 overflow-hidden [box-shadow:var(--shadow-card)]">
       <button onClick={() => setOpen(o => !o)}
         className="w-full flex items-center gap-3 px-4 py-3 text-left cursor-pointer hover:bg-muted/30 transition-colors bg-transparent border-none">
         <span className="w-5 h-5 rounded-md shrink-0" style={{ background: dept.color + '30', border: `1.5px solid ${dept.color}60` }}>
@@ -117,18 +116,12 @@ function DeptSection({ dept, docs, onAdd, onEdit, onDelete }: {
       </button>
       {open && (
         <>
-          {docs.length > 0 && (
-            <>
-              <Separator />
-              {docs.map((doc, i) => (
-                <div key={doc.id}>
-                  <DocRow doc={doc} onEdit={() => onEdit(doc)} onDelete={() => onDelete(doc.id)} />
-                  {i < docs.length - 1 && <Separator />}
-                </div>
-              ))}
-            </>
-          )}
-          <Separator />
+          {docs.length > 0 && docs.map((doc) => (
+            <div key={doc.id} className="border-t border-border/40">
+              <DocRow doc={doc} onEdit={() => onEdit(doc)} onDelete={() => onDelete(doc.id)} />
+            </div>
+          ))}
+          <div className="border-t border-border/40" />
           <div className="px-4 py-2.5">
             <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-primary hover:text-primary/80" onClick={onAdd}>
               + Add knowledge for {dept.name}
@@ -147,14 +140,14 @@ function EmployeeSection({ employee, docs, onAdd, onEdit, onDelete }: {
   const [open, setOpen] = useState(false)
 
   return (
-    <div className="bg-card rounded-2xl overflow-hidden [box-shadow:var(--shadow-card)]">
+    <div className="bg-card rounded-xl border border-border/50 overflow-hidden [box-shadow:var(--shadow-card)]">
       <button
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center gap-3 px-4 py-3 text-left cursor-pointer hover:bg-muted/30 transition-colors bg-transparent border-none"
       >
         <AgentAvatar agent={employee} size={28} />
         <div className="flex-1 min-w-0">
-          <span className="text-sm font-medium text-foreground">{employee.name}</span>
+          <span className="text-sm text-foreground">{employee.name}</span>
           {docs.length > 0 && (
             <span className="ml-2 font-mono text-[10px] text-muted-foreground">{docs.length} doc{docs.length !== 1 ? 's' : ''}</span>
           )}
@@ -164,18 +157,12 @@ function EmployeeSection({ employee, docs, onAdd, onEdit, onDelete }: {
 
       {open && (
         <>
-          {docs.length > 0 && (
-            <>
-              <Separator />
-              {docs.map((doc, i) => (
-                <div key={doc.id}>
-                  <DocRow doc={doc} onEdit={() => onEdit(doc)} onDelete={() => onDelete(doc.id)} />
-                  {i < docs.length - 1 && <Separator />}
-                </div>
-              ))}
-            </>
-          )}
-          <Separator />
+          {docs.length > 0 && docs.map((doc) => (
+            <div key={doc.id} className="border-t border-border/40">
+              <DocRow doc={doc} onEdit={() => onEdit(doc)} onDelete={() => onDelete(doc.id)} />
+            </div>
+          ))}
+          <div className="border-t border-border/40" />
           <div className="px-4 py-2.5">
             <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-primary hover:text-primary/80" onClick={onAdd}>
               + Add knowledge for {employee.name}
@@ -230,29 +217,27 @@ export default function KnowledgePage() {
 
   return (
     <div className="flex-1 overflow-y-auto bg-background">
-      <div className="max-w-2xl mx-auto px-6 py-10 flex flex-col gap-10">
+      <div className="px-6 pt-10 pb-8 flex flex-col gap-8">
 
-        <h1 className="text-2xl font-bold tracking-tight">Knowledge</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Knowledge</h1>
 
         {/* Company Library */}
         <section className="flex flex-col gap-3">
-          <div className="flex items-start">
+          <div className="flex items-start justify-between gap-4">
             <div>
-              <span className="text-sm font-semibold text-foreground">Company Library</span>
-              <p className="text-xs text-muted-foreground mt-0.5">Injected into every employee's prompts — coding standards, architecture docs, guidelines.</p>
+              <p className="text-xs text-muted-foreground/50">Company library</p>
+              <p className="text-xs text-muted-foreground/40 mt-0.5">Injected into every agent's prompt — coding standards, architecture docs, guidelines.</p>
             </div>
-            <div className="flex-1" />
-            <Button size="sm" onClick={() => openAdd('company', undefined, 'Company Library')}>+ Add</Button>
+            <Button size="sm" className="shrink-0" onClick={() => openAdd('company', undefined, 'Company Library')}>+ Add</Button>
           </div>
 
           {companyDocs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No company knowledge yet. Add documents all employees should know.</p>
+            <p className="text-sm text-muted-foreground/50">No company knowledge yet.</p>
           ) : (
-            <div className="bg-card rounded-2xl overflow-hidden [box-shadow:var(--shadow-card)]">
+            <div className="bg-card rounded-xl border border-border/50 overflow-hidden [box-shadow:var(--shadow-card)]">
               {companyDocs.map((doc, i) => (
-                <div key={doc.id}>
+                <div key={doc.id} className={i > 0 ? 'border-t border-border/40' : ''}>
                   <DocRow doc={doc} onEdit={() => openEdit(doc)} onDelete={() => deleteDoc.mutate(doc.id)} />
-                  {i < companyDocs.length - 1 && <Separator />}
                 </div>
               ))}
             </div>
@@ -263,8 +248,8 @@ export default function KnowledgePage() {
         {deptList.length > 0 && (
           <section className="flex flex-col gap-3">
             <div>
-              <span className="text-sm font-semibold text-foreground">Department Knowledge</span>
-              <p className="text-xs text-muted-foreground mt-0.5">Injected for all employees in a department.</p>
+              <p className="text-xs text-muted-foreground/50">Department knowledge</p>
+              <p className="text-xs text-muted-foreground/40 mt-0.5">Injected for all agents in a department.</p>
             </div>
             <div className="flex flex-col gap-2">
               {deptList.map(dept => (
@@ -281,15 +266,15 @@ export default function KnowledgePage() {
           </section>
         )}
 
-        {/* Employee Knowledge */}
+        {/* Agent Knowledge */}
         <section className="flex flex-col gap-3">
           <div>
-            <span className="text-sm font-semibold text-foreground">Employee Knowledge</span>
-            <p className="text-xs text-muted-foreground mt-0.5">Personal context injected only when a specific employee is working.</p>
+            <p className="text-xs text-muted-foreground/50">Agent knowledge</p>
+            <p className="text-xs text-muted-foreground/40 mt-0.5">Personal context injected only when a specific agent is working.</p>
           </div>
 
           {employeeList.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No employees yet.</p>
+            <p className="text-sm text-muted-foreground/50">No agents yet.</p>
           ) : (
             <div className="flex flex-col gap-2">
               {employeeList.map(emp => (

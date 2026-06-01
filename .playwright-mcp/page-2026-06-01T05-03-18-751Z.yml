@@ -1,0 +1,150 @@
+- generic [ref=e2]:
+  - navigation [ref=e3]:
+    - button "pilot" [ref=e4] [cursor=pointer]:
+      - img [ref=e5]
+      - text: pilot
+    - generic [ref=e10]:
+      - button "Today 2" [ref=e11] [cursor=pointer]:
+        - text: Today
+        - generic [ref=e12]: "2"
+      - button "Agents" [ref=e13] [cursor=pointer]
+      - button "Projects" [ref=e14] [cursor=pointer]
+      - button "Knowledge" [ref=e15] [cursor=pointer]
+    - generic [ref=e16]:
+      - button "⌘K" [ref=e17] [cursor=pointer]:
+        - img [ref=e18]
+        - generic [ref=e21]: ⌘K
+      - button "Toggle theme" [ref=e22] [cursor=pointer]:
+        - img [ref=e23]
+      - button "New task" [ref=e25] [cursor=pointer]:
+        - img [ref=e26]
+        - generic [ref=e28]: New task
+      - generic "You" [ref=e29]: JD
+  - generic [ref=e30]:
+    - banner [ref=e31]:
+      - generic [ref=e32]: Monday, June 1 · Day shift 09:00–18:00
+      - heading "Today" [level=1] [ref=e33]
+      - paragraph [ref=e34]: 3 agents are working. 2 changes are waiting for your review, and 5 tasks are queued.
+    - generic [ref=e35]:
+      - generic [ref=e36]:
+        - generic [ref=e37]:
+          - generic [ref=e38]: 5/7
+          - img [ref=e39]
+        - generic [ref=e42]: On shift
+      - generic [ref=e43]:
+        - generic [ref=e44]:
+          - generic [ref=e45]: "12"
+          - img [ref=e46]
+        - generic [ref=e49]: Merged today
+      - generic [ref=e50]:
+        - generic [ref=e51]:
+          - generic [ref=e52]: 7m
+          - img [ref=e53]
+        - generic [ref=e56]: Avg session
+      - generic [ref=e57]:
+        - generic [ref=e58]:
+          - generic [ref=e59]: "5"
+          - img [ref=e60]
+        - generic [ref=e63]: Queue depth
+    - generic [ref=e64]:
+      - button "Waiting for you 2" [ref=e66] [cursor=pointer]:
+        - img [ref=e67]
+        - heading "Waiting for you" [level=2] [ref=e69]
+        - generic [ref=e70]: "2"
+      - generic [ref=e71]:
+        - generic [ref=e72]:
+          - generic [ref=e73]: MA
+          - button "Migrate data layer to React Query v5 Mara · Acme App · Approved by reviewer" [ref=e74] [cursor=pointer]:
+            - generic [ref=e75]: Migrate data layer to React Query v5
+            - generic [ref=e76]:
+              - text: Mara
+              - generic [ref=e77]: ·
+              - text: Acme App
+              - generic [ref=e78]: ·
+              - generic [ref=e79]: Approved by reviewer
+          - generic [ref=e81]:
+            - button "Approve" [ref=e82] [cursor=pointer]:
+              - img [ref=e83]
+              - text: Approve
+            - button "Request changes" [ref=e85] [cursor=pointer]
+        - generic [ref=e86]:
+          - generic [ref=e87]: LE
+          - button "Redesign the empty states Lena · Marketing Site · Changes suggested" [ref=e88] [cursor=pointer]:
+            - generic [ref=e89]: Redesign the empty states
+            - generic [ref=e90]:
+              - text: Lena
+              - generic [ref=e91]: ·
+              - text: Marketing Site
+              - generic [ref=e92]: ·
+              - generic [ref=e93]: Changes suggested
+          - generic [ref=e95]:
+            - button "Approve" [ref=e96] [cursor=pointer]:
+              - img [ref=e97]
+              - text: Approve
+            - button "Request changes" [ref=e99] [cursor=pointer]
+    - generic [ref=e100]:
+      - button "In progress 3" [ref=e102] [cursor=pointer]:
+        - img [ref=e103]
+        - heading "In progress" [level=2] [ref=e105]
+        - generic [ref=e106]: "3"
+      - generic [ref=e107]:
+        - button "DV Refactor the auth session flow Devon · Acme App ↵ 4:21:00" [ref=e108] [cursor=pointer]:
+          - generic [ref=e110]: DV
+          - generic [ref=e111]:
+            - generic [ref=e112]: Refactor the auth session flow
+            - generic [ref=e113]:
+              - text: Devon
+              - generic [ref=e114]: ·
+              - text: Acme App
+          - generic [ref=e115]: ↵
+          - generic [ref=e116]: 4:21:00
+        - button "RA Investigate the flaky billing test suite Rai · Billing Service ↵ 11:09:00" [ref=e117] [cursor=pointer]:
+          - generic [ref=e119]: RA
+          - generic [ref=e120]:
+            - generic [ref=e121]: Investigate the flaky billing test suite
+            - generic [ref=e122]:
+              - text: Rai
+              - generic [ref=e123]: ·
+              - text: Billing Service
+          - generic [ref=e124]: ↵
+          - generic [ref=e125]: 11:09:00
+        - button "PR Add rate limiting to the public API Priya · Acme App ↵ 48:00" [ref=e126] [cursor=pointer]:
+          - generic [ref=e128]: PR
+          - generic [ref=e129]:
+            - generic [ref=e130]: Add rate limiting to the public API
+            - generic [ref=e131]:
+              - text: Priya
+              - generic [ref=e132]: ·
+              - text: Acme App
+          - generic [ref=e133]: ↵
+          - generic [ref=e134]: 48:00
+    - generic [ref=e135]:
+      - generic [ref=e136]:
+        - button "Activity" [ref=e137] [cursor=pointer]:
+          - img [ref=e138]
+          - heading "Activity" [level=2] [ref=e140]
+        - generic [ref=e141]:
+          - text: All
+          - img [ref=e142]
+      - generic [ref=e144]:
+        - button "Mara merged Cache the project file tree. 14m ago" [ref=e145] [cursor=pointer]:
+          - generic [ref=e146]: Mara merged Cache the project file tree.
+          - generic [ref=e147]: 14m ago
+        - button "Devon finished Refactor the auth session flow. 2m ago" [ref=e148] [cursor=pointer]:
+          - generic [ref=e149]: Devon finished Refactor the auth session flow.
+          - generic [ref=e150]: 2m ago
+        - button "Priya started Add rate limiting to the public API. 48m ago" [ref=e151] [cursor=pointer]:
+          - generic [ref=e152]: Priya started Add rate limiting to the public API.
+          - generic [ref=e153]: 48m ago
+        - button "Sol ran into an error on Wire up the new icon set. 1h ago" [ref=e154] [cursor=pointer]:
+          - generic [ref=e155]: Sol ran into an error on Wire up the new icon set.
+          - generic [ref=e156]: 1h ago
+        - button "Lena requested review on Redesign the empty states. 1h ago" [ref=e157] [cursor=pointer]:
+          - generic [ref=e158]: Lena requested review on Redesign the empty states.
+          - generic [ref=e159]: 1h ago
+        - button "Ana merged Summarise the weekly research digest. 1h ago" [ref=e160] [cursor=pointer]:
+          - generic [ref=e161]: Ana merged Summarise the weekly research digest.
+          - generic [ref=e162]: 1h ago
+        - button "Rai started Investigate the flaky billing test suite. 1h ago" [ref=e163] [cursor=pointer]:
+          - generic [ref=e164]: Rai started Investigate the flaky billing test suite.
+          - generic [ref=e165]: 1h ago

@@ -1,0 +1,37 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - button "pilot" [ref=e5] [cursor=pointer]:
+      - img [ref=e6]
+      - text: pilot
+    - generic [ref=e11]:
+      - link "Today" [ref=e12] [cursor=pointer]:
+        - /url: /
+      - link "Agents" [ref=e13] [cursor=pointer]:
+        - /url: /employees
+      - link "Projects" [ref=e14] [cursor=pointer]:
+        - /url: /projects
+      - link "Settings" [ref=e15] [cursor=pointer]:
+        - /url: /settings
+    - button "Sign out" [ref=e17] [cursor=pointer]
+  - main [ref=e18]:
+    - generic [ref=e20]:
+      - generic [ref=e21]:
+        - paragraph [ref=e22]: pilot
+        - paragraph [ref=e23]: Your AI coding crew, ready to ship.
+      - generic [ref=e24]:
+        - generic [ref=e25]:
+          - generic [ref=e26]: "1"
+          - generic [ref=e27]:
+            - generic [ref=e28]: Add a project
+            - generic [ref=e29]: Connect a GitHub repo or local path.
+        - generic [ref=e30]:
+          - generic [ref=e31]: "2"
+          - generic [ref=e32]:
+            - generic [ref=e33]: Add an agent
+            - generic [ref=e34]: Configure an API key in Settings.
+        - generic [ref=e35]:
+          - generic [ref=e36]: "3"
+          - generic [ref=e37]:
+            - generic [ref=e38]: Dispatch tasks
+            - generic [ref=e39]: Agents run in parallel on separate branches.
+      - button "Add first project" [ref=e40] [cursor=pointer]

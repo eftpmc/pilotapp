@@ -1,0 +1,29 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - button "pilot" [ref=e5] [cursor=pointer]:
+      - img [ref=e6]
+      - text: pilot
+    - generic [ref=e11]:
+      - link "Today" [ref=e12] [cursor=pointer]:
+        - /url: /
+      - link "Agents" [ref=e13] [cursor=pointer]:
+        - /url: /employees
+      - link "Projects" [ref=e14] [cursor=pointer]:
+        - /url: /projects
+      - link "Settings" [ref=e15] [cursor=pointer]:
+        - /url: /settings
+    - button "Sign out" [ref=e17] [cursor=pointer]
+  - main [ref=e18]:
+    - generic [ref=e19]:
+      - generic [ref=e20]:
+        - button "Back" [ref=e21] [cursor=pointer]:
+          - img [ref=e22]
+          - text: Back
+        - generic [ref=e24]:
+          - generic [ref=e25]: "?"
+          - heading "Session" [level=1] [ref=e27]
+          - button "Discard" [ref=e29] [cursor=pointer]
+        - generic [ref=e30]:
+          - button "output" [ref=e31] [cursor=pointer]
+          - button "diff" [ref=e32] [cursor=pointer]
+      - paragraph [ref=e36]: waiting for output…

@@ -1,21 +1,20 @@
-import { NavLink, Outlet, useParams } from 'react-router-dom'
+import { NavLink, Outlet, useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { projects, sessions } from '../api/client'
 import { cn } from '@/lib/utils'
-import { LayoutGrid, Clock, FileText, FolderOpen, SlidersHorizontal } from 'lucide-react'
-
-const PROJECT_COLORS = ['#f87171','#fb923c','#facc15','#4ade80','#60a5fa','#c084fc','#f472b6']
+import { ArrowLeft } from 'lucide-react'
 
 const TABS = [
-  { label: 'Board',    icon: LayoutGrid,        path: ''          },
-  { label: 'Sessions', icon: Clock,              path: '/sessions' },
-  { label: 'Plans',    icon: FileText,           path: '/plans'    },
-  { label: 'Files',    icon: FolderOpen,         path: '/files'    },
-  { label: 'Settings', icon: SlidersHorizontal,  path: '/settings' },
+  { label: 'Board',    path: ''          },
+  { label: 'History',  path: '/sessions' },
+  { label: 'Plans',    path: '/plans'    },
+  { label: 'Files',    path: '/files'    },
+  { label: 'Settings', path: '/settings' },
 ]
 
 export default function ProjectLayout() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
 
   const { data: projectList = [] } = useQuery({
     queryKey: ['projects'],
@@ -28,54 +27,72 @@ export default function ProjectLayout() {
     refetchInterval: 5000,
   })
 
-  const project   = projectList.find(p => p.id === id)
-  const projIndex = projectList.findIndex(p => p.id === id)
-  const color     = PROJECT_COLORS[projIndex % PROJECT_COLORS.length] ?? 'var(--primary)'
-
+  const project     = projectList.find(p => p.id === id)
   const runningCount = sessionList.filter(s => s.status === 'running').length
   const reviewCount  = sessionList.filter(s => !s.specId && (s.status === 'done' || s.status === 'error')).length
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-      {/* Project header + tabs */}
-      <div className="shrink-0 border-b border-border/60 bg-background">
-        <div className="flex items-center gap-0 px-4">
-          {/* Identity */}
-          <div className="flex items-center gap-2 mr-4 py-2.5">
-            <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: color }} />
-            <span className="text-sm font-semibold text-foreground truncate max-w-[160px]">
-              {project?.name ?? '…'}
-            </span>
-          </div>
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{
+        padding: '28px 32px 0',
+        borderBottom: '1px solid var(--rule)',
+        background: 'var(--bg)',
+      }}>
+        {/* Back */}
+        <button
+          onClick={() => navigate('/projects')}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: '6px',
+            fontSize: '13px', fontWeight: 500, color: 'var(--muted)',
+            background: 'none', border: 'none', cursor: 'pointer',
+            padding: 0, marginBottom: '18px',
+            transition: 'color .12s',
+          }}
+          onMouseOver={e => (e.currentTarget.style.color = 'var(--ink)')}
+          onMouseOut={e => (e.currentTarget.style.color = 'var(--muted)')}
+        >
+          <ArrowLeft size={14} />
+          Projects
+        </button>
 
-          {/* Tabs */}
-          <div className="flex gap-0 flex-1">
-            {TABS.map(({ label, path }) => (
-              <NavLink
-                key={label}
-                to={`/projects/${id}${path}`}
-                end={path === ''}
-                className={({ isActive }) => cn(
-                  'flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium border-b-2 transition-colors -mb-px',
-                  isActive
-                    ? 'border-primary text-foreground font-semibold'
-                    : 'border-transparent text-muted-foreground hover:text-foreground'
-                )}
-              >
-                {label}
-                {label === 'Board'    && reviewCount  > 0 && (
-                  <span className="font-mono text-[10px] tabular-nums text-amber-500">{reviewCount}</span>
-                )}
-                {label === 'Sessions' && runningCount > 0 && (
-                  <span className="font-mono text-[10px] tabular-nums text-green-500">{runningCount}</span>
-                )}
-              </NavLink>
-            ))}
-          </div>
+        {/* Project name */}
+        <h1 style={{
+          fontFamily: '"Newsreader", Georgia, serif',
+          fontWeight: 400, fontSize: '32px', letterSpacing: '-0.02em',
+          lineHeight: 1.1, color: 'var(--ink)', margin: '0 0 20px',
+        }}>
+          {project?.name ?? '…'}
+        </h1>
+
+        {/* Tab bar */}
+        <div className="tabs" style={{ margin: 0 }}>
+          {TABS.map(({ label, path }) => (
+            <NavLink
+              key={label}
+              to={`/projects/${id}${path}`}
+              end={path === ''}
+              className={({ isActive }) => cn('tab', isActive && 'active')}
+              style={{ textDecoration: 'none' }}
+            >
+              {label}
+              {label === 'Board' && reviewCount > 0 && (
+                <span className="badge" style={{ marginLeft: '5px' }}>{reviewCount}</span>
+              )}
+              {label === 'History' && runningCount > 0 && (
+                <span className="badge" style={{
+                  marginLeft: '5px',
+                  background: 'color-mix(in srgb, var(--green-dot) 15%, transparent)',
+                  color: 'var(--green)',
+                }}>{runningCount}</span>
+              )}
+            </NavLink>
+          ))}
         </div>
       </div>
 
-      <Outlet />
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+        <Outlet />
+      </div>
     </div>
   )
 }

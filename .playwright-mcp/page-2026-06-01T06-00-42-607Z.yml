@@ -1,0 +1,91 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - button "pilot" [ref=e5] [cursor=pointer]:
+      - img [ref=e6]
+      - text: pilot
+    - generic [ref=e11]:
+      - link "Today" [ref=e12] [cursor=pointer]:
+        - /url: /
+      - link "Agents" [ref=e13] [cursor=pointer]:
+        - /url: /employees
+      - link "Projects" [ref=e14] [cursor=pointer]:
+        - /url: /projects
+      - link "Settings" [ref=e15] [cursor=pointer]:
+        - /url: /settings
+    - generic [ref=e16]:
+      - button "⌘K" [ref=e17] [cursor=pointer]:
+        - img [ref=e18]
+        - generic [ref=e21]: ⌘K
+      - button "Toggle theme" [active] [ref=e22] [cursor=pointer]:
+        - img [ref=e237]
+      - button "Sign out" [ref=e25] [cursor=pointer]
+  - main [ref=e26]:
+    - generic [ref=e28]:
+      - generic [ref=e29]: Monday, June 1
+      - heading "Today" [level=1] [ref=e30]
+      - paragraph [ref=e31]: Nothing running. Open a project to dispatch work.
+      - generic [ref=e49]:
+        - button "Activity" [ref=e51] [cursor=pointer]:
+          - img [ref=e52]
+          - heading "Activity" [level=2] [ref=e54]
+        - generic [ref=e55]:
+          - button "Orc finished Review ball-sort visualizer against spec 11h ago" [ref=e56] [cursor=pointer]:
+            - generic [ref=e57]: Orc
+            - generic [ref=e58]: finished
+            - generic [ref=e59]: Review ball-sort visualizer against spec
+            - generic [ref=e60]: 11h ago
+          - button "Carl merged Polish and harden ball-sort visualizer 11h ago" [ref=e61] [cursor=pointer]:
+            - generic [ref=e62]: Carl
+            - generic [ref=e63]: merged
+            - generic [ref=e64]: Polish and harden ball-sort visualizer
+            - generic [ref=e65]: 11h ago
+          - button "Carl finished Polish and harden ball-sort visualizer 12h ago" [ref=e66] [cursor=pointer]:
+            - generic [ref=e67]: Carl
+            - generic [ref=e68]: finished
+            - generic [ref=e69]: Polish and harden ball-sort visualizer
+            - generic [ref=e70]: 12h ago
+          - button "Carl started Polish and harden ball-sort visualizer 12h ago" [ref=e71] [cursor=pointer]:
+            - generic [ref=e72]: Carl
+            - generic [ref=e73]: started
+            - generic [ref=e74]: Polish and harden ball-sort visualizer
+            - generic [ref=e75]: 12h ago
+          - button "Atlas updated Polish and harden ball-sort visualizer 12h ago" [disabled] [ref=e76] [cursor=pointer]:
+            - generic [ref=e77]: Atlas
+            - generic [ref=e78]: updated
+            - generic [ref=e79]: Polish and harden ball-sort visualizer
+            - generic [ref=e80]: 12h ago
+          - button "Orc started Review ball-sort visualizer against spec 12h ago" [ref=e81] [cursor=pointer]:
+            - generic [ref=e82]: Orc
+            - generic [ref=e83]: started
+            - generic [ref=e84]: Review ball-sort visualizer against spec
+            - generic [ref=e85]: 12h ago
+          - button "Atlas updated Review ball-sort visualizer against spec 12h ago" [disabled] [ref=e86] [cursor=pointer]:
+            - generic [ref=e87]: Atlas
+            - generic [ref=e88]: updated
+            - generic [ref=e89]: Review ball-sort visualizer against spec
+            - generic [ref=e90]: 12h ago
+          - button "Atlas finished Build index.html — colored ball sort visualizer 12h ago" [ref=e91] [cursor=pointer]:
+            - generic [ref=e92]: Atlas
+            - generic [ref=e93]: finished
+            - generic [ref=e94]: Build index.html — colored ball sort visualizer
+            - generic [ref=e95]: 12h ago
+          - button "Atlas started Build index.html — colored ball sort visualizer 12h ago" [ref=e96] [cursor=pointer]:
+            - generic [ref=e97]: Atlas
+            - generic [ref=e98]: started
+            - generic [ref=e99]: Build index.html — colored ball sort visualizer
+            - generic [ref=e100]: 12h ago
+          - button "Carl failed on Create five numbered text files 12h ago" [ref=e101] [cursor=pointer]:
+            - generic [ref=e102]: Carl
+            - generic [ref=e103]: failed on
+            - generic [ref=e104]: Create five numbered text files
+            - generic [ref=e105]: 12h ago
+          - button "Carl started Create five numbered text files 12h ago" [ref=e106] [cursor=pointer]:
+            - generic [ref=e107]: Carl
+            - generic [ref=e108]: started
+            - generic [ref=e109]: Create five numbered text files
+            - generic [ref=e110]: 12h ago
+          - button "Atlas updated Create five numbered text files 12h ago" [disabled] [ref=e111] [cursor=pointer]:
+            - generic [ref=e112]: Atlas
+            - generic [ref=e113]: updated
+            - generic [ref=e114]: Create five numbered text files
+            - generic [ref=e115]: 12h ago

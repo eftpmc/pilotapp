@@ -10,7 +10,7 @@ const TabsList = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <TabsPrimitive.List
     ref={ref}
-    className={cn('inline-flex items-center gap-0 border-b border-border', className)}
+    className={cn('tabs', className)}
     {...props}
   />
 ))
@@ -22,10 +22,12 @@ const TabsTrigger = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <TabsPrimitive.Trigger
     ref={ref}
-    className={cn(
-      'relative px-4 py-2 text-sm font-medium text-muted-foreground transition-colors focus-visible:outline-none after:absolute after:bottom-0 after:left-0 after:right-0 after:h-0.5 data-[state=active]:text-foreground data-[state=active]:after:bg-primary',
-      className
-    )}
+    className={cn('tab', className)}
+    data-active-class="active"
+    // Radix sets data-state="active" — we style via CSS attribute selector below
+    style={{
+      // handled via global .tab + [data-state=active] in index.css
+    }}
     {...props}
   />
 ))

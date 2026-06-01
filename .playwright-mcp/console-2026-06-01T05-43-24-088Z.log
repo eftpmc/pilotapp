@@ -1,0 +1,23 @@
+[      87ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=1e3f1880:14336
+[     147ms] [WARNING] WebSocket connection to 'ws://localhost:5173/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI4ZGJkZmMzZC1lNzU4LTQ0NzYtYWJhZS04ZTI1YjhlNTU2ZDQiLCJpYXQiOjE3ODAyOTIzNjcsImV4cCI6MTc4Mjg4NDM2N30.vbSEr1Wtowo2fo6NFZJ_jTxY0fBzdeK1VyvAVfQzrYw' failed: WebSocket is closed before the connection is established. @ http://localhost:5173/src/pages/SessionPage.tsx:380
+[   53603ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://localhost:5173/sessions/c4ed775b-2cbd-4b37-8da3-85c56a3e87f2/diff:0
+[   53612ms] Error: HTTP 500
+    at req (http://localhost:5173/src/api/client.ts:62:9)
+    at async loadDiff (http://localhost:5173/src/pages/SessionPage.tsx:426:24)
+[   97075ms] ReferenceError: JournalView is not defined
+    at SessionPage (http://localhost:5173/src/pages/SessionPage.tsx?t=1780292700924:732:86)
+    at Object.react_stack_bottom_frame (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=1e3f1880:12867:12)
+    at renderWithHooks (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=1e3f1880:4212:19)
+    at updateFunctionComponent (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=1e3f1880:5568:16)
+    at beginWork (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=1e3f1880:6139:20)
+    at runWithFiberInDEV (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=1e3f1880:850:66)
+    at performUnitOfWork (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=1e3f1880:8428:92)
+    at workLoopSync (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=1e3f1880:8324:37)
+    at renderRootSync (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=1e3f1880:8308:6)
+    at performWorkOnRoot (http://localhost:5173/node_modules/.vite/deps/react-dom_client.js?v=1e3f1880:7993:27)
+[   97074ms] [WARNING] %s
+
+%s
+ An error occurred in the <SessionPage> component. Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries. @ http://localhost:5173/@vite/client:524
+[  110446ms] [WARNING] WebSocket connection to 'ws://localhost:5173/ws?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiI4ZGJkZmMzZC1lNzU4LTQ0NzYtYWJhZS04ZTI1YjhlNTU2ZDQiLCJpYXQiOjE3ODAyOTIzNjcsImV4cCI6MTc4Mjg4NDM2N30.vbSEr1Wtowo2fo6NFZJ_jTxY0fBzdeK1VyvAVfQzrYw' failed: WebSocket is closed before the connection is established. @ http://localhost:5173/src/pages/SessionPage.tsx?t=1780292714406:493

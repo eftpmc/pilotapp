@@ -1,0 +1,29 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - button "pilot" [ref=e5] [cursor=pointer]:
+      - img [ref=e6]
+      - text: pilot
+    - generic [ref=e11]:
+      - link "Today" [ref=e12] [cursor=pointer]:
+        - /url: /
+      - link "Agents" [ref=e13] [cursor=pointer]:
+        - /url: /employees
+      - link "Projects" [ref=e14] [cursor=pointer]:
+        - /url: /projects
+      - link "Settings" [ref=e15] [cursor=pointer]:
+        - /url: /settings
+    - button "Sign out" [ref=e17] [cursor=pointer]
+  - main [ref=e18]:
+    - generic [ref=e20]:
+      - heading "Settings" [level=1] [ref=e21]
+      - generic [ref=e22]:
+        - generic [ref=e23]:
+          - heading "Connections" [level=2] [ref=e24]
+          - button "+ Add" [ref=e25] [cursor=pointer]
+        - paragraph [ref=e26]: API credentials agents use to run tasks.
+        - paragraph [ref=e27]: No connections yet.
+      - generic [ref=e28]:
+        - heading "Account" [level=2] [ref=e30]
+        - generic [ref=e31]:
+          - generic [ref=e32]: Sign out of pilot
+          - button "Sign out" [ref=e33] [cursor=pointer]

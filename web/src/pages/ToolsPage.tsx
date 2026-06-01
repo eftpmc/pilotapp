@@ -10,7 +10,8 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import {
-  Globe, GitBranch, Brain, HardDrive, Wrench, Zap, Plus, Pencil, Trash2, Users,
+  Globe, GitBranch, Brain, Wrench, Zap, Plus, Pencil, Trash2, Users,
+  Search, Monitor, BookMarked, MessageSquare, Database, AlertCircle, Code2,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -33,9 +34,24 @@ const PRESETS: Preset[] = [
     name: 'Fetch',
     icon: Globe,
     tagline: 'Web browsing',
-    description: 'Let employees browse URLs and fetch web content during their sessions.',
+    description: 'Let agents browse URLs and fetch web content during their sessions.',
     mcpConfig: { fetch: { command: 'npx', args: ['-y', '@modelcontextprotocol/server-fetch'] } },
     envVars: [],
+  },
+  {
+    id: 'brave-search',
+    name: 'Brave Search',
+    icon: Search,
+    tagline: 'Web search',
+    description: 'Search the web via Brave Search API. Better than fetch for discovery tasks.',
+    mcpConfig: {
+      'brave-search': {
+        command: 'npx',
+        args: ['-y', '@modelcontextprotocol/server-brave-search'],
+        env: { BRAVE_API_KEY: '__TOKEN__' },
+      },
+    },
+    envVars: [{ key: 'BRAVE_API_KEY', label: 'Brave API Key', placeholder: 'BSA...' }],
   },
   {
     id: 'github',
@@ -53,22 +69,93 @@ const PRESETS: Preset[] = [
     envVars: [{ key: 'GITHUB_PERSONAL_ACCESS_TOKEN', label: 'Personal Access Token', placeholder: 'ghp_...' }],
   },
   {
+    id: 'gitlab',
+    name: 'GitLab',
+    icon: Code2,
+    tagline: 'Issues, MRs, repos',
+    description: 'Read and write GitLab issues, merge requests, and repository content.',
+    mcpConfig: {
+      gitlab: {
+        command: 'npx',
+        args: ['-y', '@modelcontextprotocol/server-gitlab'],
+        env: { GITLAB_PERSONAL_ACCESS_TOKEN: '__TOKEN__', GITLAB_API_URL: 'https://gitlab.com/api/v4' },
+      },
+    },
+    envVars: [{ key: 'GITLAB_PERSONAL_ACCESS_TOKEN', label: 'Personal Access Token', placeholder: 'glpat-...' }],
+  },
+  {
     id: 'sequential-thinking',
     name: 'Sequential Thinking',
     icon: Brain,
     tagline: 'Structured reasoning',
-    description: 'Step-by-step reasoning that helps employees break down complex tasks before acting.',
+    description: 'Step-by-step reasoning that helps agents break down complex tasks before acting.',
     mcpConfig: { 'sequential-thinking': { command: 'npx', args: ['-y', '@modelcontextprotocol/server-sequential-thinking'] } },
     envVars: [],
   },
   {
-    id: 'filesystem',
-    name: 'Filesystem',
-    icon: HardDrive,
-    tagline: 'Local file access',
-    description: 'Read and write files on the local filesystem. Useful for reading shared config or docs.',
-    mcpConfig: { filesystem: { command: 'npx', args: ['-y', '@modelcontextprotocol/server-filesystem', '.'] } },
+    id: 'memory',
+    name: 'Memory',
+    icon: BookMarked,
+    tagline: 'Persistent knowledge',
+    description: 'Lets agents store and recall facts across sessions using a knowledge graph.',
+    mcpConfig: { memory: { command: 'npx', args: ['-y', '@modelcontextprotocol/server-memory'] } },
     envVars: [],
+  },
+  {
+    id: 'postgres',
+    name: 'PostgreSQL',
+    icon: Database,
+    tagline: 'Database queries',
+    description: 'Read-only access to a Postgres database. Agents can query schema and run SELECTs.',
+    mcpConfig: {
+      postgres: {
+        command: 'npx',
+        args: ['-y', '@modelcontextprotocol/server-postgres'],
+        env: { DATABASE_URL: '__TOKEN__' },
+      },
+    },
+    envVars: [{ key: 'DATABASE_URL', label: 'Connection String', placeholder: 'postgresql://user:pass@host/db' }],
+  },
+  {
+    id: 'puppeteer',
+    name: 'Puppeteer',
+    icon: Monitor,
+    tagline: 'Browser automation',
+    description: 'Control a real browser — navigate pages, click, fill forms, take screenshots.',
+    mcpConfig: { puppeteer: { command: 'npx', args: ['-y', '@modelcontextprotocol/server-puppeteer'] } },
+    envVars: [],
+  },
+  {
+    id: 'slack',
+    name: 'Slack',
+    icon: MessageSquare,
+    tagline: 'Messaging',
+    description: 'Read channels and post messages to Slack workspaces.',
+    mcpConfig: {
+      slack: {
+        command: 'npx',
+        args: ['-y', '@modelcontextprotocol/server-slack'],
+        env: { SLACK_BOT_TOKEN: '__TOKEN__', SLACK_TEAM_ID: '__TEAM_ID__' },
+      },
+    },
+    envVars: [
+      { key: 'SLACK_BOT_TOKEN', label: 'Bot Token', placeholder: 'xoxb-...' },
+      { key: 'SLACK_TEAM_ID',   label: 'Team ID',   placeholder: 'T...' },
+    ],
+  },
+  {
+    id: 'sentry',
+    name: 'Sentry',
+    icon: AlertCircle,
+    tagline: 'Error monitoring',
+    description: 'Query Sentry for errors, issues, and stack traces to help agents debug.',
+    mcpConfig: {
+      sentry: {
+        command: 'uvx',
+        args: ['mcp-server-sentry', '--auth-token', '__TOKEN__'],
+      },
+    },
+    envVars: [{ key: '__TOKEN__', label: 'Auth Token', placeholder: 'sntrys_...' }],
   },
   {
     id: 'linear',
@@ -289,7 +376,7 @@ function ToolCard({ tool, deptList, deptToolIds, employeeToolIds, onEdit, onDele
       {/* Department assignments */}
       {deptList.length > 0 && (
         <div className="px-4 pb-4 border-t border-border/40 pt-3">
-          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">Departments</p>
+          <p className="text-xs font-semibold text-muted-foreground/60 mb-2">Departments</p>
           <div className="flex flex-wrap gap-1.5">
             {deptList.map(dept => {
               const assigned = deptToolIds.has(dept.id)
@@ -327,27 +414,29 @@ function ToolCard({ tool, deptList, deptToolIds, employeeToolIds, onEdit, onDele
 }
 
 // ---------------------------------------------------------------------------
-// Preset shop card
+// Preset shop row
 // ---------------------------------------------------------------------------
 
-function PresetCard({ preset, onAdd }: { preset: Preset; onAdd: () => void }) {
+function PresetRow({ preset, onAdd }: { preset: Preset; onAdd: () => void }) {
   const Icon = preset.icon
   return (
-    <div className="bg-card rounded-2xl border border-dashed border-border/50 px-4 py-4 flex flex-col gap-3">
-      <div className="flex items-start gap-3">
-        <div className="w-8 h-8 rounded-xl bg-muted flex items-center justify-center shrink-0">
-          <Icon className="h-4 w-4 text-muted-foreground" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-foreground">{preset.name}</p>
-          <p className="text-xs text-muted-foreground mt-0.5">{preset.tagline}</p>
-        </div>
+    <div className="flex items-center gap-4 px-4 py-3.5 rounded-xl hover:bg-muted/30 transition-colors group">
+      <div className="w-8 h-8 rounded-lg bg-muted/60 flex items-center justify-center shrink-0">
+        <Icon className="h-4 w-4 text-muted-foreground" />
       </div>
-      <p className="text-xs text-muted-foreground leading-relaxed">{preset.description}</p>
-      <Button size="sm" variant="outline" className="w-full gap-1.5" onClick={onAdd}>
-        <Plus className="h-3.5 w-3.5" />
-        Add to company
-      </Button>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-baseline gap-2">
+          <span className="text-sm text-foreground">{preset.name}</span>
+          <span className="text-xs text-muted-foreground/60">{preset.tagline}</span>
+        </div>
+        <p className="text-xs text-muted-foreground/50 mt-0.5 leading-snug">{preset.description}</p>
+      </div>
+      <button
+        onClick={onAdd}
+        className="shrink-0 h-7 px-3 rounded-lg text-xs text-muted-foreground border border-border/50 hover:border-border hover:text-foreground bg-transparent transition-colors cursor-pointer opacity-0 group-hover:opacity-100"
+      >
+        Add
+      </button>
     </div>
   )
 }
@@ -411,17 +500,15 @@ export default function ToolsPage() {
 
   return (
     <div className="flex-1 overflow-y-auto bg-background">
-      <div className="max-w-4xl mx-auto px-6 py-8">
+      <div className="px-6 pt-10 pb-8">
 
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-start justify-between mb-8">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Tools</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Equipment available to your employees via MCP.
-            </p>
+            <h1 className="text-2xl font-semibold tracking-tight">Tools</h1>
+            <p className="text-sm text-muted-foreground mt-1">MCP servers available to your agents.</p>
           </div>
-          <Button onClick={() => setShowCustom(true)} className="gap-1.5">
+          <Button onClick={() => setShowCustom(true)} className="gap-1.5 mt-1">
             <Plus className="h-4 w-4" />
             Custom tool
           </Button>
@@ -430,10 +517,7 @@ export default function ToolsPage() {
         {/* Installed tools */}
         {toolList.length > 0 && (
           <section className="mb-10">
-            <div className="flex items-center gap-2 mb-4">
-              <h2 className="text-xs font-semibold text-foreground uppercase tracking-wide">Installed</h2>
-              <span className="font-mono text-xs text-muted-foreground">{toolList.length}</span>
-            </div>
+            <p className="text-xs text-muted-foreground/50 mb-3">Installed · {toolList.length}</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {toolList.map(tool => (
                 <ToolCard
@@ -456,13 +540,10 @@ export default function ToolsPage() {
         {/* Shop */}
         {uninstalledPresets.length > 0 && (
           <section>
-            <div className="flex items-center gap-2 mb-4">
-              <h2 className="text-xs font-semibold text-foreground uppercase tracking-wide">Shop</h2>
-              <span className="text-xs text-muted-foreground">Common equipment packages</span>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <p className="text-xs text-muted-foreground/50 mb-1">Available</p>
+            <div className="flex flex-col">
               {uninstalledPresets.map(preset => (
-                <PresetCard key={preset.id} preset={preset} onAdd={() => setAddPreset(preset)} />
+                <PresetRow key={preset.id} preset={preset} onAdd={() => setAddPreset(preset)} />
               ))}
             </div>
           </section>
@@ -470,13 +551,6 @@ export default function ToolsPage() {
 
         {toolList.length === 0 && uninstalledPresets.length === 0 && (
           <p className="text-sm text-muted-foreground">All preset tools installed.</p>
-        )}
-
-        {/* Empty installed state with shop */}
-        {toolList.length === 0 && (
-          <div className="mb-8 p-4 rounded-xl border border-dashed border-border/50 text-center">
-            <p className="text-sm text-muted-foreground">No tools installed yet. Add one from the shop below or create a custom MCP server.</p>
-          </div>
         )}
 
       </div>

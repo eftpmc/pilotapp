@@ -3,12 +3,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { brains, employees } from '../api/client'
 import type { Brain, AgentProvider, Employee } from '../api/client'
-import { useTheme, ACCENTS, type ThemeMode } from '../theme'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 
@@ -45,10 +43,10 @@ function AddBrainDialog({ open, onClose, onCreate, loading, error }: {
   return (
     <Dialog open={open} onOpenChange={o => !o && onClose()}>
       <DialogContent>
-        <DialogHeader><DialogTitle>Add Brain</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>Add Connection</DialogTitle></DialogHeader>
         <div className="flex flex-col gap-4">
           <p className="text-xs text-muted-foreground -mt-1">
-            A brain is a reasoning provider — an API connection employees borrow at runtime.
+            A connection is an API credential agents use at runtime.
           </p>
           <div className="flex flex-col gap-1.5">
             <Label>Name</Label>
@@ -87,7 +85,7 @@ function AddBrainDialog({ open, onClose, onCreate, loading, error }: {
             <Button variant="outline" onClick={onClose}>Cancel</Button>
             <Button className="flex-1" disabled={!name || loading}
               onClick={() => onCreate({ name, type, apiKey: apiKey || undefined, model: model || undefined })}>
-              {loading ? '…' : 'Add Brain'}
+              {loading ? '…' : 'Add Connection'}
             </Button>
           </div>
         </div>
@@ -146,8 +144,8 @@ function BrainRow({ brain, employeeCount, onUpdate, onDelete, onClearQuota }: {
       <div className="flex items-center gap-3 px-4 py-3 bg-destructive/5">
         <p className="text-xs text-muted-foreground flex-1">
           {employeeCount > 0
-            ? `This brain is used by ${employeeCount} employee${employeeCount !== 1 ? 's' : ''}. They will lose their brain.`
-            : 'Delete this brain?'}
+            ? `This connection is used by ${employeeCount} agent${employeeCount !== 1 ? 's' : ''}. They will lose access.`
+            : 'Delete this connection?'}
         </p>
         <Button size="sm" variant="outline" onClick={() => setConfirmDelete(false)}>Cancel</Button>
         <Button size="sm" variant="destructive" onClick={() => { onDelete(); setConfirmDelete(false) }}>Delete</Button>
@@ -157,7 +155,7 @@ function BrainRow({ brain, employeeCount, onUpdate, onDelete, onClearQuota }: {
 
   return (
     <div className="flex items-center gap-3 px-4 py-3">
-      <span className="text-sm font-medium text-foreground flex-1">{brain.name}</span>
+      <span className="text-sm text-foreground flex-1">{brain.name}</span>
       {brain.model && <span className="font-mono text-[10px] text-muted-foreground">{brain.model}</span>}
       {brain.quotaStatus === 'exceeded' && (
         <button onClick={onClearQuota} className="flex items-center gap-1 cursor-pointer bg-transparent border-none p-0">
@@ -185,7 +183,6 @@ function BrainRow({ brain, employeeCount, onUpdate, onDelete, onClearQuota }: {
 // ---------------------------------------------------------------------------
 
 export default function SettingsPage() {
-  const { theme, accent, setTheme, setAccent } = useTheme()
   const navigate = useNavigate()
   const qc = useQueryClient()
   const [showAddBrain, setShowAddBrain] = useState(false)
@@ -220,28 +217,24 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-background">
-      <div className="max-w-2xl mx-auto px-6 py-10 flex flex-col gap-10">
+    <div style={{ flex: 1, overflowY: 'auto', background: 'var(--bg)' }}>
+      <div className="page-content narrow" style={{ paddingTop: 52, paddingBottom: 80 }}>
 
-        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
+        <h1 className="h-page" style={{ marginBottom: 40 }}>Settings</h1>
 
-        {/* Brains */}
-        <section className="flex flex-col gap-3">
-          <div className="flex items-center">
-            <div>
-              <span className="text-sm font-semibold text-foreground">Brains</span>
-              <p className="text-xs text-muted-foreground mt-0.5">Reasoning providers — API connections employees borrow at runtime.</p>
-            </div>
-            <div className="flex-1" />
-            <Button size="sm" onClick={() => setShowAddBrain(true)}>+ Add</Button>
+        {/* Connections */}
+        <div className="section" style={{ marginTop: 0 }}>
+          <div className="section-head" style={{ marginBottom: 8 }}>
+            <h2>Connections</h2>
+            <button className="btn sm" onClick={() => setShowAddBrain(true)}>+ Add</button>
           </div>
-
+          <p style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 12 }}>API credentials agents use to run tasks.</p>
           {brainList.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No brains yet. Add an API key to get started.</p>
+            <p className="empty-line">No connections yet.</p>
           ) : (
-            <div className="bg-card rounded-2xl overflow-hidden [box-shadow:var(--shadow-card)]">
+            <div style={{ borderTop: '1px solid var(--rule-soft)', borderBottom: '1px solid var(--rule-soft)' }}>
               {brainList.map((b, i) => (
-                <div key={b.id}>
+                <div key={b.id} style={i > 0 ? { borderTop: '1px solid var(--rule-soft)' } : {}}>
                   <BrainRow
                     brain={b}
                     employeeCount={employeeCountForBrain(b.id)}
@@ -249,56 +242,20 @@ export default function SettingsPage() {
                     onDelete={() => deleteBrain.mutate(b.id)}
                     onClearQuota={() => clearQuota.mutate(b.id)}
                   />
-                  {i < brainList.length - 1 && <Separator />}
                 </div>
               ))}
             </div>
           )}
-        </section>
-
-        {/* Appearance */}
-        <section className="flex flex-col gap-3">
-          <span className="text-sm font-semibold text-foreground">Appearance</span>
-          <div className="bg-card rounded-2xl overflow-hidden [box-shadow:var(--shadow-card)]">
-            <div className="flex items-center gap-3 px-4 py-3">
-              <span className="text-sm text-foreground flex-1">Theme</span>
-              <div className="flex gap-0.5 bg-muted rounded-lg p-0.5">
-                {(['dark', 'system', 'light'] as ThemeMode[]).map(t => (
-                  <button key={t} onClick={() => setTheme(t)} className={cn(
-                    'px-3 py-1.5 rounded-md text-xs font-medium transition-colors cursor-pointer border-none',
-                    theme === t ? 'bg-card text-foreground font-semibold shadow-sm' : 'bg-transparent text-muted-foreground hover:text-foreground',
-                  )}>{t}</button>
-                ))}
-              </div>
-            </div>
-            <Separator />
-            <div className="flex items-center gap-3 px-4 py-3">
-              <span className="text-sm text-foreground flex-1">Accent color</span>
-              <div className="flex gap-2">
-                {ACCENTS.map(({ hex, label }) => (
-                  <button key={hex} title={label} onClick={() => setAccent(hex)} className={cn(
-                    'w-5 h-5 rounded-full cursor-pointer border-2 transition-all',
-                    accent === hex ? 'border-foreground scale-110' : 'border-transparent hover:scale-110',
-                  )} style={{ background: hex }} />
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
+        </div>
 
         {/* Account */}
-        <section className="flex flex-col gap-3">
-          <span className="text-sm font-semibold text-foreground">Account</span>
-          <div className="bg-card rounded-2xl overflow-hidden [box-shadow:var(--shadow-card)]">
-            <div className="flex items-center gap-3 px-4 py-3">
-              <span className="text-sm text-foreground flex-1">Sign out of pilot</span>
-              <Button size="sm" variant="outline" onClick={signOut}
-                className="text-muted-foreground hover:text-destructive hover:border-destructive/40">
-                Sign out
-              </Button>
-            </div>
+        <div className="section">
+          <div className="section-head"><h2>Account</h2></div>
+          <div style={{ borderTop: '1px solid var(--rule-soft)', borderBottom: '1px solid var(--rule-soft)', display: 'flex', alignItems: 'center', padding: '14px 4px', gap: 12 }}>
+            <span style={{ flex: 1, fontSize: 14, color: 'var(--ink)' }}>Sign out of pilot</span>
+            <button className="btn sm danger" onClick={signOut}>Sign out</button>
           </div>
-        </section>
+        </div>
 
       </div>
 

@@ -1,0 +1,35 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - button "pilot" [ref=e5] [cursor=pointer]:
+      - img [ref=e6]
+      - text: pilot
+    - generic [ref=e11]:
+      - link "Today" [ref=e12] [cursor=pointer]:
+        - /url: /
+      - link "Agents" [ref=e13] [cursor=pointer]:
+        - /url: /employees
+      - link "Projects" [ref=e14] [cursor=pointer]:
+        - /url: /projects
+      - link "Settings" [ref=e15] [cursor=pointer]:
+        - /url: /settings
+    - generic [ref=e16]:
+      - button "⌘K" [ref=e17] [cursor=pointer]:
+        - img [ref=e18]
+        - generic [ref=e21]: ⌘K
+      - button "Toggle theme" [ref=e22] [cursor=pointer]:
+        - img [ref=e23]
+      - button "Sign out" [ref=e26] [cursor=pointer]
+  - main [ref=e27]:
+    - generic [ref=e28]:
+      - generic [ref=e29]:
+        - button "Back" [ref=e30] [cursor=pointer]:
+          - img [ref=e31]
+          - text: Back
+        - generic [ref=e33]:
+          - generic [ref=e34]: "?"
+          - heading "Session" [level=1] [ref=e36]
+          - button "Discard" [ref=e38] [cursor=pointer]
+        - generic [ref=e39]:
+          - button "output" [ref=e40] [cursor=pointer]
+          - button "diff" [ref=e41] [cursor=pointer]
+      - paragraph [ref=e45]: waiting for output…

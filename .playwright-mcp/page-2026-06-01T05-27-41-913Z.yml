@@ -1,0 +1,42 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - button "pilot" [ref=e5] [cursor=pointer]:
+      - img [ref=e6]
+      - text: pilot
+    - generic [ref=e11]:
+      - link "Today" [ref=e12] [cursor=pointer]:
+        - /url: /
+      - link "Agents" [active] [ref=e13] [cursor=pointer]:
+        - /url: /employees
+      - link "Projects" [ref=e14] [cursor=pointer]:
+        - /url: /projects
+      - link "Settings" [ref=e15] [cursor=pointer]:
+        - /url: /settings
+    - button "Sign out" [ref=e17] [cursor=pointer]
+  - main [ref=e18]:
+    - generic [ref=e42]:
+      - generic [ref=e43]:
+        - generic [ref=e44]:
+          - heading "Agents" [level=1] [ref=e45]
+          - paragraph [ref=e46]: 1 agent
+        - generic [ref=e47]:
+          - button "+ Department" [ref=e48] [cursor=pointer]
+          - button "+ Agent" [ref=e49] [cursor=pointer]
+      - generic [ref=e50]:
+        - generic [ref=e51]:
+          - generic [ref=e52]: Unassigned
+          - generic [ref=e53]: "1"
+        - generic [ref=e55]:
+          - generic [ref=e57]: AT
+          - generic [ref=e59]:
+            - generic [ref=e61]: Atlas
+            - generic [ref=e62]:
+              - generic [ref=e63]: claude
+              - generic [ref=e64]: claude-opus-4-7
+              - generic [ref=e65]: idle
+          - generic [ref=e66]:
+            - button "tools" [ref=e67] [cursor=pointer]
+            - button "knowledge" [ref=e68] [cursor=pointer]
+            - button "edit" [ref=e69] [cursor=pointer]
+            - button "delete" [ref=e70] [cursor=pointer]
+        - button "+ Add agent" [ref=e71] [cursor=pointer]

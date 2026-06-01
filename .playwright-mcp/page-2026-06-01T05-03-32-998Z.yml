@@ -1,0 +1,99 @@
+- generic [ref=e2]:
+  - navigation [ref=e170]:
+    - button "pilot" [ref=e171] [cursor=pointer]:
+      - img [ref=e172]
+      - text: pilot
+    - generic [ref=e177]:
+      - button "Today 2" [ref=e178] [cursor=pointer]:
+        - text: Today
+        - generic [ref=e179]: "2"
+      - button "Agents" [ref=e180] [cursor=pointer]
+      - button "Projects" [ref=e181] [cursor=pointer]
+      - button "Knowledge" [ref=e182] [cursor=pointer]
+    - generic [ref=e183]:
+      - button "⌘K" [ref=e184] [cursor=pointer]:
+        - img [ref=e185]
+        - generic [ref=e188]: ⌘K
+      - button "Toggle theme" [ref=e189] [cursor=pointer]:
+        - img [ref=e190]
+      - button "New task" [ref=e192] [cursor=pointer]:
+        - img [ref=e193]
+        - generic [ref=e195]: New task
+      - generic "You" [ref=e196]: JD
+  - generic [ref=e197]:
+    - banner [ref=e198]:
+      - heading "Agents" [level=1] [ref=e199]
+      - paragraph [ref=e200]: 7 teammates across three departments. 5 on shift, 3 on a task right now.
+    - generic [ref=e201]:
+      - generic [ref=e202]:
+        - generic [ref=e203]: Engineering
+        - generic [ref=e204]: 3/3 on shift
+        - generic "100% on shift" [ref=e205]
+      - generic [ref=e207]:
+        - button "MA Mara lead · claude · between tasks ↵ on shift" [ref=e208] [cursor=pointer]:
+          - generic [ref=e210]: MA
+          - generic [ref=e212]:
+            - generic [ref=e213]: Mara
+            - generic [ref=e214]: lead · claude · between tasks
+          - generic [ref=e215]: ↵
+          - generic [ref=e216]: on shift
+        - button "DV Devon working on Refactor the auth session flow ↵ 4:21:14" [ref=e218] [cursor=pointer]:
+          - generic [ref=e220]: DV
+          - generic [ref=e222]:
+            - generic [ref=e223]: Devon
+            - generic [ref=e224]:
+              - generic [ref=e225]: working on
+              - text: Refactor the auth session flow
+          - generic [ref=e226]: ↵
+          - generic [ref=e227]: 4:21:14
+        - button "PR Priya working on Add rate limiting to the public API ↵ 48:14" [ref=e228] [cursor=pointer]:
+          - generic [ref=e230]: PR
+          - generic [ref=e232]:
+            - generic [ref=e233]: Priya
+            - generic [ref=e234]:
+              - generic [ref=e235]: working on
+              - text: Add rate limiting to the public API
+          - generic [ref=e236]: ↵
+          - generic [ref=e237]: 48:14
+    - generic [ref=e238]:
+      - generic [ref=e239]:
+        - generic [ref=e240]: Design
+        - generic [ref=e241]: 0/2 on shift
+        - generic "0% on shift" [ref=e242]
+      - generic [ref=e243]:
+        - button "LE Lena reviewer · claude ↵ off shift" [ref=e244] [cursor=pointer]:
+          - generic [ref=e246]: LE
+          - generic [ref=e248]:
+            - generic [ref=e249]: Lena
+            - generic [ref=e250]: reviewer · claude
+          - generic [ref=e251]: ↵
+          - generic [ref=e252]: off shift
+        - button "SO Sol worker · codex ↵ off shift" [ref=e254] [cursor=pointer]:
+          - generic [ref=e256]: SO
+          - generic [ref=e258]:
+            - generic [ref=e259]: Sol
+            - generic [ref=e260]: worker · codex
+          - generic [ref=e261]: ↵
+          - generic [ref=e262]: off shift
+    - generic [ref=e264]:
+      - generic [ref=e265]:
+        - generic [ref=e266]: Research
+        - generic [ref=e267]: 2/2 on shift
+        - generic "100% on shift" [ref=e268]
+      - generic [ref=e270]:
+        - button "RA Rai working on Investigate the flaky billing test suite ↵ 11:09:14" [ref=e271] [cursor=pointer]:
+          - generic [ref=e273]: RA
+          - generic [ref=e275]:
+            - generic [ref=e276]: Rai
+            - generic [ref=e277]:
+              - generic [ref=e278]: working on
+              - text: Investigate the flaky billing test suite
+          - generic [ref=e279]: ↵
+          - generic [ref=e280]: 11:09:14
+        - button "AN Ana worker · claude · between tasks ↵ on shift" [ref=e281] [cursor=pointer]:
+          - generic [ref=e283]: AN
+          - generic [ref=e285]:
+            - generic [ref=e286]: Ana
+            - generic [ref=e287]: worker · claude · between tasks
+          - generic [ref=e288]: ↵
+          - generic [ref=e289]: on shift

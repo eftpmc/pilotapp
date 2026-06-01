@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -16,7 +15,7 @@ import { CardSkeleton } from '@/components/Skeleton'
 import { AgentAvatar } from '@/components/AgentAvatar'
 import { fmtSecs, useElapsed } from '@/lib/time'
 import { cn } from '@/lib/utils'
-import { ListTodo, Loader2, GitMerge, Upload, ChevronDown, GripVertical } from 'lucide-react'
+import { ListTodo, Loader2, GitMerge, Upload, GripVertical } from 'lucide-react'
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
   type DragEndEvent,
@@ -41,18 +40,18 @@ function ProjectDot({ projectId, projectList }: { projectId: string; projectList
 // Column header
 // ---------------------------------------------------------------------------
 
-const COL_DOT: Record<string, string> = {
-  Queue: 'bg-muted-foreground/40',
+const COL_ACCENT: Record<string, string> = {
+  Queue:   'bg-muted-foreground/25',
   Working: 'bg-green-500',
-  Review: 'bg-amber-400',
+  Review:  'bg-amber-400',
 }
 
 function ColHead({ title, count }: { title: string; count: number }) {
   return (
-    <div className="flex items-center gap-2 pb-3 shrink-0">
-      <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', COL_DOT[title] ?? 'bg-muted-foreground/40')} />
-      <span className="text-xs font-semibold text-foreground">{title}</span>
-      <span className="font-mono text-xs text-muted-foreground">{count}</span>
+    <div className="flex items-center gap-2.5 pb-3 shrink-0">
+      <div className={cn('w-0.5 h-4 rounded-full shrink-0', COL_ACCENT[title] ?? 'bg-muted-foreground/25')} />
+      <span className="text-xs font-semibold text-foreground tracking-wide">{title}</span>
+      <span className="text-[11px] font-mono text-muted-foreground/50 bg-muted/60 px-1.5 py-px rounded-full leading-none">{count}</span>
     </div>
   )
 }
@@ -95,55 +94,71 @@ function AgentPicker({ employeeList, onAssign }: { employeeList: Employee[]; onA
 // Cards
 // ---------------------------------------------------------------------------
 
+const SIZE_BADGE: Record<string, string> = {
+  xs: 'text-sky-400 bg-sky-500/10 border-sky-500/25',
+  s:  'text-blue-400 bg-blue-500/10 border-blue-500/25',
+  m:  'text-muted-foreground/60 bg-muted/50 border-border/50',
+  l:  'text-amber-400 bg-amber-500/10 border-amber-500/25',
+  xl: 'text-red-400 bg-red-500/10 border-red-500/25',
+}
+
+function SizeBadge({ size }: { size?: string }) {
+  const s = size ?? 'm'
+  return (
+    <span className={cn('inline-flex items-center font-mono text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border', SIZE_BADGE[s])}>
+      {s}
+    </span>
+  )
+}
+
 function QueueCard({ task, employeeList, projectList, onAssign, onDelete }: {
   task: Task; employeeList: Employee[]
   projectList: { id: string; name: string }[]
   onAssign: (id: string) => void; onDelete: () => void
 }) {
-  const [expanded, setExpanded] = useState(false)
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id })
   const style = { transform: CSS.Transform.toString(transform), transition }
+  const projName = projectList.find(p => p.id === task.projectId)?.name
   return (
-    <div ref={setNodeRef} style={style} className={cn('bg-card rounded-xl [box-shadow:var(--shadow-card)] border border-dashed border-border/50', isDragging && 'opacity-50 z-50')}>
-      <div className="flex items-start gap-1 p-3.5">
+    <div ref={setNodeRef} style={style} className={cn('bg-card rounded-xl [box-shadow:var(--shadow-card)] overflow-hidden select-none', isDragging && 'opacity-50 z-50')}>
+      {/* Tags row */}
+      <div className="flex items-center gap-1.5 px-3.5 pt-3.5">
+        <SizeBadge size={task.size} />
+        {task.leadSessionId && (
+          <span className="text-[10px] font-bold text-indigo-400 bg-indigo-500/10 border border-indigo-500/25 rounded px-1.5 py-0.5 uppercase tracking-wider">Lead</span>
+        )}
+        <span className="text-[11px] font-mono text-muted-foreground/55 bg-muted/50 border border-border/40 rounded-full px-2 py-px ml-auto">
+          {task.baseBranch || 'main'}
+        </span>
+      </div>
+
+      {/* Title + prompt */}
+      <div className="px-3.5 pt-2.5 pb-3">
+        <p className="text-sm font-semibold text-foreground leading-snug">{task.title}</p>
+        {task.prompt && (
+          <p className="text-xs text-muted-foreground/60 mt-1.5 leading-relaxed line-clamp-2">{task.prompt}</p>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div className="flex items-center gap-2 px-3.5 pb-3 border-t border-border/30 pt-2.5">
         <button {...attributes} {...listeners}
-          className="mt-0.5 shrink-0 text-muted-foreground/30 hover:text-muted-foreground/60 cursor-grab active:cursor-grabbing transition-colors bg-transparent border-none p-0 touch-none">
-          <GripVertical className="h-4 w-4" />
+          className="text-muted-foreground/20 hover:text-muted-foreground/50 cursor-grab active:cursor-grabbing bg-transparent border-none p-0 touch-none transition-colors shrink-0" tabIndex={-1}>
+          <GripVertical className="h-3.5 w-3.5" />
         </button>
-        <div className="flex-1 min-w-0 flex flex-col gap-2">
-          <div className="flex items-start gap-2">
-            <p className="text-sm font-medium text-foreground leading-snug flex-1">
-              {task.leadSessionId && <span className="text-[10px] font-bold text-indigo-400/70 mr-1.5 uppercase tracking-wide">Lead ·</span>}
-              {task.title}
-            </p>
-            {task.prompt && (
-              <button onClick={() => setExpanded(e => !e)}
-                className="shrink-0 text-muted-foreground/50 hover:text-muted-foreground transition-colors cursor-pointer bg-transparent border-none p-0 mt-0.5">
-                <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', expanded && 'rotate-180')} />
-              </button>
-            )}
-          </div>
-          {expanded && task.prompt && (
-            <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap bg-muted/40 rounded-lg px-2.5 py-2">
-              {task.prompt}
-            </p>
-          )}
-          <div className="flex items-center gap-2">
+        {projName && (
+          <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground/50">
             <ProjectDot projectId={task.projectId} projectList={projectList} />
-            <span className="text-[11px] text-muted-foreground truncate">
-              {projectList.find(p => p.id === task.projectId)?.name ?? '—'}
-            </span>
-            <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-[11px] font-mono">
-              {task.baseBranch || 'main'}
-            </span>
-            <div className="flex-1" />
-            {employeeList.length > 0
-              ? <AgentPicker employeeList={employeeList} onAssign={onAssign} />
-              : <span className="text-[11px] text-muted-foreground">No employees</span>}
-            <button onClick={onDelete}
-              className="text-muted-foreground/50 hover:text-destructive transition-colors cursor-pointer bg-transparent border-none text-base leading-none">×</button>
-          </div>
-        </div>
+            {projName}
+          </span>
+        )}
+        <div className="flex-1" />
+        {employeeList.length > 0
+          ? <AgentPicker employeeList={employeeList} onAssign={onAssign} />
+          : <span className="text-[11px] text-muted-foreground/40">No agents</span>
+        }
+        <button onClick={onDelete}
+          className="text-muted-foreground/25 hover:text-destructive transition-colors cursor-pointer bg-transparent border-none text-lg leading-none">×</button>
       </div>
     </div>
   )
@@ -153,35 +168,40 @@ function WorkingCard({ session, employee, task, projectName, taskList, onClick }
   session: Session; employee?: Employee; task?: Task; projectName?: string
   taskList: Task[]; onClick: () => void
 }) {
-  const secs      = useElapsed(session.createdAt, true)
-  const shortId   = session.id.slice(0, 7)
-  const isLead    = employee?.role === 'lead'
+  const secs       = useElapsed(session.createdAt, true)
+  const shortId    = session.id.slice(0, 7)
+  const isLead     = employee?.role === 'lead'
   const shiftTotal = session.shiftId ? taskList.filter(t => t.shiftId === session.shiftId).length : 0
   const shiftDone  = session.shiftId ? taskList.filter(t => t.shiftId === session.shiftId && (t.status === 'done' || t.status === 'failed')).length : 0
-  const leadTasks  = isLead ? taskList.filter(t => t.leadSessionId === session.id) : []
+
+  const statusLabel = session.shiftId
+    ? `Shift ${shiftDone + 1}/${shiftTotal}`
+    : isLead ? 'Coordinating' : 'Running'
 
   return (
     <button onClick={onClick}
-      className="w-full text-left bg-card rounded-xl p-3.5 flex flex-col gap-2.5 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 [box-shadow:var(--shadow-card)] border border-green-500/20">
-      <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2 min-h-[2.5rem]">
-        {session.shiftId && <span className="text-[10px] font-bold text-primary/70 mr-1.5 uppercase tracking-wide">Shift {shiftDone + 1}/{shiftTotal} ·</span>}
-        {isLead && !session.shiftId && <span className="text-[10px] font-bold text-indigo-400/80 mr-1.5 uppercase tracking-wide">Lead ·</span>}
-        {task?.title ?? session.branch}
-      </p>
-      <div className="flex items-center gap-2">
-        <AgentAvatar agent={employee} size={18} />
-        <span className="text-xs text-muted-foreground truncate">{employee?.name ?? '—'}</span>
-        {projectName && <span className="text-[11px] text-muted-foreground/60 truncate">· {projectName}</span>}
-        <span className="font-mono text-[10px] text-muted-foreground/40">#{shortId}</span>
-        <div className="flex-1" />
-        {isLead && leadTasks.length > 0 && (
-          <span className="text-[10px] text-indigo-400/70 font-medium">{leadTasks.length} dispatched</span>
-        )}
-        <span className="font-mono text-[11px] text-green-500 tabular-nums">{fmtSecs(secs)}</span>
-        <Badge variant="success" className="gap-1 shrink-0 text-[10px] px-1.5">
+      className="w-full text-left bg-card rounded-xl overflow-hidden cursor-pointer transition-all duration-200 hover:-translate-y-0.5 [box-shadow:var(--shadow-card)]"
+      style={{ boxShadow: 'var(--shadow-card), inset 0 2px 0 oklch(0.70 0.19 145 / 0.6)' }}
+    >
+      <div className="flex items-center gap-1.5 px-3.5 pt-3.5">
+        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-green-500 bg-green-500/10 border border-green-500/25 rounded px-1.5 py-0.5">
           <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-[pulse_1.6s_ease-out_infinite]" />
-          {isLead ? 'Coordinating' : 'Live'}
-        </Badge>
+          {statusLabel}
+        </span>
+        <span className="font-mono text-[11px] text-green-500 tabular-nums ml-auto">{fmtSecs(secs)}</span>
+      </div>
+
+      <div className="px-3.5 pt-2.5 pb-3">
+        <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">
+          {task?.title ?? session.branch}
+        </p>
+      </div>
+
+      <div className="flex items-center gap-2 px-3.5 pb-3 border-t border-border/30 pt-2.5">
+        <AgentAvatar agent={employee} size={18} />
+        <span className="text-xs text-muted-foreground">{employee?.name ?? '—'}</span>
+        {projectName && <span className="text-[11px] text-muted-foreground/40">· {projectName}</span>}
+        <span className="font-mono text-[10px] text-muted-foreground/30">#{shortId}</span>
       </div>
     </button>
   )
@@ -229,28 +249,39 @@ function ReviewCard({ session, employee, task, projectName, hasRemote, allEmploy
   const approved  = verdict === 'approved'
   const changes   = verdict === 'changes_requested'
 
+  const topAccent = isError ? 'oklch(0.63 0.22 22 / 0.7)' : approved ? 'oklch(0.70 0.19 145 / 0.7)' : isPending ? 'oklch(0.60 0.10 264 / 0.5)' : 'oklch(0.80 0.16 75 / 0.6)'
+  const statusTag = isError ? (
+    <span className="inline-flex items-center text-[10px] font-bold text-red-400 bg-red-500/10 border border-red-500/25 rounded px-1.5 py-0.5">Error</span>
+  ) : isPending ? (
+    <span className="inline-flex items-center text-[10px] font-bold text-muted-foreground bg-muted/60 border border-border/50 rounded px-1.5 py-0.5">Reviewing…</span>
+  ) : approved ? (
+    <span className="inline-flex items-center text-[10px] font-bold text-green-400 bg-green-500/10 border border-green-500/25 rounded px-1.5 py-0.5">Approved ✓</span>
+  ) : changes ? (
+    <span className="inline-flex items-center text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/25 rounded px-1.5 py-0.5">Changes Requested</span>
+  ) : (
+    <span className="inline-flex items-center text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/25 rounded px-1.5 py-0.5">Review</span>
+  )
+
   return (
     <div onClick={onClick}
-      className={cn(
-        'bg-card rounded-xl p-3.5 flex flex-col gap-2.5 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 [box-shadow:var(--shadow-card)]',
-        isError ? 'border border-red-500/25' : approved ? 'border border-green-500/20' : 'border border-amber-400/20'
-      )}>
-      <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2 min-h-[2.5rem]">
-        {task?.leadSessionId && <span className="text-[10px] font-bold text-indigo-400/70 mr-1.5 uppercase tracking-wide">Lead ·</span>}
-        {task?.title ?? session.branch}
-      </p>
-      <div className="flex items-center gap-2">
-        <AgentAvatar agent={employee} size={18} />
-        <span className="text-xs text-muted-foreground truncate">{employee?.name ?? '—'}</span>
-        {projectName && <span className="text-[11px] text-muted-foreground/60 truncate">· {projectName}</span>}
-        <div className="flex-1" />
-        {approved  && <Badge variant="success"     className="shrink-0 text-[10px]">Approved ✓</Badge>}
-        {changes   && <Badge variant="warning"     className="shrink-0 text-[10px]">Changes Requested</Badge>}
-        {isPending && <Badge variant="outline"     className="shrink-0 text-[10px] text-muted-foreground">Reviewing…</Badge>}
-        {!verdict  && !isError && <Badge variant="warning" className="shrink-0 text-[10px]">Review</Badge>}
-        {isError   && <Badge variant="destructive" className="shrink-0 text-[10px]">Error</Badge>}
+      className="bg-card rounded-xl overflow-hidden cursor-pointer transition-all duration-200 hover:-translate-y-0.5 [box-shadow:var(--shadow-card)]"
+      style={{ boxShadow: `var(--shadow-card), inset 0 2px 0 ${topAccent}` }}
+    >
+      <div className="flex items-center gap-1.5 px-3.5 pt-3.5">{statusTag}</div>
+
+      <div className="px-3.5 pt-2.5 pb-3">
+        <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">
+          {task?.title ?? session.branch}
+        </p>
       </div>
-      <div className="flex items-center gap-1.5" onClick={e => e.stopPropagation()}>
+
+      <div className="flex items-center gap-2 px-3.5 pb-2.5">
+        <AgentAvatar agent={employee} size={18} />
+        <span className="text-xs text-muted-foreground">{employee?.name ?? '—'}</span>
+        {projectName && <span className="text-[11px] text-muted-foreground/40">· {projectName}</span>}
+      </div>
+
+      <div className="flex items-center gap-1.5 px-3.5 pb-3.5 border-t border-border/30 pt-2.5" onClick={e => e.stopPropagation()}>
         {isError ? (
           <Button size="sm" className="h-7 px-2.5 text-xs flex-1" onClick={onClick}>View & Retry</Button>
         ) : isPending ? (
@@ -423,28 +454,28 @@ export default function WorkPage() {
     { title: 'Review',  count: review.length  },
   ]
 
-  const stats = [
-    { label: 'Queue',   value: queue.length,          cls: 'text-foreground'       },
-    { label: 'Working', value: working.length,         cls: 'text-green-500'        },
-    { label: 'Review',  value: review.length,          cls: 'text-amber-400'        },
-    { label: 'Free',    value: idleEmployees.length,   cls: 'text-muted-foreground' },
-  ]
-
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-background">
 
-      {/* Top bar */}
-      <div className="h-14 shrink-0 flex items-center gap-4 px-4 md:px-6 border-b border-border/60">
-        <div className="flex items-center gap-3">
-          {stats.map(({ label, value, cls }) => (
-            <div key={label} className="flex items-center gap-1.5">
-              <span className={cn('text-sm font-semibold tabular-nums', cls)}>{value}</span>
-              <span className="text-xs text-muted-foreground hidden sm:inline">{label}</span>
-            </div>
-          ))}
+      {/* Page header */}
+      <div className="shrink-0 px-5 pt-6 pb-5 border-b border-border/40 flex items-end gap-4">
+        <div className="flex-1">
+          <h1 className="text-2xl font-bold tracking-tight">Work</h1>
+          <div className="flex items-center gap-4 mt-1.5">
+            {working.length > 0 && (
+              <span className="flex items-center gap-1.5 text-sm text-green-500 font-semibold">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-[pulse_1.6s_ease-out_infinite]" />
+                {working.length} working
+              </span>
+            )}
+            {review.length > 0 && <span className="text-sm text-amber-500 font-semibold">{review.length} in review</span>}
+            {queue.length > 0 && <span className="text-sm text-muted-foreground">{queue.length} queued</span>}
+            {working.length === 0 && review.length === 0 && queue.length === 0 && (
+              <span className="text-sm text-muted-foreground/40">Idle</span>
+            )}
+          </div>
         </div>
-        <div className="flex-1" />
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {queue.length > 0 && idleEmployees.length > 0 && (
             <Button variant="outline" size="sm" onClick={() => runQueue.mutate()} disabled={runQueue.isPending}>
               {runQueue.isPending ? '…' : '▶ Run queue'}
@@ -472,7 +503,7 @@ export default function WorkPage() {
               'flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition-colors cursor-pointer bg-transparent border-none border-b-2 -mb-px',
               mobileCol === col.title ? 'text-foreground border-primary' : 'text-muted-foreground border-transparent'
             )}>
-            <span className={cn('w-1.5 h-1.5 rounded-full', COL_DOT[col.title])} />
+            <div className={cn('w-0.5 h-3 rounded-full', COL_ACCENT[col.title])} />
             {col.title}
             {col.count > 0 && <span className="font-mono text-[10px] text-muted-foreground">({col.count})</span>}
           </button>
@@ -480,16 +511,17 @@ export default function WorkPage() {
       </div>
 
       {/* Kanban */}
-      <div className="flex-1 min-h-0 flex gap-3 px-3 md:px-4 pt-4 pb-2 overflow-hidden">
+      <div className="flex-1 min-h-0 flex gap-3 px-4 md:px-5 pt-4 pb-4 overflow-hidden">
         {COLS.map(({ title, count }) => (
           <div key={title} className={cn(
-            'min-w-0 flex-col overflow-hidden',
+            'min-w-0 flex-col overflow-hidden rounded-xl p-3',
+            '',
             title === mobileCol ? 'flex flex-1' : 'hidden',
             'md:flex md:flex-1'
           )}>
             <ColHead title={title} count={count} />
             <ScrollArea className="flex-1">
-              <div className="flex flex-col gap-2.5 pb-3">
+              <div className="flex flex-col gap-2.5 pb-1">
                 {isLoading ? (
                   Array.from({ length: 2 }).map((_, i) => <CardSkeleton key={i} />)
                 ) : title === 'Queue' ? (
@@ -592,7 +624,7 @@ function ShiftStrip({ shiftList, employeeList, onViewReport }: {
   if (recent.length === 0) return null
   return (
     <div className="shrink-0 flex items-center gap-2 px-4 py-2 border-b border-border/40 overflow-x-auto">
-      <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide shrink-0">Shifts</span>
+      <span className="text-xs font-semibold text-muted-foreground/60 shrink-0">Shifts</span>
       {recent.map(shift => {
         const emp = employeeList.find(e => e.id === shift.agentId)
         const isRunning = shift.status === 'running'

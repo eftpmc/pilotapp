@@ -1,11 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ThemeProvider } from './theme'
 import LoginPage from './pages/LoginPage'
 import Layout from './components/Layout'
 import ProjectLayout from './components/ProjectLayout'
 import OverviewPage from './pages/OverviewPage'
-import WorkPage from './pages/WorkPage'
 import EmployeesPage from './pages/EmployeesPage'
 import KnowledgePage from './pages/KnowledgePage'
 import ProjectsPage from './pages/ProjectsPage'
@@ -26,31 +24,29 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <ThemeProvider>
-      <QueryClientProvider client={qc}>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/" element={<RequireAuth><Layout /></RequireAuth>}>
-              <Route index                element={<OverviewPage />} />
-              <Route path="work"          element={<WorkPage />} />
-              <Route path="employees"     element={<EmployeesPage />} />
-              <Route path="projects"      element={<ProjectsPage />} />
-              <Route path="knowledge"     element={<KnowledgePage />} />
-              <Route path="tools"         element={<ToolsPage />} />
-              <Route path="settings"      element={<SettingsPage />} />
-              <Route path="sessions/:id"  element={<SessionPage />} />
-              <Route path="projects/:id"  element={<ProjectLayout />}>
-                <Route index              element={<ProjectDetailPage />} />
-                <Route path="sessions"    element={<SessionsPage />} />
-                <Route path="plans"       element={<PlansPage />} />
-                <Route path="files"       element={<FilesPage />} />
-                <Route path="settings"    element={<ProjectSettingsPage />} />
-              </Route>
+    <QueryClientProvider client={qc}>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/" element={<RequireAuth><Layout /></RequireAuth>}>
+            <Route index                element={<OverviewPage />} />
+            <Route path="work"          element={<Navigate to="/" replace />} />
+            <Route path="employees"     element={<EmployeesPage />} />
+            <Route path="projects"      element={<ProjectsPage />} />
+            <Route path="knowledge"     element={<KnowledgePage />} />
+            <Route path="tools"         element={<ToolsPage />} />
+            <Route path="settings"      element={<SettingsPage />} />
+            <Route path="sessions/:id"  element={<SessionPage />} />
+            <Route path="projects/:id"  element={<ProjectLayout />}>
+              <Route index              element={<ProjectDetailPage />} />
+              <Route path="sessions"    element={<SessionsPage />} />
+              <Route path="plans"       element={<PlansPage />} />
+              <Route path="files"       element={<FilesPage />} />
+              <Route path="settings"    element={<ProjectSettingsPage />} />
             </Route>
-          </Routes>
-        </BrowserRouter>
-      </QueryClientProvider>
-    </ThemeProvider>
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </QueryClientProvider>
   )
 }

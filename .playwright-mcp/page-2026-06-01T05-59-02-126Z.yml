@@ -1,0 +1,42 @@
+- generic [ref=e3]:
+  - navigation [ref=e4]:
+    - button "pilot" [ref=e5] [cursor=pointer]:
+      - img [ref=e6]
+      - text: pilot
+    - generic [ref=e11]:
+      - link "Today" [ref=e12] [cursor=pointer]:
+        - /url: /
+      - link "Agents" [ref=e13] [cursor=pointer]:
+        - /url: /employees
+      - link "Projects" [ref=e14] [cursor=pointer]:
+        - /url: /projects
+      - link "Settings" [ref=e15] [cursor=pointer]:
+        - /url: /settings
+    - generic [ref=e16]:
+      - button "⌘K" [ref=e17] [cursor=pointer]:
+        - img [ref=e18]
+        - generic [ref=e21]: ⌘K
+      - button "Toggle theme" [ref=e22] [cursor=pointer]:
+        - img [ref=e23]
+      - button "Sign out" [ref=e25] [cursor=pointer]
+  - main [ref=e26]:
+    - generic [ref=e28]:
+      - generic [ref=e29]: Monday, June 1
+      - heading "Today" [level=1] [ref=e30]
+      - paragraph [ref=e31]: No projects yet. Add one to get started.
+      - generic [ref=e33]:
+        - button "1 Add a project Connect a GitHub repo or local path." [ref=e34] [cursor=pointer]:
+          - generic [ref=e35]: "1"
+          - generic [ref=e36]:
+            - generic [ref=e37]: Add a project
+            - generic [ref=e38]: Connect a GitHub repo or local path.
+        - button "2 Add agents Configure API keys and create named agents." [ref=e39] [cursor=pointer]:
+          - generic [ref=e40]: "2"
+          - generic [ref=e41]:
+            - generic [ref=e42]: Add agents
+            - generic [ref=e43]: Configure API keys and create named agents.
+        - button "3 Dispatch work Open a project, create tasks, assign to agents." [ref=e44] [cursor=pointer]:
+          - generic [ref=e45]: "3"
+          - generic [ref=e46]:
+            - generic [ref=e47]: Dispatch work
+            - generic [ref=e48]: Open a project, create tasks, assign to agents.

@@ -2,19 +2,19 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
 import { projects } from '../api/client'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Separator } from '@/components/ui/separator'
-import { Skeleton } from '@/components/Skeleton'
-import { cn } from '@/lib/utils'
 
 function InfoRow({ label, value }: { label: string; value?: string }) {
   if (!value) return null
   return (
-    <div className="flex flex-col gap-1">
-      <span className="text-[10px] font-mono text-muted-foreground/60 uppercase tracking-widest">{label}</span>
-      <span className="text-sm text-foreground font-mono break-all">{value}</span>
+    <div className="row quiet" style={{ cursor: 'default' }}>
+      <div className="row-main">
+        <div className="row-meta" style={{ marginTop: 0 }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)' }}>{label}</span>
+        </div>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12.5, color: 'var(--ink)', overflowWrap: 'anywhere', marginTop: 4 }}>{value}</div>
+      </div>
     </div>
   )
 }
@@ -55,61 +55,57 @@ export default function ProjectSettingsPage() {
   })
 
   return (
-    <div className="flex-1 flex flex-col bg-background">
-      <div className="h-14 shrink-0 flex items-center gap-3 px-6 border-b border-border/60">
-        <span className="text-sm font-semibold text-foreground">Settings</span>
-      </div>
+    <div style={{ overflowY: 'auto', flex: 1, background: 'var(--bg)' }}>
+      <div className="page-content narrow" style={{ paddingTop: 32, paddingBottom: 80 }}>
 
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-lg mx-auto px-6 py-8 flex flex-col gap-8">
-
-          {/* Project info */}
-          <section className="flex flex-col gap-4">
-            <div className="flex items-center gap-2">
-              <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest flex-1">Project</h2>
+          <section className="section" style={{ marginTop: 0 }}>
+            <div className="section-head">
+              <h2>Project</h2>
+              <div style={{ flex: 1 }} />
               {!editing && project && (
-                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
-                  onClick={startEdit}>Edit</Button>
+                <button
+                  onClick={startEdit}
+                  style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--indigo)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0', fontFamily: 'inherit' }}
+                >
+                  Edit
+                </button>
               )}
             </div>
 
-            <div className="bg-card border border-border/60 rounded-2xl p-5 flex flex-col gap-4 [box-shadow:var(--shadow-card)]">
+            <div className="rows">
               {isLoading ? (
-                <>
-                  <Skeleton className="h-4 w-32" />
-                  <Skeleton className="h-3 w-64" />
-                </>
+                <p className="empty-line">Loading project settings…</p>
               ) : editing ? (
-                <>
-                  <div className="flex flex-col gap-1.5">
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '14px 0 4px' }}>
+                  <div className="field">
                     <Label>Name</Label>
                     <Input value={name} onChange={e => setName(e.target.value)} autoFocus />
                   </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label>Remote URL <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                  <div className="field">
+                    <Label>Remote URL <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(optional)</span></Label>
                     <Input value={remoteUrl} onChange={e => setRemoteUrl(e.target.value)}
                       placeholder="https://github.com/org/repo.git" />
                   </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label>GitHub token <span className="text-muted-foreground font-normal">(leave blank to keep existing)</span></Label>
+                  <div className="field">
+                    <Label>GitHub token <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(leave blank to keep existing)</span></Label>
                     <Input type="password" value={githubToken} onChange={e => setGithubToken(e.target.value)}
                       placeholder="ghp_…" />
                   </div>
                   {updateProject.isError && (
-                    <p className="text-xs text-destructive">{updateProject.error?.message}</p>
+                    <p style={{ fontSize: 13, color: 'var(--red)', margin: 0 }}>{updateProject.error?.message}</p>
                   )}
-                  <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => setEditing(false)}>Cancel</Button>
-                    <Button className="flex-1" disabled={!name.trim() || updateProject.isPending}
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="btn" onClick={() => setEditing(false)}>Cancel</button>
+                    <button className="btn primary" style={{ flex: 1, justifyContent: 'center' }} disabled={!name.trim() || updateProject.isPending}
                       onClick={() => updateProject.mutate({
                         name: name.trim(),
                         remoteUrl: remoteUrl.trim() || undefined,
                         githubToken: githubToken.trim() || undefined,
                       })}>
                       {updateProject.isPending ? '…' : 'Save'}
-                    </Button>
+                    </button>
                   </div>
-                </>
+                </div>
               ) : (
                 <>
                   <InfoRow label="Name"       value={project?.name} />
@@ -122,40 +118,41 @@ export default function ProjectSettingsPage() {
             </div>
           </section>
 
-          <Separator className="opacity-40" />
-
-          {/* Danger zone */}
-          <section className="flex flex-col gap-4">
-            <h2 className="text-xs font-semibold text-destructive/80 uppercase tracking-widest">Danger zone</h2>
-            <div className="bg-card border border-destructive/20 rounded-2xl p-5 flex flex-col gap-3 [box-shadow:var(--shadow-card)]">
-              <div>
-                <p className="text-sm font-semibold text-foreground">Delete project</p>
-                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                  Permanently deletes this project and all its tasks and sessions. This cannot be undone.
-                </p>
+          {project && (
+          <section className="section">
+            <div className="section-head">
+              <h2 style={{ color: 'var(--red)' }}>Danger zone</h2>
+            </div>
+            <div className="rows">
+              <div className="row" style={{ cursor: 'default' }}>
+                <div className="row-main">
+                  <div className="row-title">Delete project</div>
+                  <div className="row-meta">Permanently deletes this project and all its tasks and sessions. This cannot be undone.</div>
+                </div>
+                {!confirming && (
+                  <button className="btn sm danger" onClick={() => setConfirming(true)}>
+                    Delete
+                  </button>
+                )}
               </div>
 
               {confirming ? (
-                <div className="flex items-center gap-2 pt-1">
-                  <p className="text-xs text-muted-foreground flex-1">Are you sure?</p>
-                  <Button size="sm" variant="outline" onClick={() => setConfirming(false)}>Cancel</Button>
-                  <Button size="sm" variant="destructive"
+                <div className="row quiet" style={{ cursor: 'default' }}>
+                  <div className="row-main">
+                    <div className="row-meta" style={{ marginTop: 0 }}>Are you sure?</div>
+                  </div>
+                  <button className="btn sm" onClick={() => setConfirming(false)}>Cancel</button>
+                  <button className="btn sm danger"
                     onClick={() => deleteProject.mutate()}
-                    disabled={deleteProject.isPending}
-                    className={cn(deleteProject.isPending && 'opacity-60')}>
+                    disabled={deleteProject.isPending}>
                     {deleteProject.isPending ? 'Deleting…' : 'Yes, delete'}
-                  </Button>
+                  </button>
                 </div>
-              ) : (
-                <Button size="sm" variant="outline" onClick={() => setConfirming(true)}
-                  className="self-start text-destructive border-destructive/30 hover:bg-destructive/10 hover:border-destructive/50">
-                  Delete project
-                </Button>
-              )}
+              ) : null}
             </div>
           </section>
+          )}
 
-        </div>
       </div>
     </div>
   )

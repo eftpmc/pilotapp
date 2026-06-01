@@ -7,15 +7,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { ViewToggle, type ViewMode } from '@/components/ViewToggle'
-import { CardSkeleton } from '@/components/Skeleton'
-import { cn } from '@/lib/utils'
-import { FileText, ChevronRight, Play, Trash2, ClipboardList } from 'lucide-react'
+import { Play, Trash2 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
 // Spec editor (inline textarea)
@@ -41,81 +35,12 @@ function SpecEditor({ spec, onUpdate }: { spec: Spec; onUpdate: (b: { content: s
 // Status helpers
 // ---------------------------------------------------------------------------
 
-function statusColor(spec: Spec) {
-  if (spec.status === 'planning') return 'bg-amber-400'
-  if (spec.content.trim())        return 'bg-green-500'
-  return 'bg-border'
-}
-
 function StatusPill({ spec }: { spec: Spec }) {
   if (spec.status === 'planning')
-    return <Badge variant="warning" className="text-[10px] gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-[pulse_1.6s_ease-out_infinite]" />Planning…</Badge>
+    return <span className="stat amber"><span className="dot amber pulse" />Planning</span>
   if (spec.content.trim())
-    return <Badge variant="success" className="text-[10px]">Ready</Badge>
-  return <Badge variant="outline" className="text-[10px] text-muted-foreground">Draft</Badge>
-}
-
-// ---------------------------------------------------------------------------
-// Grid card
-// ---------------------------------------------------------------------------
-
-function PlanGridCard({ spec, onDelete, onExecute, onWatch, onStop, isExecuting, isDeleting }: {
-  spec: Spec
-  onDelete: () => void
-  onExecute: () => void
-  onWatch: () => void
-  onStop: () => void
-  isExecuting: boolean
-  isDeleting: boolean
-}) {
-  return (
-    <div className={cn(
-      'bg-card rounded-2xl flex flex-col overflow-hidden [box-shadow:var(--shadow-card)] border border-border/60',
-      'hover:[box-shadow:var(--shadow-card-hover)] transition-shadow',
-    )}>
-      {/* Status strip */}
-      <div className={cn('h-0.5 w-full shrink-0', statusColor(spec))} />
-
-      {/* Body */}
-      <div className="flex flex-col gap-2.5 p-4 flex-1">
-        <div className="flex items-start gap-2.5">
-          <FileText className="h-4 w-4 text-muted-foreground shrink-0 mt-px" />
-          <p className="text-sm font-semibold text-foreground leading-snug flex-1">{spec.title}</p>
-        </div>
-
-        {spec.status === 'planning' ? (
-          <p className="text-xs text-muted-foreground">Agent is writing the spec…</p>
-        ) : spec.content ? (
-          <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">
-            {spec.content.replace(/^#.*\n?/gm, '').trim().slice(0, 180)}
-          </p>
-        ) : (
-          <p className="text-xs text-muted-foreground/50 italic">No content yet.</p>
-        )}
-      </div>
-
-      {/* Footer */}
-      <div className="px-4 py-3 border-t border-border/40 flex items-center gap-2">
-        <StatusPill spec={spec} />
-        <div className="flex-1" />
-        {spec.status === 'planning' && spec.sessionId && (
-          <>
-            <Button size="sm" variant="ghost" onClick={onWatch} className="h-7 px-2 text-xs text-muted-foreground">Watch</Button>
-            <Button size="sm" variant="ghost" onClick={onStop} className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive">Stop</Button>
-          </>
-        )}
-        <Button size="sm" variant="ghost" onClick={onDelete} disabled={isDeleting}
-          className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10">
-          <Trash2 className="h-3.5 w-3.5" />
-        </Button>
-        <Button size="sm" onClick={onExecute} disabled={!spec.content.trim() || isExecuting || spec.status === 'planning'}
-          className="h-7 px-2.5 text-xs gap-1.5">
-          <Play className="h-3 w-3" />
-          Execute
-        </Button>
-      </div>
-    </div>
-  )
+    return <span className="stat green"><span className="dot green" />Ready</span>
+  return <span className="stat" style={{ color: 'var(--muted)' }}><span className="dot idle" />Draft</span>
 }
 
 // ---------------------------------------------------------------------------
@@ -135,31 +60,34 @@ function PlanListRow({ spec, expanded, onToggle, onDelete, onExecute, onUpdate, 
   isDeleting: boolean
 }) {
   return (
-    <div className={cn(
-      'bg-card rounded-2xl overflow-hidden [box-shadow:var(--shadow-card)] border border-border/60',
-      expanded && 'ring-1 ring-primary/20'
-    )}>
+    <div>
       <button
         onClick={onToggle}
-        className="w-full flex items-center gap-3 px-4 py-3.5 cursor-pointer bg-transparent border-none hover:bg-muted/30 transition-colors text-left"
+        className="row"
       >
-        <div className={cn('w-1.5 h-1.5 rounded-full shrink-0', statusColor(spec))} />
-        <span className="text-sm font-semibold text-foreground flex-1 truncate">{spec.title}</span>
+        <div className="row-main">
+          <div className="row-title">{spec.title}</div>
+          <div className="row-meta">
+            {spec.content.trim()
+              ? <span>{spec.content.replace(/^#.*\n?/gm, '').trim().slice(0, 140)}</span>
+              : <span>No content yet.</span>
+            }
+          </div>
+        </div>
         <StatusPill spec={spec} />
-        <ChevronRight className={cn('h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0 ml-1', expanded && 'rotate-90')} />
+        <span className="row-go" style={{ opacity: expanded ? 1 : undefined, transform: expanded ? 'rotate(90deg)' : undefined }}>›</span>
       </button>
 
       {expanded && (
-        <>
-          <Separator />
-          <div className="p-4 flex flex-col gap-3">
+        <div style={{ padding: '4px 4px 22px 4px', borderTop: '1px solid var(--rule-soft)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {spec.status === 'planning' ? (
-              <div className="flex items-center gap-2.5 text-xs text-muted-foreground py-1">
-                <span className="w-2 h-2 rounded-full bg-amber-400 animate-[pulse_1.6s_ease-out_infinite] shrink-0" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: 'var(--muted)', padding: '8px 0' }}>
+                <span className="dot amber pulse" />
                 Agent is writing the spec…
                 {spec.sessionId && (
                   <button onClick={onWatch}
-                    className="text-primary underline underline-offset-2 cursor-pointer bg-transparent border-none text-xs">
+                    style={{ color: 'var(--indigo)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13 }}>
                     Watch live
                   </button>
                 )}
@@ -168,27 +96,24 @@ function PlanListRow({ spec, expanded, onToggle, onDelete, onExecute, onUpdate, 
               <SpecEditor spec={spec} onUpdate={onUpdate} />
             )}
 
-            <div className="flex items-center gap-2 justify-end">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
               {spec.status === 'planning' && spec.sessionId && (
-                <Button size="sm" variant="ghost" onClick={onStop}
-                  className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 mr-auto">
+                <Button size="sm" variant="ghost" onClick={onStop} style={{ marginRight: 'auto' }}>
                   Stop
                 </Button>
               )}
-              <Button size="sm" variant="ghost" onClick={onDelete} disabled={isDeleting}
-                className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-1.5">
-                <Trash2 className="h-3.5 w-3.5" />
+              <Button size="sm" variant="ghost" onClick={onDelete} disabled={isDeleting}>
+                <Trash2 size={13} />
                 Delete
               </Button>
               <Button size="sm" onClick={onExecute}
-                disabled={!spec.content.trim() || isExecuting || spec.status === 'planning'}
-                className="gap-1.5">
-                <Play className="h-3.5 w-3.5" />
+                disabled={!spec.content.trim() || isExecuting || spec.status === 'planning'}>
+                <Play size={13} />
                 Execute
               </Button>
             </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   )
@@ -271,7 +196,6 @@ export default function PlansPage() {
   const { id: projectId } = useParams<{ id: string }>()
   const qc = useQueryClient()
   const navigate = useNavigate()
-  const [mode, setMode]           = useState<ViewMode>('list')
   const [expandedSpec, setExpanded] = useState<string | null>(null)
   const [showNew, setShowNew]       = useState(false)
 
@@ -310,58 +234,29 @@ export default function PlansPage() {
   })
 
   return (
-    <div className="flex-1 flex flex-col bg-background">
+    <div style={{ overflowY: 'auto', flex: 1, background: 'var(--bg)' }}>
+      <div className="page-content narrow" style={{ paddingTop: 32, paddingBottom: 80 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 26 }}>
+          <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: 24, fontWeight: 420, letterSpacing: '-0.02em', margin: 0 }}>Plans</h2>
+          {specList.length > 0 && <span className="count">{specList.length}</span>}
+          <div style={{ flex: 1 }} />
+          <Button size="sm" onClick={() => setShowNew(true)}>New plan</Button>
+        </div>
 
-      {/* Top bar */}
-      <div className="h-14 shrink-0 flex items-center gap-3 px-6 border-b border-border/60">
-        <span className="text-sm font-semibold text-foreground">Plans</span>
-        {specList.length > 0 && (
-          <span className="font-mono text-xs text-muted-foreground">{specList.length}</span>
-        )}
-        <div className="flex-1" />
-        {specList.length > 0 && <ViewToggle mode={mode} onChange={setMode} />}
-        <Button size="sm" onClick={() => setShowNew(true)}>+ New plan</Button>
-      </div>
-
-      {/* Content */}
-      <ScrollArea className="flex-1">
         {isLoading ? (
-          <div className="max-w-2xl mx-auto flex flex-col gap-2.5 p-6">
-            {Array.from({ length: 3 }).map((_, i) => <CardSkeleton key={i} />)}
-          </div>
-        ) : specList.length === 0 ? (
-          <div className="flex flex-col items-center justify-center gap-4 py-24 text-center px-8">
-            <div className="w-14 h-14 rounded-2xl bg-muted/60 border border-border/40 flex items-center justify-center">
-              <ClipboardList className="h-7 w-7 text-muted-foreground/40" strokeWidth={1.5} />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <p className="text-sm font-semibold text-foreground">No plans yet</p>
-              <p className="text-xs text-muted-foreground leading-relaxed max-w-[220px]">
-                Create a plan and an agent will read your codebase and write a spec. Then execute it as a task.
-              </p>
-            </div>
-            <Button size="sm" onClick={() => setShowNew(true)}>+ New plan</Button>
-          </div>
-        ) : mode === 'grid' ? (  // closes isLoading ternary above
-          <div
-            className="p-6 grid gap-4"
-            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}
-          >
-            {specList.map(spec => (
-              <PlanGridCard
-                key={spec.id}
-                spec={spec}
-                onDelete={() => deleteSpec.mutate(spec.id)}
-                onExecute={() => executeSpec.mutate(spec.id)}
-                onWatch={() => navigate(`/sessions/${spec.sessionId}`)}
-                onStop={() => spec.sessionId && stopPlan.mutate(spec.sessionId)}
-                isExecuting={executeSpec.isPending}
-                isDeleting={deleteSpec.isPending}
-              />
+          <div className="rows">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="row">
+                <div className="row-main">
+                  <div className="row-title" style={{ color: 'var(--faint)' }}>Loading…</div>
+                </div>
+              </div>
             ))}
           </div>
+        ) : specList.length === 0 ? (
+          <p className="empty-line">No plans yet. Create one and an agent will write the spec.</p>
         ) : (
-          <div className="max-w-2xl mx-auto flex flex-col gap-2.5 p-6">
+          <div className="rows">
             {specList.map(spec => (
               <PlanListRow
                 key={spec.id}
@@ -379,7 +274,7 @@ export default function PlansPage() {
             ))}
           </div>
         )}
-      </ScrollArea>
+      </div>
 
       {showNew && projectId && (
         <NewPlanDialog
