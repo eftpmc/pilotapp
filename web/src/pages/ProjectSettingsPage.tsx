@@ -11,7 +11,7 @@ function InfoRow({ label, value }: { label: string; value?: string }) {
     <div className="row quiet" style={{ cursor: 'default' }}>
       <div className="row-main">
         <div className="row-meta" style={{ marginTop: 0 }}>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)' }}>{label}</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: 0, textTransform: 'uppercase', color: 'var(--muted)' }}>{label}</span>
         </div>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12.5, color: 'var(--ink)', overflowWrap: 'anywhere', marginTop: 4 }}>{value}</div>
       </div>

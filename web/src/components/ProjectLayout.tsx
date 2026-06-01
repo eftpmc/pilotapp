@@ -57,8 +57,8 @@ export default function ProjectLayout() {
 
         {/* Project name */}
         <h1 style={{
-          fontFamily: '"Newsreader", Georgia, serif',
-          fontWeight: 400, fontSize: '32px', letterSpacing: '-0.02em',
+          fontFamily: '"Space Grotesk Variable", "Geist Variable", system-ui, sans-serif',
+          fontWeight: 400, fontSize: '32px', letterSpacing: 0,
           lineHeight: 1.1, color: 'var(--ink)', margin: '0 0 20px',
         }}>
           {project?.name ?? '…'}

@@ -189,7 +189,7 @@ export default function FilesPage() {
     <div style={{ overflowY: 'auto', flex: 1, background: 'var(--bg)' }}>
       <div className="page-content" style={{ paddingTop: 32, paddingBottom: 80 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 26 }}>
-          <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: 24, fontWeight: 420, letterSpacing: '-0.02em', margin: 0 }}>Files</h2>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 420, letterSpacing: 0, margin: 0 }}>Files</h2>
           {fileList.length > 0 && <span className="count">{fileList.length}</span>}
         </div>
 

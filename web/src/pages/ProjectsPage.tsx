@@ -39,7 +39,7 @@ export default function ProjectsPage() {
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
         <div style={{ width: '100%', maxWidth: 400, padding: '0 24px', display: 'flex', flexDirection: 'column', gap: 32 }}>
           <div style={{ textAlign: 'center' }}>
-            <p style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 36, letterSpacing: '-0.04em', color: 'var(--ink)', margin: 0 }}>pilot</p>
+            <p style={{ fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 36, letterSpacing: 0, color: 'var(--ink)', margin: 0 }}>pilot</p>
             <p style={{ fontSize: 14, color: 'var(--muted)', marginTop: 6 }}>Your AI coding crew, ready to ship.</p>
           </div>
           <div className="rows">

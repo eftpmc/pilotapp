@@ -415,7 +415,7 @@ function EmployeeCard({ employee, brain, deptList, activeSession, activeTaskTitl
       {/* Tools panel */}
       {showT && (
         <div style={panelStyle}>
-          <p style={{ fontSize: 11, color: 'var(--muted)', margin: 0, fontFamily: 'var(--font-mono)', letterSpacing: '.08em', textTransform: 'uppercase' }}>Tools</p>
+          <p style={{ fontSize: 11, color: 'var(--muted)', margin: 0, fontFamily: 'var(--font-mono)', letterSpacing: 0, textTransform: 'uppercase' }}>Tools</p>
           {allTools.length === 0 ? (
             <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: 0 }}>No tools yet. <a href="/settings" style={{ color: 'var(--indigo)' }}>Add in Settings.</a></p>
           ) : (
@@ -443,7 +443,7 @@ function EmployeeCard({ employee, brain, deptList, activeSession, activeTaskTitl
       {showK && (
         <div style={panelStyle}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <p style={{ fontSize: 11, color: 'var(--muted)', margin: 0, fontFamily: 'var(--font-mono)', letterSpacing: '.08em', textTransform: 'uppercase', flex: 1 }}>Personal knowledge</p>
+            <p style={{ fontSize: 11, color: 'var(--muted)', margin: 0, fontFamily: 'var(--font-mono)', letterSpacing: 0, textTransform: 'uppercase', flex: 1 }}>Personal knowledge</p>
             <button onClick={onAddKnowledge} style={{ fontSize: 12.5, color: 'var(--indigo)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>+ Add</button>
           </div>
           {knowledgeDocs.length === 0 ? (

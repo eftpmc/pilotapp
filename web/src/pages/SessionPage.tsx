@@ -84,7 +84,7 @@ function ReviewerPickerButton({ agentList, onPick }: { agentList: Employee[]; on
 function inlineWithCode(line: string, key: number) {
   const parts = line.split(/(`[^`]+`)/)
   return (
-    <p key={key} style={{ fontFamily: 'var(--font-serif)', fontWeight: 360, fontSize: 16, lineHeight: 1.65, color: 'var(--ink-2)', margin: '4px 0 0' }}>
+    <p key={key} style={{ fontFamily: 'var(--font-display)', fontWeight: 360, fontSize: 16, lineHeight: 1.65, color: 'var(--ink-2)', margin: '4px 0 0' }}>
       {parts.map((part, k) =>
         part.startsWith('`') && part.endsWith('`')
           ? <code key={k} style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--indigo)', background: 'var(--indigo-wash)', padding: '1px 5px', borderRadius: 4 }}>{part.slice(1, -1)}</code>
@@ -125,10 +125,10 @@ function JournalView({ text }: { text: string }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxWidth: '38em' }}>
       {blocks.map((block, i) => {
         if (block.type === 'h1') {
-          return <p key={i} style={{ fontFamily: 'var(--font-serif)', fontSize: 22, fontWeight: 420, letterSpacing: '-0.015em', color: 'var(--ink)', margin: '0 0 10px', lineHeight: 1.2 }}>{block.content[0]}</p>
+          return <p key={i} style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 420, letterSpacing: 0, color: 'var(--ink)', margin: '0 0 10px', lineHeight: 1.2 }}>{block.content[0]}</p>
         }
         if (block.type === 'h2') {
-          return <p key={i} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 500, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)', margin: '20px 0 4px' }}>{block.content[0]}</p>
+          return <p key={i} style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 500, letterSpacing: 0, textTransform: 'uppercase', color: 'var(--muted)', margin: '20px 0 4px' }}>{block.content[0]}</p>
         }
         if (!block.content.length) return null
         return (
@@ -284,7 +284,7 @@ export default function SessionPage() {
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 16 }}>
           <AgentAvatar agent={agent} size={36} running={isRunning} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <h1 style={{ fontFamily: '"Newsreader", Georgia, serif', fontSize: 26, fontWeight: 420, letterSpacing: '-0.015em', color: 'var(--ink)', margin: 0, lineHeight: 1.15 }}>
+            <h1 style={{ fontFamily: '"Space Grotesk Variable", "Geist Variable", system-ui, sans-serif', fontSize: 26, fontWeight: 420, letterSpacing: 0, color: 'var(--ink)', margin: 0, lineHeight: 1.15 }}>
               {task?.title ?? session?.branch ?? 'Session'}
             </h1>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>

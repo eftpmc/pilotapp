@@ -100,7 +100,7 @@ export default function SessionsPage() {
 
       <div className="page-content narrow" style={{ paddingTop: 32, paddingBottom: 60 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 22 }}>
-          <h2 style={{ fontFamily: 'var(--font-serif)', fontSize: 24, fontWeight: 420, letterSpacing: '-0.02em', margin: 0 }}>History</h2>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 420, letterSpacing: 0, margin: 0 }}>History</h2>
           <span className="count">{sessionList.length}</span>
         </div>
 
