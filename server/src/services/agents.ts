@@ -83,21 +83,15 @@ function findBinary(name: string): string | null {
 // Command builders
 // ---------------------------------------------------------------------------
 
-function resolveModel(agentId: string): string | undefined {
-  const agent = db.prepare('SELECT connection_id FROM agents WHERE id = ?').get(agentId) as { connection_id: string | null } | undefined;
-  if (!agent?.connection_id) return undefined;
-  const conn = db.prepare('SELECT model FROM connections WHERE id = ?').get(agent.connection_id) as { model: string | null } | undefined;
-  return conn?.model ?? undefined;
-}
+interface AgentMeta { model: string | null; personality: string | null; connection_id: string | null; role: string | null }
 
-function resolvePersonality(agentId: string): string | undefined {
-  const agent = db.prepare('SELECT personality FROM agents WHERE id = ?').get(agentId) as { personality: string | null } | undefined;
-  return agent?.personality ?? undefined;
-}
-
-function resolveConnectionId(agentId: string): string | undefined {
-  const agent = db.prepare('SELECT connection_id FROM agents WHERE id = ?').get(agentId) as { connection_id: string | null } | undefined;
-  return agent?.connection_id ?? undefined;
+function resolveAgentMeta(agentId: string): AgentMeta {
+  return (db.prepare(`
+    SELECT a.personality, a.connection_id, a.role, c.model
+    FROM agents a
+    LEFT JOIN connections c ON c.id = a.connection_id
+    WHERE a.id = ?
+  `).get(agentId) as AgentMeta | undefined) ?? { model: null, personality: null, connection_id: null, role: null };
 }
 
 function buildCommand(provider: AgentProvider, prompt: string, model?: string, mcpConfigPath?: string, resumeId?: string): { cmd: string; args: string[] } {
@@ -137,15 +131,55 @@ const completed = new Map<string, string[]>();
 // MCP config builder
 // ---------------------------------------------------------------------------
 
-function buildMcpConfig(agentId: string, sessionId: string): string | null {
-  // Direct employee tool assignments
-  const toolRows = db.prepare(`
-    SELECT t.mcp_config FROM tools t
-    JOIN agent_tools agt ON agt.tool_id = t.id
-    WHERE agt.agent_id = ?
-  `).all(agentId) as { mcp_config: string }[];
+interface McpConfigCtx {
+  userId: string;
+  projectId: string;
+  specId?: string;
+  shiftId?: string;
+  parentSessionId?: string;
+}
 
-  // Department-inherited tools (via the agent's department)
+// Resolve the command/args for the pilot internal MCP server.
+// In dev (__filename ends in .ts) use ts-node with --transpile-only for fast startup.
+// In prod (compiled .js) use node directly.
+function pilotMcpEntry(sessionId: string, agentId: string, ctx: McpConfigCtx): Record<string, unknown> {
+  const isTsDev = __filename.endsWith('.ts');
+  const serverFile = isTsDev
+    ? path.resolve(__dirname, '../mcp-server.ts')
+    : path.resolve(__dirname, '../mcp-server.js');
+
+  // Prefer tsx if available (faster), fall back to ts-node --transpile-only
+  const tsxBin      = path.resolve(__dirname, '../../node_modules/.bin/tsx');
+  const tsNodeBin   = path.resolve(__dirname, '../../node_modules/.bin/ts-node');
+  const devCommand  = fs.existsSync(tsxBin) ? tsxBin : tsNodeBin;
+  const command     = isTsDev ? devCommand : 'node';
+  const args        = isTsDev && !fs.existsSync(tsxBin)
+    ? ['--transpile-only', serverFile]
+    : [serverFile];
+
+  return {
+    command,
+    args,
+    env: {
+      PILOT_SESSION_ID:          sessionId,
+      PILOT_USER_ID:             ctx.userId,
+      PILOT_AGENT_ID:            agentId,
+      PILOT_PROJECT_ID:          ctx.projectId,
+      PILOT_INTERNAL_URL:        `http://localhost:${process.env.PORT ?? '3000'}`,
+      PILOT_SPEC_ID:             ctx.specId             ?? '',
+      PILOT_SHIFT_ID:            ctx.shiftId            ?? '',
+      PILOT_PARENT_SESSION_ID:   ctx.parentSessionId    ?? '',
+    },
+  };
+}
+
+function buildMcpConfig(agentId: string, sessionId: string, ctx: McpConfigCtx, fileKey?: string): string {
+  // Always include the pilot internal MCP server
+  const mcpServers: Record<string, unknown> = {
+    pilot: pilotMcpEntry(sessionId, agentId, ctx),
+  };
+
+  // User-configured tools: department-inherited first, then direct (direct wins on key collision)
   const deptToolRows = db.prepare(`
     SELECT t.mcp_config FROM tools t
     JOIN department_tools dt ON dt.tool_id = t.id
@@ -153,16 +187,18 @@ function buildMcpConfig(agentId: string, sessionId: string): string | null {
     WHERE a.id = ?
   `).all(agentId) as { mcp_config: string }[];
 
-  const allRows = [...deptToolRows, ...toolRows]; // employee-direct overrides dept
-  if (allRows.length === 0) return null;
+  const toolRows = db.prepare(`
+    SELECT t.mcp_config FROM tools t
+    JOIN agent_tools agt ON agt.tool_id = t.id
+    WHERE agt.agent_id = ?
+  `).all(agentId) as { mcp_config: string }[];
 
-  const mcpServers: Record<string, unknown> = {};
-  for (const row of allRows) {
+  for (const row of [...deptToolRows, ...toolRows]) {
     try { Object.assign(mcpServers, JSON.parse(row.mcp_config)); } catch { /* skip invalid */ }
   }
-  if (Object.keys(mcpServers).length === 0) return null;
 
-  const configPath = path.join(DATA_DIR, `${sessionId}-mcp.json`);
+  // fileKey allows a unique filename without changing PILOT_SESSION_ID (needed for turn continuations)
+  const configPath = path.join(DATA_DIR, `${fileKey ?? sessionId}-mcp.json`);
   fs.writeFileSync(configPath, JSON.stringify({ mcpServers }, null, 2));
   return configPath;
 }
@@ -199,6 +235,8 @@ function buildKnowledgeContext(userId: string, agentId: string): string {
 // ---------------------------------------------------------------------------
 
 function captureJournal(sessionId: string, worktreePath: string): void {
+  const existing = db.prepare('SELECT journal FROM sessions WHERE id = ?').get(sessionId) as { journal: string | null } | undefined;
+  if (existing?.journal) return; // already set via MCP update_journal tool
   try {
     const content = fs.readFileSync(path.join(worktreePath, 'JOURNAL.md'), 'utf-8').trim();
     if (content) db.prepare('UPDATE sessions SET journal = ? WHERE id = ?').run(content, sessionId);
@@ -210,6 +248,8 @@ function captureJournal(sessionId: string, worktreePath: string): void {
 // ---------------------------------------------------------------------------
 
 function captureReview(reviewSessionId: string, worktreePath: string): void {
+  const existing = db.prepare('SELECT journal FROM sessions WHERE id = ?').get(reviewSessionId) as { journal: string | null } | undefined;
+  if (existing?.journal) return; // already set via MCP submit_review tool
   try {
     const content = fs.readFileSync(path.join(worktreePath, 'REVIEW.md'), 'utf-8').trim();
     if (!content) return;
@@ -238,10 +278,20 @@ interface AgentRowMin  { id: string; provider: string }
 
 function generateShiftReport(shiftId: string): void {
   try {
-    interface ShiftTaskRow { title: string; status: string; started_at: string | null; completed_at: string | null }
-    const shiftTasks = db.prepare(
-      'SELECT title, status, started_at, completed_at FROM tasks WHERE shift_id = ? ORDER BY started_at ASC'
-    ).all(shiftId) as ShiftTaskRow[];
+    interface ShiftTaskRow {
+      title: string; status: string;
+      started_at: string | null; completed_at: string | null;
+      journal: string | null;
+    }
+    const shiftTasks = db.prepare(`
+      SELECT t.title, t.status, t.started_at, t.completed_at,
+        (SELECT s.journal FROM sessions s
+         WHERE s.work_task_id = t.id AND s.journal IS NOT NULL
+         ORDER BY s.created_at DESC LIMIT 1) as journal
+      FROM tasks t
+      WHERE t.shift_id = ?
+      ORDER BY t.started_at ASC
+    `).all(shiftId) as ShiftTaskRow[];
 
     const done   = shiftTasks.filter(t => t.status === 'done').length;
     const failed = shiftTasks.filter(t => t.status === 'failed').length;
@@ -255,13 +305,14 @@ function generateShiftReport(shiftId: string): void {
         suffix = ` (${secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${secs % 60}s`})`;
       }
       lines.push(`${icon} ${t.title}${suffix}`);
+      if (t.journal) lines.push(`   ${t.journal.replace(/\n/g, '\n   ')}`);
     }
 
     db.prepare("UPDATE shifts SET report = ? WHERE id = ?").run(lines.join('\n'), shiftId);
   } catch { /* non-critical */ }
 }
 
-async function advanceShift(shiftId: string, agentId: string, userId: string): Promise<void> {
+export async function advanceShift(shiftId: string, agentId: string, userId: string): Promise<void> {
   const nextTask = db.prepare(
     "SELECT * FROM tasks WHERE shift_id = ? AND status = 'pending' ORDER BY created_at ASC LIMIT 1"
   ).get(shiftId) as TaskRowMin | undefined;
@@ -304,98 +355,23 @@ async function advanceShift(shiftId: string, agentId: string, userId: string): P
 }
 
 // ---------------------------------------------------------------------------
-// Lead task capture + auto-assignment
+// Lead task capture — MCP create_task is the only supported path
 // ---------------------------------------------------------------------------
 
-interface LeadTask { title: string; prompt?: string; baseBranch?: string; role?: string; priority?: number }
+async function captureTasks(session: SessionRef): Promise<void> {
+  const { count } = db.prepare('SELECT COUNT(*) as count FROM tasks WHERE lead_session_id = ?').get(session.id) as { count: number };
+  if (count === 0) return; // lead created no tasks — leave session in done/error for inspection
 
-function findIdleAgentByRole(userId: string, role: string): AgentRowMin | null {
-  return db.prepare(`
-    SELECT a.id, a.provider FROM agents a
-    WHERE a.user_id = ?
-      AND (a.role = ? OR a.role = 'any')
-      AND a.id NOT IN (SELECT agent_id FROM sessions WHERE status IN ('running', 'idle'))
-    ORDER BY CASE WHEN a.role = ? THEN 0 ELSE 1 END, a.created_at ASC
-    LIMIT 1
-  `).get(userId, role, role) as AgentRowMin | null;
-}
-
-async function autoAssignTask(
-  taskId: string, agent: AgentRowMin,
-  projectId: string, baseBranch: string, userId: string
-): Promise<void> {
-  const task    = db.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId) as TaskRowMin & { prompt: string; title: string } | undefined;
-  const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(projectId) as ProjectRowMin | undefined;
-  if (!task || !project) return;
-
-  const sessionId  = uuid();
-  const branch     = `agent/${sessionId}`;
-  const projectObj = { id: project.id, name: project.name, repoPath: project.repo_path, role: project.role as any, createdAt: project.created_at };
-  const now        = new Date().toISOString();
-
-  try {
-    const worktreePath = await createWorktree(projectObj, sessionId, baseBranch);
-    db.prepare(
-      'INSERT INTO sessions (id, user_id, agent_id, project_id, work_task_id, provider, branch, worktree_path, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(sessionId, userId, agent.id, projectId, taskId, agent.provider, branch, worktreePath, 'idle', now);
-    assignTaskToSession(taskId, agent.id, sessionId, now);
-
-    const sessionRef: SessionRef = {
-      id: sessionId, agentId: agent.id, projectId,
-      workTaskId: taskId, provider: agent.provider as AgentProvider,
-      branch, worktreePath, status: 'idle', createdAt: now,
-    };
-    void runAgent(sessionRef, task.prompt, userId, agent.id);
-  } catch (err) {
-    console.error('[lead] Failed to auto-assign task:', err);
+  markSessionMerged(session.id);
+  if (session.workTaskId) markTaskDone(session.workTaskId);
+  const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(session.projectId) as
+    { id: string; name: string; repo_path: string; role: string; created_at: string } | undefined;
+  if (project) {
+    void removeWorktree(
+      { id: project.id, name: project.name, repoPath: project.repo_path, role: project.role as any, createdAt: project.created_at },
+      session.worktreePath,
+    );
   }
-}
-
-async function captureTasks(session: SessionRef, userId: string): Promise<void> {
-  try {
-    const content = fs.readFileSync(path.join(session.worktreePath, 'TASKS.json'), 'utf-8');
-    const items   = JSON.parse(content) as LeadTask[];
-    if (!Array.isArray(items) || items.length === 0) return;
-
-    for (const item of items) {
-      if (!item.title || typeof item.title !== 'string') continue;
-      const taskId     = uuid();
-      const baseBranch = item.baseBranch ?? 'main';
-      const now        = new Date().toISOString();
-      db.prepare(
-        'INSERT INTO tasks (id, user_id, project_id, title, prompt, base_branch, status, priority, size, lead_session_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-      ).run(
-        taskId, userId, session.projectId,
-        item.title.trim(),
-        item.prompt?.trim() ?? '',
-        baseBranch,
-        'pending',
-        Math.min(10, Math.max(0, Math.round(item.priority ?? 5))),
-        'm', session.id, now
-      );
-      writeEvent(userId, 'task.created', { taskId, projectId: session.projectId, agentId: session.agentId });
-
-      const role = item.role ?? 'worker';
-      if (role !== 'reviewer') {
-        const idleAgent = findIdleAgentByRole(userId, role);
-        if (idleAgent) {
-          await autoAssignTask(taskId, idleAgent, session.projectId, baseBranch, userId);
-        }
-      }
-    }
-
-    // Auto-dismiss the lead session — it has no mergeable code, just planning artifacts.
-    // Mark it merged and clean up the worktree so it doesn't appear in the Review column.
-    markSessionMerged(session.id);
-    if (session.workTaskId) {
-      markTaskDone(session.workTaskId);
-    }
-    const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(session.projectId) as { id: string; name: string; repo_path: string; role: string; created_at: string } | undefined;
-    if (project) {
-      const projectObj = { id: project.id, name: project.name, repoPath: project.repo_path, role: project.role as any, createdAt: project.created_at };
-      void removeWorktree(projectObj, session.worktreePath);
-    }
-  } catch { /* no TASKS.json or invalid — that's fine */ }
 }
 
 // ---------------------------------------------------------------------------
@@ -404,6 +380,12 @@ async function captureTasks(session: SessionRef, userId: string): Promise<void> 
 
 function captureSpec(specId: string, worktreePath: string): void {
   const now = new Date().toISOString();
+  const existing = db.prepare('SELECT content FROM specs WHERE id = ?').get(specId) as { content: string } | undefined;
+  if (existing?.content) {
+    // Already set via MCP update_spec tool — just mark as draft
+    db.prepare('UPDATE specs SET status = ?, updated_at = ? WHERE id = ?').run('draft', now, specId);
+    return;
+  }
   try {
     const content = fs.readFileSync(path.join(worktreePath, 'SPEC.md'), 'utf-8');
     db.prepare('UPDATE specs SET content = ?, status = ?, updated_at = ? WHERE id = ?')
@@ -422,27 +404,32 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
   if (active.has(session.id)) return;
 
   const resolvedKey  = resolveApiKey(userId, session.provider, agentId, explicitKey);
-  const model        = resolveModel(session.agentId);
-  const personality  = resolvePersonality(session.agentId);
-  const connectionId = resolveConnectionId(session.agentId);
-  const knowledgeCtx = buildKnowledgeContext(userId, session.agentId);
-  const mcpConfigPath = buildMcpConfig(session.agentId, session.id);
+  const meta         = resolveAgentMeta(session.agentId);
+  const model        = meta.model ?? undefined;
+  const personality  = meta.personality ?? undefined;
+  const connectionId = meta.connection_id ?? undefined;
+  const isLead       = meta.role === 'lead';
+  const knowledgeCtx  = buildKnowledgeContext(userId, session.agentId);
+  const mcpConfigPath = buildMcpConfig(session.agentId, session.id, {
+    userId,
+    projectId:       session.projectId,
+    specId:          session.specId,
+    shiftId:         session.shiftId,
+    parentSessionId: session.parentSessionId,
+  });
 
-  const agentRoleRow = db.prepare('SELECT role FROM agents WHERE id = ?').get(session.agentId) as { role: string } | undefined;
-  const isLead       = agentRoleRow?.role === 'lead';
-
-  // Inject previous session journal if this task has been worked on before
+  // Inject previous session journals if this task has been worked on before (up to 4, newest-first)
   let prevJournal: string | undefined;
   if (session.workTaskId && !session.parentSessionId) {
-    const prev = db.prepare(
-      "SELECT journal FROM sessions WHERE work_task_id = ? AND id != ? AND journal IS NOT NULL AND status IN ('done','error','merged') ORDER BY created_at DESC LIMIT 1"
-    ).get(session.workTaskId, session.id) as { journal: string } | undefined;
-    prevJournal = prev?.journal;
+    const prevRows = db.prepare(
+      "SELECT journal FROM sessions WHERE work_task_id = ? AND id != ? AND journal IS NOT NULL AND status IN ('done','error','merged') ORDER BY created_at DESC LIMIT 4"
+    ).all(session.workTaskId, session.id) as { journal: string }[];
+    if (prevRows.length > 0) prevJournal = prevRows.map(r => r.journal).join('\n\n---\n\n');
   }
 
   const journalInstruction = session.parentSessionId ? '' : isLead
-    ? '\n\n---\n\nYou are a **Lead Agent**. Analyze this brief and break it into concrete tasks for your team. When done, write TASKS.json in the project root:\n\n```json\n[\n  {\n    "title": "Short task title",\n    "prompt": "Detailed worker instructions",\n    "baseBranch": "main",\n    "role": "worker",\n    "priority": 5\n  }\n]\n```\n\nRoles: "worker" (writes code), "reviewer" (reviews diffs), "planner" (writes specs). Priority 1–10, higher = more urgent. Keep each task focused — completable in one session. Do NOT write code yourself.'
-    : '\n\n---\n\nWhen you finish your work, write a JOURNAL.md file in the project root with a brief summary: what you completed, key decisions made, any issues encountered, and what a future session should know. Keep it to 5-10 lines.';
+    ? `\n\n---\n\nYou are a **Lead Agent**. Your only job is to coordinate — you must NOT write code or implement features yourself.\n\nYou have a \`pilot\` MCP server connected. These tools are available right now as direct MCP calls — do NOT search for them with ToolSearch or any other tool discovery mechanism:\n\n- \`list_agents\` — see available agents, their roles, and current status\n- \`create_task\` — create a subtask (title, prompt, baseBranch, role, priority)\n- \`get_task_status\` — check whether a subtask completed and read its journal\n- \`request_clarification\` — ask the user if the brief is ambiguous\n- \`append_journal\` — record your plan and decisions\n- \`skip_task\` — use this if the MCP tools are not responding\n\nRoles: "worker" (writes code), "reviewer" (reviews diffs), "planner" (writes specs)\n\n**Required first step**: Call \`list_agents\` immediately. If it fails or returns an error, call \`skip_task\` with reason "MCP connectivity failure" and stop — do NOT proceed without MCP tools.\n\nRules:\n- Never write, edit, or implement code\n- Keep each task focused — completable in one session\n- Use \`get_task_status\` to check subtask outcomes before creating dependent tasks`
+    : `\n\n---\n\nYou have access to a \`pilot\` MCP server. Use these tools as you work:\n\n- \`append_journal\` — append progress notes at any point; call this often so partial work survives a crash\n- \`update_journal\` — replace the full journal; use this for your final summary when done\n- \`request_clarification\` — if you hit genuine ambiguity where guessing would waste significant effort, ask the user. They will respond in real time.\n- \`skip_task\` — if the task is blocked by something outside your control (missing dependency, broken environment), call this with a reason instead of failing silently.\n- \`get_quota_status\` — check if your API connection has rate limits before starting expensive operations.`;
 
   const promptParts = [
     knowledgeCtx,
@@ -452,7 +439,7 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
   ].filter(Boolean);
   const effectivePrompt = promptParts.join('\n\n---\n\n');
 
-  const { cmd, args } = buildCommand(session.provider, effectivePrompt, model, mcpConfigPath ?? undefined);
+  const { cmd, args } = buildCommand(session.provider, effectivePrompt, model, mcpConfigPath);
   const env = resolvedKey
     ? { ...resolvedEnv(process.env as Record<string, string | undefined>), ...apiKeyEnv(session.provider, resolvedKey) }
     : resolvedEnv(process.env as Record<string, string | undefined>);
@@ -528,7 +515,7 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
   });
   proc.stderr.on('data', (chunk: Buffer) => {
     const text = chunk.toString();
-    stderrAccum += text;
+    stderrAccum = (stderrAccum + text).slice(-8192);
     broadcast('stderr', text);
   });
 
@@ -551,7 +538,7 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
       captureReview(session.id, session.worktreePath);
     } else if (isLead) {
       captureJournal(session.id, session.worktreePath);
-      if (exitCode === 0) void captureTasks(session, userId);
+      void captureTasks(session); // always run — count > 0 branch dismisses even on non-zero exit
     } else {
       captureJournal(session.id, session.worktreePath);
       if (session.shiftId && exitCode === 0) {
@@ -613,11 +600,22 @@ export async function continueAgent(
   }
 
   const resolvedKey   = resolveApiKey(userId, session.provider, agentId, explicitKey);
-  const model         = resolveModel(session.agentId);
-  const mcpConfigPath = buildMcpConfig(session.agentId, `${session.id}-t${turnNumber}`);
-  const connectionId  = resolveConnectionId(session.agentId);
+  const meta          = resolveAgentMeta(session.agentId);
+  const model         = meta.model ?? undefined;
+  const connectionId  = meta.connection_id ?? undefined;
+  const mcpConfigPath = buildMcpConfig(
+    session.agentId, session.id,
+    { userId, projectId: session.projectId, shiftId: session.shiftId, parentSessionId: session.parentSessionId },
+    `${session.id}-t${turnNumber}`,
+  );
 
-  const { cmd, args } = buildCommand(session.provider, prompt, model, mcpConfigPath ?? undefined, runnerSessionId);
+  // Re-inject knowledge + personality so turns reflect any updates since the original session
+  const personality  = meta.personality ?? undefined;
+  const knowledgeCtx = buildKnowledgeContext(userId, session.agentId);
+  const turnParts    = [knowledgeCtx, personality, prompt].filter(Boolean);
+  const effectivePrompt = turnParts.join('\n\n---\n\n');
+
+  const { cmd, args } = buildCommand(session.provider, effectivePrompt, model, mcpConfigPath, runnerSessionId);
   const env = resolvedKey
     ? { ...resolvedEnv(process.env as Record<string, string | undefined>), ...apiKeyEnv(session.provider, resolvedKey) }
     : resolvedEnv(process.env as Record<string, string | undefined>);
@@ -638,7 +636,7 @@ export async function continueAgent(
     }
   };
 
-  broadcast('turn_start', JSON.stringify({ turnId, turnNumber, prompt }));
+  broadcast('turn_start', JSON.stringify({ turnId, turnNumber, prompt })); // shows original prompt, not expanded
 
   if (!resolvedKey) {
     broadcast('stderr', `[pilot] No API key set — using machine auth for ${session.provider}.`);
@@ -687,7 +685,7 @@ export async function continueAgent(
 
   proc.stderr.on('data', (chunk: Buffer) => {
     const text = chunk.toString();
-    stderrAccum += text;
+    stderrAccum = (stderrAccum + text).slice(-8192);
     broadcast('stderr', text);
   });
 
@@ -729,6 +727,18 @@ export async function continueAgent(
 // ---------------------------------------------------------------------------
 // Subscription
 // ---------------------------------------------------------------------------
+
+export function broadcastToSession(sessionId: string, type: string, data: string): void {
+  const entry = active.get(sessionId);
+  if (!entry) return;
+  const msg = JSON.stringify({ type, sessionId, data });
+  entry.buffer.push(msg);
+  if (entry.buffer.length > MAX_BUFFER) entry.buffer.shift();
+  fs.appendFileSync(sessionLogPath(sessionId), msg + '\n');
+  for (const ws of entry.subs) {
+    if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+  }
+}
 
 export function subscribeToSession(sessionId: string, ws: WebSocket): boolean {
   const entry = active.get(sessionId);

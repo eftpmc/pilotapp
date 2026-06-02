@@ -53,6 +53,7 @@ function ColoredDiff({ raw }: { raw: string }) {
 
 function StatusStat({ status }: { status: string }) {
   if (status === 'running') return <span className="stat green"><span className="dot green pulse" />Running</span>
+  if (status === 'waiting') return <span className="stat" style={{ color: 'var(--amber)' }}><span className="dot" style={{ background: 'var(--amber)', animation: 'pulse 1.6s ease-out infinite' }} />Waiting</span>
   if (status === 'done')    return <span className="stat green"><span className="dot green" />Done</span>
   if (status === 'merged')  return <span className="stat indigo"><span className="dot indigo" />Merged</span>
   if (status === 'error')   return <span className="stat red"><span className="dot red" />Error</span>
@@ -339,6 +340,9 @@ export default function SessionPage() {
   const [turns, setTurns]               = useState<TurnData[]>([])
   const activeTurnRef                   = useRef<string | null>(null)
 
+  const [clarification, setClarification] = useState<{ id: string; question: string; options?: string[] } | null>(null)
+  const [clarificationInput, setClarInput] = useState('')
+
   const [activeTab, setActiveTab]       = useState<'output' | 'diff' | 'journal'>('output')
   const [diff, setDiff]                 = useState<string | null>(null)
   const [diffLoading, setDiffLoad]      = useState(false)
@@ -351,7 +355,13 @@ export default function SessionPage() {
   const bufferRef                       = useRef('')
   const notifiedRef                     = useRef(false)
 
-  const { data: session, refetch: refetchSession } = useQuery({ queryKey: ['session', id], queryFn: () => sessions.get(id!), enabled: !!id, refetchInterval: 3000 })
+  const isLiveStatus = (s?: string) => s === 'running' || s === 'waiting'
+  const { data: session, refetch: refetchSession } = useQuery({
+    queryKey: ['session', id],
+    queryFn: () => sessions.get(id!),
+    enabled: !!id,
+    refetchInterval: (q) => isLiveStatus(q.state.data?.status) ? 2000 : 3000,
+  })
   const { data: agentList   = [] } = useQuery({ queryKey: ['agents'], queryFn: () => agents.list() })
   const { data: projectList = [] } = useQuery({ queryKey: ['projects'],  queryFn: () => projects.list() })
   const { data: taskList    = [] } = useQuery({ queryKey: ['tasks', session?.projectId], queryFn: () => tasks.list({ projectId: session!.projectId }), enabled: !!session?.projectId })
@@ -406,10 +416,31 @@ export default function SessionPage() {
         delay = 1000
         setLegacyLines([]); setDone(false); setExitCode(null); setTurns([]); activeTurnRef.current = null; bufferRef.current = ''
         ws!.send(JSON.stringify({ type: 'subscribe', sessionId: id }))
+        ws!.send(JSON.stringify({ type: 'subscribe-global' }))
       }
       ws.onmessage = (e) => {
         try {
           const msg = JSON.parse(e.data)
+
+          // Global events — clarification lifecycle
+          if (msg.type === 'global-event') {
+            if (msg.eventType === 'session.clarification_requested' && msg.sessionId === id) {
+              const token = localStorage.getItem('token')
+              fetch(`/sessions/${id}/clarifications`, { headers: { Authorization: `Bearer ${token}` } })
+                .then(r => r.json())
+                .then((items: { id: string; question: string; options?: string[]; respondedAt?: string }[]) => {
+                  const pending = items.find(c => !c.respondedAt)
+                  if (pending) { setClarification({ id: pending.id, question: pending.question, options: pending.options }); setClarInput('') }
+                })
+                .catch(() => {})
+              refetchSession()
+            }
+            if (msg.eventType === 'session.clarification_responded' && msg.sessionId === id) {
+              setClarification(null); setClarInput(''); refetchSession()
+            }
+            return
+          }
+
           if (msg.type === 'done') {
             setDone(true); setExitCode(String(msg.data ?? '0')); refetchSession(); return
           }
@@ -488,6 +519,17 @@ export default function SessionPage() {
 
   const branchShort = shortBranchName(session?.branch)
   const canContinue = isDone && !!session?.runnerSessionId && !isMerged && !session?.parentSessionId
+  const isWaiting   = session?.status === 'waiting'
+
+  function submitClarification(clarificationId: string, response: string) {
+    if (!response.trim()) return
+    const token = localStorage.getItem('token')
+    fetch(`/sessions/${id}/clarifications/${clarificationId}/respond`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body:    JSON.stringify({ response: response.trim() }),
+    }).then(() => { setClarification(null); setClarInput('') }).catch(() => {})
+  }
 
   return (
     <div className="flex-1 flex flex-col bg-background" style={{ minHeight: 0 }}>
@@ -559,13 +601,18 @@ export default function SessionPage() {
               )}
             </button>
           ))}
-          {session?.journal && (
+          {(session?.journal || isLiveStatus(session?.status)) && (
             <button
               className={`proj-tab ${activeTab === 'journal' ? 'active' : ''}`}
               onClick={() => setActiveTab('journal')}
               style={{ textTransform: 'capitalize' }}
             >
-              {session.parentSessionId ? 'review' : 'journal'}
+              {session?.parentSessionId ? 'review' : 'journal'}
+              {isLiveStatus(session?.status) && session?.journal && (
+                <span className="ml-1.5 inline-flex items-center gap-1 text-[10px] font-mono" style={{ color: 'var(--green)' }}>
+                  <span className="dot green pulse" style={{ width: 5, height: 5 }} />live
+                </span>
+              )}
             </button>
           )}
         </div>
@@ -574,8 +621,10 @@ export default function SessionPage() {
       {/* Content */}
       <div className="flex-1 overflow-y-auto bg-muted/30" style={{ minHeight: 0 }}>
         <div style={{ maxWidth: 780, margin: '0 auto', padding: '24px 28px' }}>
-          {activeTab === 'journal' && session?.journal ? (
-            <JournalView text={session.journal} />
+          {activeTab === 'journal' ? (
+            session?.journal
+              ? <JournalView text={session.journal} />
+              : <p className="text-xs font-mono text-muted-foreground">Agent hasn't written anything yet…</p>
           ) : activeTab === 'diff' ? (
             diffLoading
               ? <p className="text-xs font-mono text-muted-foreground">loading diff…</p>
@@ -668,6 +717,14 @@ export default function SessionPage() {
         </div>
       )}
 
+      {/* Waiting for clarification panel */}
+      {isWaiting && !clarification && (
+        <div className="border-t px-6 py-3.5 flex items-center gap-3" style={{ borderColor: 'var(--amber)', background: 'color-mix(in srgb, var(--amber) 6%, transparent)' }}>
+          <span className="dot" style={{ background: 'var(--amber)', animation: 'pulse 1.6s ease-out infinite', flexShrink: 0 }} />
+          <span className="text-sm font-medium" style={{ color: 'var(--amber)' }}>Agent is waiting for your input…</span>
+        </div>
+      )}
+
       {/* Error panel */}
       {isError && (
         <div className="border-t border-destructive/20 bg-destructive/5 px-6 py-4">
@@ -677,6 +734,66 @@ export default function SessionPage() {
             <button className="btn primary" onClick={() => retry.mutate(hint.trim() ? `Continue where you left off.\n\nAdditional context: ${hint.trim()}` : undefined)} disabled={retry.isPending}>
               {retry.isPending ? '…' : 'Retry'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Clarification dialog — blocks interaction until user responds */}
+      {clarification && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 50,
+          background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '24px',
+        }}>
+          <div style={{
+            background: 'var(--bg)', border: '1px solid var(--rule)',
+            borderRadius: 14, padding: '28px 28px 24px',
+            maxWidth: 520, width: '100%', boxShadow: 'var(--shadow-dialog)',
+          }}>
+            <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--amber)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>
+              Agent needs your input
+            </p>
+            <p style={{ fontSize: 15, fontWeight: 500, color: 'var(--ink)', lineHeight: 1.55, margin: '0 0 20px' }}>
+              {clarification.question}
+            </p>
+
+            {clarification.options ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {clarification.options.map(opt => (
+                  <button
+                    key={opt}
+                    onClick={() => submitClarification(clarification.id, opt)}
+                    className="btn"
+                    style={{ justifyContent: 'flex-start', textAlign: 'left' }}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <Textarea
+                  value={clarificationInput}
+                  onChange={e => setClarInput(e.target.value)}
+                  placeholder="Type your answer…"
+                  rows={3}
+                  autoFocus
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && clarificationInput.trim()) {
+                      submitClarification(clarification.id, clarificationInput)
+                    }
+                  }}
+                />
+                <button
+                  className="btn primary"
+                  onClick={() => submitClarification(clarification.id, clarificationInput)}
+                  disabled={!clarificationInput.trim()}
+                >
+                  Send
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

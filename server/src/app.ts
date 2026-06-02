@@ -14,6 +14,7 @@ import departmentRoutes from './routes/departments';
 import eventsRoutes     from './routes/events';
 import shiftsRoutes     from './routes/shifts';
 import toolsRoutes      from './routes/tools';
+import internalRoutes   from './routes/internal';
 import { agentHealth }  from './services/agents';
 
 const app = express();
@@ -36,6 +37,7 @@ app.use('/departments', departmentRoutes);
 app.use('/events',      eventsRoutes);
 app.use('/shifts',      shiftsRoutes);
 app.use('/tools',       toolsRoutes);
+app.use('/internal',    internalRoutes);
 
 app.get('/health', (_req, res) => res.json({ ok: true, agents: agentHealth() }));
 

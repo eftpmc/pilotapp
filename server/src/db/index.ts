@@ -231,3 +231,16 @@ migrate('023_turns', `
   );
   CREATE INDEX IF NOT EXISTS idx_turns_session_id ON turns (session_id);
 `);
+migrate('024_clarifications', `
+  CREATE TABLE IF NOT EXISTS clarifications (
+    id           TEXT PRIMARY KEY,
+    session_id   TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    question     TEXT NOT NULL,
+    options      TEXT,
+    response     TEXT,
+    created_at   TEXT NOT NULL,
+    responded_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_clarifications_session_id ON clarifications (session_id);
+`);

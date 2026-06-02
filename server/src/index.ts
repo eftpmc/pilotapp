@@ -1,4 +1,6 @@
 import 'dotenv/config';
+import fs from 'fs';
+import path from 'path';
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import app from './app';
@@ -7,6 +9,14 @@ import { failInterruptedWork } from './services/lifecycle';
 
 // On startup: mark any sessions that were mid-run when the server died as error.
 failInterruptedWork();
+
+// Clean up MCP config files left over from a crashed or killed server.
+const DATA_DIR = path.resolve(process.env.DATA_DIR ?? './data');
+try {
+  const orphans = fs.readdirSync(DATA_DIR).filter(f => f.endsWith('-mcp.json'));
+  for (const f of orphans) fs.unlinkSync(path.join(DATA_DIR, f));
+  if (orphans.length > 0) console.log(`[startup] Cleaned up ${orphans.length} orphaned MCP config file(s)`);
+} catch { /* DATA_DIR may not exist on first boot */ }
 
 const server = createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });

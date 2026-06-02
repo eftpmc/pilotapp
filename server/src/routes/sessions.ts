@@ -8,6 +8,7 @@ import { createWorktree, removeWorktree, getDiff, mergeWorktree, commitWorktree 
 import { killAgent, runAgent, continueAgent } from '../services/agents';
 import { writeEvent } from '../services/events';
 import { markSessionMerged, resetErroredSessionForRetry, resetTaskAfterSessionDiscard } from '../services/lifecycle';
+import { broadcastGlobal } from '../services/broadcast';
 import { authMiddleware, userId } from '../middleware/auth';
 import { SessionRow, toSession } from './_helpers';
 
@@ -105,7 +106,7 @@ router.get('/:id/diff', async (req: Request, res: Response) => {
 router.post('/:id/stop', (req: Request, res: Response) => {
   const row = db.prepare('SELECT * FROM sessions WHERE id = ? AND user_id = ?').get(req.params.id, userId(req)) as SessionRow | undefined;
   if (!row) { res.status(404).json({ error: 'Not found' }); return; }
-  if (row.status !== 'running') { res.status(400).json({ error: 'Session is not running' }); return; }
+  if (row.status !== 'running' && row.status !== 'waiting') { res.status(400).json({ error: 'Session is not running' }); return; }
   killAgent(row.id);
   res.json({ stopped: true });
 });
@@ -171,7 +172,7 @@ router.post('/:id/request-review', async (req: Request, res: Response) => {
   const baseBranch = task?.base_branch ?? 'main';
   const diff = await getDiff(row.worktree_path, baseBranch).catch(() => '(diff unavailable)');
 
-  const reviewPrompt = `You are conducting a code review for a colleague's work.
+  const reviewPrompt = `You are conducting a code review for a colleague's work. You have access to a \`pilot\` MCP server.
 
 Original task:
 ${task?.prompt ?? '(no task description)'}
@@ -181,9 +182,11 @@ Git diff:
 ${diff.slice(0, 40000)}
 \`\`\`
 
-Review the changes carefully. After your review, write a REVIEW.md file in the project root:
-- First line must be exactly: VERDICT: APPROVED  or  VERDICT: CHANGES_REQUESTED
-- Followed by your detailed review notes, specific issues, and suggestions.`;
+Review the changes carefully, then call the \`submit_review\` MCP tool with:
+- \`verdict\`: "approved" or "changes_requested"
+- \`comments\`: array of specific findings, issues, or suggestions
+
+Do NOT write a REVIEW.md file — use the tool directly. If anything in the diff is unclear, call \`request_clarification\` before submitting your verdict.`;
 
   const reviewId     = uuid();
   const reviewBranch = `review/${reviewId}`;
@@ -284,6 +287,54 @@ router.post('/:id/turns', (req: Request, res: Response) => {
   void continueAgent(sessionRef as any, turnId, turnNumber, parsed.data.prompt, uid);
 
   res.status(201).json({ turnId, turnNumber, prompt: parsed.data.prompt, status: 'running', createdAt: now });
+});
+
+// ---------------------------------------------------------------------------
+// GET /sessions/:id/clarifications
+// ---------------------------------------------------------------------------
+
+router.get('/:id/clarifications', (req: Request, res: Response) => {
+  const row = db.prepare('SELECT * FROM sessions WHERE id = ? AND user_id = ?').get(req.params.id, userId(req)) as SessionRow | undefined;
+  if (!row) { res.status(404).json({ error: 'Not found' }); return; }
+
+  interface ClarificationRow { id: string; session_id: string; question: string; options: string | null; response: string | null; created_at: string; responded_at: string | null }
+  const rows = db.prepare('SELECT * FROM clarifications WHERE session_id = ? ORDER BY created_at ASC').all(row.id) as ClarificationRow[];
+  res.json(rows.map(r => ({
+    id: r.id, sessionId: r.session_id, question: r.question,
+    options:     r.options     ? JSON.parse(r.options) : undefined,
+    response:    r.response    ?? undefined,
+    createdAt:   r.created_at,
+    respondedAt: r.responded_at ?? undefined,
+  })));
+});
+
+// ---------------------------------------------------------------------------
+// POST /sessions/:id/clarifications/:clarificationId/respond
+// ---------------------------------------------------------------------------
+
+const RespondSchema = z.object({ response: z.string().min(1) });
+
+router.post('/:id/clarifications/:clarificationId/respond', (req: Request, res: Response) => {
+  const parsed = RespondSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+
+  const row = db.prepare('SELECT * FROM sessions WHERE id = ? AND user_id = ?').get(req.params.id, userId(req)) as SessionRow | undefined;
+  if (!row) { res.status(404).json({ error: 'Not found' }); return; }
+
+  const clarId  = req.params.clarificationId;
+  const clarRow = db.prepare('SELECT id FROM clarifications WHERE id = ? AND session_id = ?').get(clarId, row.id);
+  if (!clarRow) { res.status(404).json({ error: 'Clarification not found' }); return; }
+
+  db.prepare('UPDATE clarifications SET response = ?, responded_at = ? WHERE id = ?')
+    .run(parsed.data.response, new Date().toISOString(), clarId);
+
+  broadcastGlobal('global-event', {
+    eventType:       'session.clarification_responded',
+    sessionId:       row.id,
+    clarificationId: clarId,
+  });
+
+  res.json({ ok: true });
 });
 
 // ---------------------------------------------------------------------------

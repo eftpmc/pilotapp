@@ -1,6 +1,6 @@
 import { db } from '../db';
 
-export type SessionStatus = 'idle' | 'running' | 'done' | 'error' | 'merged';
+export type SessionStatus = 'idle' | 'running' | 'waiting' | 'done' | 'error' | 'merged';
 export type TaskStatus = 'pending' | 'running' | 'done' | 'failed';
 
 export function setSessionStatus(sessionId: string, status: SessionStatus): void {
@@ -15,6 +15,10 @@ export function markSessionFinished(sessionId: string, exitCode: number): void {
   const status = exitCode === 0 ? 'done' : 'error';
   setSessionStatus(sessionId, status);
   setLinkedTaskFinished(sessionId, exitCode);
+}
+
+export function markSessionWaiting(sessionId: string): void {
+  setSessionStatus(sessionId, 'waiting');
 }
 
 export function markSessionMerged(sessionId: string): void {
@@ -32,7 +36,8 @@ export function setLinkedTaskFinished(sessionId: string, exitCode: number, compl
     | undefined;
   if (!session?.work_task_id) return;
 
-  db.prepare('UPDATE tasks SET status = ?, completed_at = ? WHERE id = ?').run(
+  // Don't overwrite if already explicitly set (e.g. via skip_task MCP tool)
+  db.prepare("UPDATE tasks SET status = ?, completed_at = ? WHERE id = ? AND status = 'running'").run(
     exitCode === 0 ? 'done' : 'failed',
     completedAt,
     session.work_task_id
@@ -59,6 +64,6 @@ export function resetTaskAfterSessionDiscard(taskId: string): void {
 }
 
 export function failInterruptedWork(completedAt = new Date().toISOString()): void {
-  db.prepare("UPDATE sessions SET status = 'error' WHERE status = 'running' OR status = 'idle'").run();
+  db.prepare("UPDATE sessions SET status = 'error' WHERE status IN ('running', 'idle', 'waiting')").run();
   db.prepare("UPDATE tasks SET status = 'failed', completed_at = ? WHERE status = 'running'").run(completedAt);
 }
