@@ -1,0 +1,62 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - button "p pilot" [ref=e5] [cursor=pointer]:
+      - generic [ref=e6]: p
+      - text: pilot
+    - button "Search" [ref=e7] [cursor=pointer]:
+      - img [ref=e8]
+  - main [ref=e11]:
+    - generic [ref=e12]:
+      - generic [ref=e13]:
+        - button "Projects" [ref=e14] [cursor=pointer]:
+          - img [ref=e15]
+          - text: Projects
+        - heading "…" [level=1] [ref=e17]
+        - navigation [ref=e18]:
+          - link "Board" [ref=e19] [cursor=pointer]:
+            - /url: /projects/bffc8171-2ef5-4d57-891b-10be8251e215
+          - link "History" [ref=e20] [cursor=pointer]:
+            - /url: /projects/bffc8171-2ef5-4d57-891b-10be8251e215/sessions
+          - link "Plans" [ref=e21] [cursor=pointer]:
+            - /url: /projects/bffc8171-2ef5-4d57-891b-10be8251e215/plans
+          - link "Files" [ref=e22] [cursor=pointer]:
+            - /url: /projects/bffc8171-2ef5-4d57-891b-10be8251e215/files
+          - link "Settings" [ref=e23] [cursor=pointer]:
+            - /url: /projects/bffc8171-2ef5-4d57-891b-10be8251e215/settings
+      - generic [ref=e27]:
+        - generic [ref=e28]:
+          - generic [ref=e29]:
+            - button "Queue" [ref=e30] [cursor=pointer]:
+              - img [ref=e31]
+              - heading "Queue" [level=2] [ref=e33]
+            - button "+ Add" [ref=e34] [cursor=pointer]
+          - paragraph [ref=e35]: Queue is empty — add a task to get started.
+        - generic [ref=e36]:
+          - button "Working 0" [ref=e38] [cursor=pointer]:
+            - img [ref=e39]
+            - heading "Working" [level=2] [ref=e41]
+            - generic [ref=e42]: "0"
+          - paragraph [ref=e43]: No agents running.
+        - generic [ref=e44]:
+          - button "Review 0" [ref=e46] [cursor=pointer]:
+            - img [ref=e47]
+            - heading "Review" [level=2] [ref=e49]
+            - generic [ref=e50]: "0"
+          - paragraph [ref=e51]: Nothing to review.
+  - navigation [ref=e52]:
+    - link "Today" [ref=e53] [cursor=pointer]:
+      - /url: /
+      - img [ref=e55]
+      - generic [ref=e58]: Today
+    - link "Projects" [ref=e59] [cursor=pointer]:
+      - /url: /projects
+      - img [ref=e61]
+      - generic [ref=e63]: Projects
+    - link "Agents" [ref=e64] [cursor=pointer]:
+      - /url: /employees
+      - img [ref=e66]
+      - generic [ref=e71]: Agents
+    - link "Settings" [ref=e72] [cursor=pointer]:
+      - /url: /settings
+      - img [ref=e74]
+      - generic [ref=e77]: Settings

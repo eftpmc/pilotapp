@@ -8,6 +8,13 @@ import {
   Settings, Sun, Users, Wrench,
 } from 'lucide-react'
 
+const BOTTOM_NAV = [
+  { label: 'Today',    path: '/',          end: true,  icon: Home },
+  { label: 'Projects', path: '/projects',  end: false, icon: FolderOpen },
+  { label: 'Agents',   path: '/employees', end: false, icon: Users },
+  { label: 'Settings', path: '/settings',  end: false, icon: Settings },
+]
+
 const NAV = [
   { label: 'Today',    path: '/',          end: true,  icon: Home },
   { label: 'Agents',   path: '/employees', end: false, icon: Users },
@@ -283,6 +290,23 @@ export default function Layout() {
       <main className="app-main">
         <Outlet />
       </main>
+
+      <nav className="mobile-tabbar">
+        {BOTTOM_NAV.map(({ label, path, end, icon: Icon }) => (
+          <NavLink
+            key={label}
+            to={path}
+            end={end}
+            className={({ isActive }) => cn('mobile-tab', isActive && 'active')}
+          >
+            <div className="mobile-tab-icon">
+              <Icon size={20} />
+              {label === 'Today' && reviewCount > 0 && <span className="mobile-tab-badge" />}
+            </div>
+            <span>{label}</span>
+          </NavLink>
+        ))}
+      </nav>
 
       {paletteOpen && <CommandPalette onClose={closePalette} />}
     </div>

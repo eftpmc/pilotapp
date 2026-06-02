@@ -11,6 +11,10 @@ import { SessionRow, toSession } from './_helpers';
 const router = Router();
 router.use(authMiddleware);
 
+// Serialise queue dispatch — prevents double-assigning the same task if two
+// requests arrive before either DB write lands.
+let dispatchLock = false;
+
 // ---------------------------------------------------------------------------
 // Row helpers
 // ---------------------------------------------------------------------------
@@ -97,50 +101,57 @@ router.post('/', (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 
 router.post('/queue/run', async (req: Request, res: Response) => {
+  if (dispatchLock) { res.json({ dispatched: [] }); return; }
+  dispatchLock = true;
   const uid = userId(req);
 
-  const pendingTasks = db.prepare(
-    "SELECT * FROM tasks WHERE user_id = ? AND status = 'pending' ORDER BY priority DESC, created_at ASC"
-  ).all(uid) as TaskRow[];
-
-  const busyAgentIds = new Set(
-    (db.prepare("SELECT agent_id FROM sessions WHERE user_id = ? AND status IN ('idle', 'running')").all(uid) as { agent_id: string }[])
-      .map((r) => r.agent_id)
-  );
-
-  const idleAgents = (db.prepare('SELECT * FROM agents WHERE user_id = ?').all(uid) as AgentRow[])
-    .filter((a) => !busyAgentIds.has(a.id));
-
   const dispatched: { task: ReturnType<typeof toTask>; session: ReturnType<typeof toSession> }[] = [];
-  const assignedTaskIds = new Set<string>();
 
-  for (const agent of idleAgents) {
-    const next = pendingTasks.find(t => !assignedTaskIds.has(t.id));
-    if (!next) continue;
+  try {
+    const pendingTasks = db.prepare(
+      "SELECT * FROM tasks WHERE user_id = ? AND status = 'pending' ORDER BY priority DESC, created_at ASC"
+    ).all(uid) as TaskRow[];
 
-    const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(next.project_id) as ProjectRow;
-    const sessionId    = uuid();
-    const branch       = `agent/${sessionId}`;
-    const worktreePath = await createWorktree(
-      { id: project.id, name: project.name, repoPath: project.repo_path, role: project.role as any, createdAt: project.created_at },
-      sessionId,
-      next.base_branch
+    const busyAgentIds = new Set(
+      (db.prepare("SELECT agent_id FROM sessions WHERE user_id = ? AND status IN ('idle', 'running')").all(uid) as { agent_id: string }[])
+        .map((r) => r.agent_id)
     );
 
-    const now = new Date().toISOString();
-    db.prepare(
-      'INSERT INTO sessions (id, user_id, agent_id, project_id, work_task_id, provider, branch, worktree_path, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(sessionId, uid, agent.id, project.id, next.id, agent.provider, branch, worktreePath, 'idle', now);
+    const idleAgents = (db.prepare('SELECT * FROM agents WHERE user_id = ?').all(uid) as AgentRow[])
+      .filter((a) => !busyAgentIds.has(a.id));
 
-    assignTaskToSession(next.id, agent.id, sessionId, now);
+    const assignedTaskIds = new Set<string>();
 
-    const updatedTask    = db.prepare('SELECT * FROM tasks WHERE id = ?').get(next.id) as TaskRow;
-    const updatedSession = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId) as SessionRow;
+    for (const agent of idleAgents) {
+      const next = pendingTasks.find(t => !assignedTaskIds.has(t.id));
+      if (!next) continue;
 
-    void runAgent(toSession(updatedSession), next.prompt, uid, agent.id);
+      const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(next.project_id) as ProjectRow;
+      const sessionId    = uuid();
+      const branch       = `agent/${sessionId}`;
+      const worktreePath = await createWorktree(
+        { id: project.id, name: project.name, repoPath: project.repo_path, role: project.role as any, createdAt: project.created_at },
+        sessionId,
+        next.base_branch
+      );
 
-    dispatched.push({ task: toTask(updatedTask), session: toSession(updatedSession) });
-    assignedTaskIds.add(next.id);
+      const now = new Date().toISOString();
+      db.prepare(
+        'INSERT INTO sessions (id, user_id, agent_id, project_id, work_task_id, provider, branch, worktree_path, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run(sessionId, uid, agent.id, project.id, next.id, agent.provider, branch, worktreePath, 'idle', now);
+
+      assignTaskToSession(next.id, agent.id, sessionId, now);
+
+      const updatedTask    = db.prepare('SELECT * FROM tasks WHERE id = ?').get(next.id) as TaskRow;
+      const updatedSession = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId) as SessionRow;
+
+      void runAgent(toSession(updatedSession), next.prompt, uid, agent.id);
+
+      dispatched.push({ task: toTask(updatedTask), session: toSession(updatedSession) });
+      assignedTaskIds.add(next.id);
+    }
+  } finally {
+    dispatchLock = false;
   }
 
   res.json({ dispatched });
@@ -184,8 +195,10 @@ router.patch('/:id', (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 
 router.delete('/:id', (req: Request, res: Response) => {
-  const row = db.prepare('SELECT id FROM tasks WHERE id = ? AND user_id = ?').get(req.params.id, userId(req));
+  const row = db.prepare('SELECT id, status FROM tasks WHERE id = ? AND user_id = ?').get(req.params.id, userId(req)) as Pick<TaskRow, 'id' | 'status'> | undefined;
   if (!row) { res.status(404).json({ error: 'Not found' }); return; }
+  if (row.status === 'running') { res.status(400).json({ error: 'Cannot delete a running task — stop the session first' }); return; }
+  db.prepare('UPDATE sessions SET work_task_id = NULL WHERE work_task_id = ?').run(req.params.id);
   db.prepare('DELETE FROM tasks WHERE id = ?').run(req.params.id);
   res.status(204).send();
 });

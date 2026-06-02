@@ -1,0 +1,36 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - button "p pilot" [ref=e5] [cursor=pointer]:
+      - generic [ref=e6]: p
+      - text: pilot
+    - button "Search" [ref=e7] [cursor=pointer]:
+      - img [ref=e8]
+  - main [ref=e11]:
+    - generic [ref=e13]:
+      - generic [ref=e14]:
+        - generic [ref=e15]:
+          - heading "Projects" [level=1] [ref=e16]
+          - paragraph [ref=e17]: 3 projects · git repos your agents work in
+        - button "+ New" [ref=e18] [cursor=pointer]
+      - generic [ref=e19]:
+        - button "ball-sorting local 1 queued 1 active item 8h ago" [ref=e20] [cursor=pointer]:
+          - generic [ref=e22]: ball-sorting
+          - paragraph [ref=e23]: local
+          - generic [ref=e29]: 1 queued
+          - generic [ref=e30]:
+            - generic [ref=e31]: 1 active item
+            - generic [ref=e32]: 8h ago
+        - button "test local Idle Quiet 1d ago" [ref=e33] [cursor=pointer]:
+          - generic [ref=e35]: test
+          - paragraph [ref=e36]: local
+          - generic [ref=e42]: Idle
+          - generic [ref=e43]:
+            - generic [ref=e44]: Quiet
+            - generic [ref=e45]: 1d ago
+        - button "test local Idle Quiet No activity" [ref=e46] [cursor=pointer]:
+          - generic [ref=e48]: test
+          - paragraph [ref=e49]: local
+          - generic [ref=e55]: Idle
+          - generic [ref=e56]:
+            - generic [ref=e57]: Quiet
+            - generic [ref=e58]: No activity

@@ -184,7 +184,7 @@ export default function ProjectDetailPage() {
             {queue.length   > 0 && <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{queue.length} queued</span>}
             <div style={{ flex: 1 }} />
             {queue.length > 0 && idleAgents.length > 0 && (
-              <button className="btn sm" onClick={() => runQueue.mutate()} disabled={runQueue.isPending}>
+              <button className="btn sm primary" onClick={() => runQueue.mutate()} disabled={runQueue.isPending}>
                 {runQueue.isPending ? '…' : 'Run queue'}
               </button>
             )}
@@ -209,7 +209,11 @@ export default function ProjectDetailPage() {
                   <span className="dot idle" />
                   <div className="row-main">
                     <div className="row-title">{task.title}</div>
-                    {task.prompt && <div className="row-meta" style={{ WebkitLineClamp: 1, overflow: 'hidden' }}>{task.prompt}</div>}
+                    {task.prompt && (
+                      <div className="row-meta" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                        {task.prompt}
+                      </div>
+                    )}
                   </div>
                   {task.size && (
                     <span className="chip mono">{task.size}</span>
@@ -220,7 +224,7 @@ export default function ProjectDetailPage() {
                       : <span style={{ fontSize: 12, color: 'var(--faint)' }}>No agents</span>
                     }
                     <button onClick={() => deleteTask.mutate(task.id)}
-                      style={{ fontSize: 18, lineHeight: 1, color: 'var(--faint)', background: 'none', border: 'none', cursor: 'pointer', padding: '0 4px' }}
+                      style={{ fontSize: 16, lineHeight: 1, color: 'var(--faint)', background: 'none', border: 'none', cursor: 'pointer', padding: '10px 12px', margin: '-10px -4px -10px 0' }}
                       onMouseOver={e => (e.currentTarget.style.color = 'var(--red)')}
                       onMouseOut={e => (e.currentTarget.style.color = 'var(--faint)')}
                     >×</button>

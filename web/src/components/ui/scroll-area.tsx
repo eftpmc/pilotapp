@@ -1,13 +1,13 @@
-import * as React from 'react'
+import { forwardRef } from 'react'
 import * as ScrollAreaPrimitive from '@radix-ui/react-scroll-area'
 import { cn } from '@/lib/utils'
 
-const ScrollArea = React.forwardRef<
+const ScrollArea = forwardRef<
   React.ElementRef<typeof ScrollAreaPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Root>
 >(({ className, children, ...props }, ref) => (
-  <ScrollAreaPrimitive.Root ref={ref} className={cn('relative overflow-hidden', className)} {...props}>
-    <ScrollAreaPrimitive.Viewport className="h-full w-full rounded-[inherit]">
+  <ScrollAreaPrimitive.Root ref={ref} style={{ position: 'relative', overflow: 'hidden' }} className={className} {...props}>
+    <ScrollAreaPrimitive.Viewport style={{ height: '100%', width: '100%', borderRadius: 'inherit' }}>
       {children}
     </ScrollAreaPrimitive.Viewport>
     <ScrollBar />
@@ -16,24 +16,27 @@ const ScrollArea = React.forwardRef<
 ))
 ScrollArea.displayName = ScrollAreaPrimitive.Root.displayName
 
-const ScrollBar = React.forwardRef<
+const ScrollBar = forwardRef<
   React.ElementRef<typeof ScrollAreaPrimitive.ScrollAreaScrollbar>,
   React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.ScrollAreaScrollbar>
 >(({ className, orientation = 'vertical', ...props }, ref) => (
   <ScrollAreaPrimitive.ScrollAreaScrollbar
     ref={ref}
     orientation={orientation}
-    className={cn(
-      'flex touch-none select-none transition-colors',
-      orientation === 'vertical'   && 'h-full w-1.5 border-l border-l-transparent p-px',
-      orientation === 'horizontal' && 'h-1.5 flex-col border-t border-t-transparent p-px',
-      className
-    )}
+    className={cn(className)}
+    style={{
+      display: 'flex',
+      touchAction: 'none',
+      userSelect: 'none',
+      padding: '1px',
+      ...(orientation === 'vertical'
+        ? { width: 6, height: '100%', borderLeft: '1px solid transparent' }
+        : { height: 6, flexDirection: 'column', borderTop: '1px solid transparent' }),
+    }}
     {...props}
   >
     <ScrollAreaPrimitive.ScrollAreaThumb
-      style={{ borderRadius: '999px', background: 'var(--rule)' }}
-      className="relative flex-1"
+      style={{ flex: 1, borderRadius: 999, background: 'var(--rule)', position: 'relative' }}
     />
   </ScrollAreaPrimitive.ScrollAreaScrollbar>
 ))

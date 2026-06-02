@@ -1,0 +1,74 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - button "p pilot" [ref=e5] [cursor=pointer]:
+      - generic [ref=e6]: p
+      - text: pilot
+    - button "Search" [ref=e7] [cursor=pointer]:
+      - img [ref=e8]
+  - main [ref=e11]:
+    - generic [ref=e12]:
+      - generic [ref=e13]:
+        - button "Projects" [ref=e14] [cursor=pointer]:
+          - img [ref=e15]
+          - text: Projects
+        - heading "ball-sorting" [level=1] [ref=e78]
+        - navigation [ref=e18]:
+          - link "Board" [ref=e19] [cursor=pointer]:
+            - /url: /projects/bffc8171-2ef5-4d57-891b-10be8251e215
+          - link "History" [ref=e20] [cursor=pointer]:
+            - /url: /projects/bffc8171-2ef5-4d57-891b-10be8251e215/sessions
+          - link "Plans" [ref=e21] [cursor=pointer]:
+            - /url: /projects/bffc8171-2ef5-4d57-891b-10be8251e215/plans
+          - link "Files" [ref=e22] [cursor=pointer]:
+            - /url: /projects/bffc8171-2ef5-4d57-891b-10be8251e215/files
+          - link "Settings" [ref=e23] [cursor=pointer]:
+            - /url: /projects/bffc8171-2ef5-4d57-891b-10be8251e215/settings
+      - generic [ref=e26]:
+        - generic [ref=e79]:
+          - generic [ref=e80]: 1 queued
+          - button "Run queue" [ref=e81] [cursor=pointer]
+        - generic [ref=e27]:
+          - generic [ref=e28]:
+            - generic [ref=e29]:
+              - button "Queue 1" [ref=e82] [cursor=pointer]:
+                - img [ref=e31]
+                - heading "Queue" [level=2] [ref=e33]
+                - generic [ref=e83]: "1"
+              - button "+ Add" [ref=e34] [cursor=pointer]
+            - generic [ref=e85]:
+              - generic [ref=e87]:
+                - generic [ref=e88]: Build ball sorting visualizer HTML file
+                - generic [ref=e89]: "Create a single self-contained `ball-sorter.html` file that visually demonstrates a ball sorting algorithm (e.g. tube/column sort where colored balls are moved between tubes until each tube contains only one color). Requirements: - Single HTML file with all CSS and JS inline — no external dependencies - At least 4 tubes and 4 colors, each tube holding 4 balls - Animated ball movement between tubes (smooth CSS or JS animation) - Click-to-select-and-move UX: click a tube to pick up the top ball, click another tube to drop it (only valid moves allowed — a ball can only be placed on a matching color or into an empty tube) - Win detection: show a congratulations message when all tubes are sorted - A 'New Game' / 'Shuffle' button to reset with a freshly randomized solvable state - Visual feedback for invalid moves (e.g. brief shake or highlight) - Clean, modern dark UI — dark background, vibrant ball colors, clear tube outlines - No build step, no frameworks — plain HTML/CSS/JS only Deliver only the `ball-sorter.html` file at the repo root. Include a brief comment block at the top explaining the algorithm and controls."
+              - generic [ref=e90]: m
+              - generic [ref=e91]:
+                - button "Assign" [ref=e93] [cursor=pointer]
+                - button "×" [active] [ref=e94] [cursor=pointer]
+          - generic [ref=e36]:
+            - button "Working 0" [ref=e38] [cursor=pointer]:
+              - img [ref=e39]
+              - heading "Working" [level=2] [ref=e41]
+              - generic [ref=e42]: "0"
+            - paragraph [ref=e43]: No agents running.
+          - generic [ref=e44]:
+            - button "Review 0" [ref=e46] [cursor=pointer]:
+              - img [ref=e47]
+              - heading "Review" [level=2] [ref=e49]
+              - generic [ref=e50]: "0"
+            - paragraph [ref=e51]: Nothing to review.
+  - navigation [ref=e52]:
+    - link "Today" [ref=e53] [cursor=pointer]:
+      - /url: /
+      - img [ref=e55]
+      - generic [ref=e58]: Today
+    - link "Projects" [ref=e59] [cursor=pointer]:
+      - /url: /projects
+      - img [ref=e61]
+      - generic [ref=e63]: Projects
+    - link "Agents" [ref=e64] [cursor=pointer]:
+      - /url: /employees
+      - img [ref=e66]
+      - generic [ref=e71]: Agents
+    - link "Settings" [ref=e72] [cursor=pointer]:
+      - /url: /settings
+      - img [ref=e74]
+      - generic [ref=e77]: Settings

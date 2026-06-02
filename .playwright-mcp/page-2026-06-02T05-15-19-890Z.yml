@@ -1,0 +1,57 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - button "p pilot" [ref=e5] [cursor=pointer]:
+      - generic [ref=e6]: p
+      - text: pilot
+    - button "Search" [ref=e7] [cursor=pointer]:
+      - img [ref=e8]
+  - main [ref=e11]:
+    - generic [ref=e59]:
+      - generic [ref=e60]:
+        - button "Projects" [ref=e61] [cursor=pointer]:
+          - img [ref=e62]
+          - text: Projects
+        - heading "ball-sorting" [level=1] [ref=e64]
+        - navigation [ref=e65]:
+          - link "Board" [ref=e66] [cursor=pointer]:
+            - /url: /projects/bffc8171-2ef5-4d57-891b-10be8251e215
+          - link "History" [ref=e67] [cursor=pointer]:
+            - /url: /projects/bffc8171-2ef5-4d57-891b-10be8251e215/sessions
+          - link "Plans" [ref=e68] [cursor=pointer]:
+            - /url: /projects/bffc8171-2ef5-4d57-891b-10be8251e215/plans
+          - link "Files" [ref=e69] [cursor=pointer]:
+            - /url: /projects/bffc8171-2ef5-4d57-891b-10be8251e215/files
+          - link "Settings" [ref=e70] [cursor=pointer]:
+            - /url: /projects/bffc8171-2ef5-4d57-891b-10be8251e215/settings
+      - generic [ref=e73]:
+        - generic [ref=e74]:
+          - generic [ref=e75]: 1 queued
+          - button "Run queue" [ref=e76] [cursor=pointer]
+        - generic [ref=e77]:
+          - generic [ref=e78]:
+            - generic [ref=e79]:
+              - button "Queue 1" [ref=e80] [cursor=pointer]:
+                - img [ref=e81]
+                - heading "Queue" [level=2] [ref=e83]
+                - generic [ref=e84]: "1"
+              - button "+ Add" [ref=e85] [cursor=pointer]
+            - generic [ref=e87]:
+              - generic [ref=e89]:
+                - generic [ref=e90]: Build ball sorting visualizer HTML file
+                - generic [ref=e91]: "Create a single self-contained `ball-sorter.html` file that visually demonstrates a ball sorting algorithm (e.g. tube/column sort where colored balls are moved between tubes until each tube contains only one color). Requirements: - Single HTML file with all CSS and JS inline — no external dependencies - At least 4 tubes and 4 colors, each tube holding 4 balls - Animated ball movement between tubes (smooth CSS or JS animation) - Click-to-select-and-move UX: click a tube to pick up the top ball, click another tube to drop it (only valid moves allowed — a ball can only be placed on a matching color or into an empty tube) - Win detection: show a congratulations message when all tubes are sorted - A 'New Game' / 'Shuffle' button to reset with a freshly randomized solvable state - Visual feedback for invalid moves (e.g. brief shake or highlight) - Clean, modern dark UI — dark background, vibrant ball colors, clear tube outlines - No build step, no frameworks — plain HTML/CSS/JS only Deliver only the `ball-sorter.html` file at the repo root. Include a brief comment block at the top explaining the algorithm and controls."
+              - generic [ref=e92]: m
+              - generic [ref=e93]:
+                - button "Assign" [ref=e95] [cursor=pointer]
+                - button "×" [ref=e96] [cursor=pointer]
+          - generic [ref=e97]:
+            - button "Working 0" [ref=e99] [cursor=pointer]:
+              - img [ref=e100]
+              - heading "Working" [level=2] [ref=e102]
+              - generic [ref=e103]: "0"
+            - paragraph [ref=e104]: No agents running.
+          - generic [ref=e105]:
+            - button "Review 0" [ref=e107] [cursor=pointer]:
+              - img [ref=e108]
+              - heading "Review" [level=2] [ref=e110]
+              - generic [ref=e111]: "0"
+            - paragraph [ref=e112]: Nothing to review.

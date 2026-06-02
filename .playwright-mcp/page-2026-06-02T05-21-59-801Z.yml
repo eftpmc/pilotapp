@@ -1,0 +1,138 @@
+- generic:
+  - generic:
+    - generic:
+      - banner:
+        - button:
+          - generic: p
+          - text: pilot
+        - button:
+          - img
+      - main:
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - heading [level=1]: Agents
+                - paragraph: 3 agents
+              - generic:
+                - button: + Department
+                - button: + Agent
+            - generic:
+              - generic:
+                - generic:
+                  - generic:
+                    - heading [level=2]: Software
+                    - paragraph: 3 agents
+                - generic:
+                  - button: Edit
+                  - button: Delete
+                  - button: + Agent to Software
+              - generic:
+                - article:
+                  - generic:
+                    - generic:
+                      - generic: OR
+                      - generic:
+                        - generic:
+                          - generic: Orc
+                        - generic:
+                          - generic: claude
+                          - generic: subscription
+                    - generic:
+                      - generic: Idle
+                      - button:
+                        - img
+                  - generic:
+                    - paragraph:
+                      - generic: Any
+                      - generic: ·
+                      - generic: Architect
+                    - generic:
+                      - generic: 2 tools
+                      - generic: 0 notes
+                - article:
+                  - generic:
+                    - generic:
+                      - generic: CA
+                      - generic:
+                        - generic:
+                          - generic: Carl
+                        - generic:
+                          - generic: claude
+                          - generic: subscription
+                    - generic:
+                      - generic: Idle
+                      - button:
+                        - img
+                  - generic:
+                    - paragraph:
+                      - generic: Worker
+                      - generic: ·
+                      - generic: Methodical
+                    - generic:
+                      - generic: 0 tools
+                      - generic: 0 notes
+                - article:
+                  - generic:
+                    - generic:
+                      - generic: AT
+                      - generic:
+                        - generic:
+                          - generic: Atlas
+                        - generic:
+                          - generic: claude
+                          - generic: subscription
+                    - generic:
+                      - generic: Idle
+                      - button:
+                        - img
+                  - generic:
+                    - paragraph:
+                      - generic: Lead
+                      - generic: ·
+                      - generic: Communicator
+                    - generic:
+                      - generic: 0 tools
+                      - generic: 0 notes
+  - dialog "Add Agent" [ref=e112]:
+    - generic [ref=e113]:
+      - heading "Add Agent" [level=2] [ref=e114]
+      - paragraph [ref=e115]: Hire a teammate, choose how they work, and put them on the right connection.
+    - generic [ref=e116]:
+      - generic [ref=e117]:
+        - button "1 Identity" [ref=e118] [cursor=pointer]:
+          - generic [ref=e119]: "1"
+          - text: Identity
+        - button "2 Role + brain" [ref=e120] [cursor=pointer]:
+          - generic [ref=e121]: "2"
+          - text: Role + brain
+        - button "3 Working style" [ref=e122] [cursor=pointer]:
+          - generic [ref=e123]: "3"
+          - text: Working style
+      - generic [ref=e125]:
+        - generic [ref=e126]:
+          - paragraph [ref=e127]: Identity
+          - heading "Who is joining the team?" [level=3] [ref=e128]
+        - generic [ref=e129]:
+          - generic [ref=e130]: AI
+          - generic [ref=e131]:
+            - generic [ref=e132]: Name
+            - textbox "Carl" [active] [ref=e133]
+        - generic [ref=e134]:
+          - generic [ref=e135]: Department (optional)
+          - combobox [ref=e136] [cursor=pointer]:
+            - generic: No department
+            - img [ref=e137]
+        - paragraph [ref=e139]: Departments keep agents grouped by team. You can move them later.
+      - generic [ref=e140]:
+        - generic [ref=e141]:
+          - generic [ref=e142]: "?"
+          - generic [ref=e143]:
+            - paragraph [ref=e144]: Unnamed agent
+            - paragraph [ref=e145]: Worker · zackhhi@gmail.com
+        - generic [ref=e146]:
+          - button "Cancel" [ref=e147] [cursor=pointer]
+          - button "Next" [ref=e148] [cursor=pointer]
+          - button "Create now" [disabled] [ref=e149]
+    - button [ref=e150] [cursor=pointer]:
+      - img [ref=e151]

@@ -1,5 +1,4 @@
 import type { LucideIcon } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 
 export function EmptyState({ icon: Icon, title, description, action }: {
   icon: LucideIcon
@@ -8,18 +7,18 @@ export function EmptyState({ icon: Icon, title, description, action }: {
   action?: { label: string; onClick: () => void }
 }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-4 py-20 px-8 text-center select-none">
-      <div className="w-14 h-14 rounded-2xl bg-muted/30 flex items-center justify-center">
-        <Icon className="h-7 w-7 text-muted-foreground/65" strokeWidth={1.5} />
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: '80px 32px', textAlign: 'center', userSelect: 'none' }}>
+      <div style={{ width: 56, height: 56, borderRadius: 16, background: 'color-mix(in srgb, var(--panel-2) 60%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Icon size={28} style={{ color: 'var(--muted)', opacity: 0.65 }} strokeWidth={1.5} />
       </div>
-      <div className="flex flex-col gap-1.5">
-        <p className="text-sm font-semibold text-foreground">{title}</p>
-        <p className="text-xs text-muted-foreground leading-relaxed max-w-[220px]">{description}</p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)', margin: 0 }}>{title}</p>
+        <p style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5, maxWidth: 220, margin: 0 }}>{description}</p>
       </div>
       {action && (
-        <Button size="sm" onClick={action.onClick} className="mt-1">
+        <button className="btn sm" onClick={action.onClick} style={{ marginTop: 4 }}>
           {action.label}
-        </Button>
+        </button>
       )}
     </div>
   )

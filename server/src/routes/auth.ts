@@ -5,6 +5,28 @@ import { v4 as uuid } from 'uuid';
 import { db } from '../db';
 import { signToken } from '../middleware/auth';
 
+// Simple in-memory rate limiter — 10 attempts per IP per 15 minutes.
+// Resets on server restart, which is fine for a self-hosted tool.
+const attempts = new Map<string, { count: number; resetAt: number }>();
+const WINDOW_MS = 15 * 60 * 1000;
+const MAX_ATTEMPTS = 10;
+
+function rateLimit(req: Request, res: Response): boolean {
+  const ip = req.ip ?? req.socket.remoteAddress ?? 'unknown';
+  const now = Date.now();
+  const record = attempts.get(ip);
+  if (!record || now > record.resetAt) {
+    attempts.set(ip, { count: 1, resetAt: now + WINDOW_MS });
+    return true;
+  }
+  if (record.count >= MAX_ATTEMPTS) {
+    res.status(429).json({ error: 'Too many attempts — try again later' });
+    return false;
+  }
+  record.count++;
+  return true;
+}
+
 const router = Router();
 
 const AuthSchema = z.object({
@@ -42,6 +64,7 @@ router.post('/register', async (req: Request, res: Response) => {
 });
 
 router.post('/login', async (req: Request, res: Response) => {
+  if (!rateLimit(req, res)) return;
   const parsed = AuthSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.flatten() });

@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { AgentAvatar } from '@/components/AgentAvatar'
 import { cn } from '@/lib/utils'
 import { fmtSecs, useElapsed } from '@/lib/time'
@@ -65,7 +65,7 @@ const ROLES: { value: EmployeeRole; label: string; desc: string }[] = [
 function ProviderBadge({ type }: { type: string }) {
   return (
     <Badge variant="outline" className={cn(
-      'font-mono text-[10px]',
+      'text-[11px] font-semibold capitalize',
       type === 'claude' && 'text-orange-500 border-orange-500/30 bg-orange-500/10',
       type === 'codex'  && 'text-blue-500 border-blue-500/30 bg-blue-500/10',
     )}>{type}</Badge>
@@ -85,7 +85,7 @@ function PersonalityPicker({ value, onChange, compact = false }: {
 
   return (
     <div className="flex flex-col gap-2">
-      <div className={cn('grid gap-1.5', compact ? 'grid-cols-3' : 'grid-cols-3')}>
+      <div className={cn('grid gap-1.5', compact ? 'grid-cols-2' : 'grid-cols-3')}>
         {PERSONALITY_PRESETS.map((preset, i) => {
           const active = activeIdx === i
           return (
@@ -367,12 +367,17 @@ function AddEmployeeDialog({ open, brainList, deptList, defaultDeptId, onClose, 
             </div>
 
             <div className="agent-wizard-footer">
-              <div className="agent-wizard-summary">
-                <span className="font-semibold text-foreground">{name.trim() || 'Unnamed agent'}</span>
-                <span>{selectedRole?.label ?? 'Worker'}</span>
-                <span>{selectedBrain?.name ?? 'No connection'}</span>
-                {selectedDept && <span>{selectedDept.name}</span>}
-                {selectedPreset && <span>{selectedPreset.label}</span>}
+              <div className="agent-wizard-preview">
+                <AgentAvatar name={name.trim() || undefined} size={30} />
+                <div className="min-w-0 flex-1">
+                  <p className="agent-wizard-preview-name">{name.trim() || 'Unnamed agent'}</p>
+                  <p className="agent-wizard-preview-meta">
+                    {selectedRole?.label ?? 'Worker'}
+                    {selectedBrain && <> · {selectedBrain.name}</>}
+                    {selectedDept && <> · {selectedDept.name}</>}
+                  </p>
+                </div>
+                {selectedPreset && <span className="chip">{selectedPreset.label}</span>}
               </div>
               {error && <p className="text-sm text-destructive">{error}</p>}
               <div className="flex gap-2 justify-end">
@@ -459,153 +464,181 @@ function EmployeeCard({ employee, brain, deptList, activeSession, activeTaskTitl
   const statusLabel = isActive ? 'Working' : 'Idle'
   const modelLabel = brain?.model || (brain?.hasKey ? 'API key' : brain?.type === 'claude' ? 'subscription' : 'machine auth')
 
-  const panelStyle: React.CSSProperties = {
-    padding: '14px 4px 14px 52px',
-    borderTop: '1px solid var(--rule-soft)',
-    background: 'var(--panel)',
-    display: 'flex', flexDirection: 'column', gap: 12,
-  }
-
   return (
-    <div>
-      {/* Main row */}
-      <div className="row employee-row" style={{ cursor: 'default', alignItems: 'center' }}>
-        <AgentAvatar agent={employee} size={32} running={isActive} />
-        <div className="row-main employee-main">
-          <div className="employee-title-line">
-            <span className="row-title">{employee.name}</span>
-            {employee.role && employee.role !== 'any' && <Badge variant="outline" className="font-mono text-[10px] text-muted-foreground">{roleLabel}</Badge>}
+    <>
+      <article className={cn('employee-card', confirmDelete && 'is-open')}>
+        <div className="employee-card-head">
+          <div className="employee-card-identity">
+            <AgentAvatar agent={employee} size={44} running={isActive} />
+            <div className="min-w-0">
+              <div className="employee-title-line">
+                <span className="employee-name">{employee.name}</span>
+                <div className={cn('employee-status-dot', isActive ? 'working' : 'idle')} />
+              </div>
+              <div className="employee-meta-line">
+                {brain && <ProviderBadge type={brain.type} />}
+                {modelLabel && <span className="employee-meta-text">{modelLabel}</span>}
+              </div>
+            </div>
           </div>
-          <div className="employee-meta-line">
-            {brain && <ProviderBadge type={brain.type} />}
-            {modelLabel && <span className="employee-meta-text">{modelLabel}</span>}
-            {assignedTools.length > 0 && <span className="employee-capability-chip">{assignedTools.length} tool{assignedTools.length !== 1 ? 's' : ''}</span>}
-            {knowledgeDocs.length > 0 && <span className="employee-capability-chip">{knowledgeDocs.length} note{knowledgeDocs.length !== 1 ? 's' : ''}</span>}
-            {personalityLabel && <span className="employee-style-preview">{personalityLabel}</span>}
-            {isActive && activeTaskTitle && <span className="employee-task-preview">{activeTaskTitle}</span>}
-          </div>
-        </div>
-        <div className="employee-card-right">
-          <div className={cn('employee-status-chip', isActive ? 'working' : 'idle')}>
-            {isActive ? <LiveBadge createdAt={activeSession!.createdAt} /> : statusLabel}
-          </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="employee-menu-trigger" aria-label={`Agent options for ${employee.name}`}>
-                <MoreHorizontal size={16} />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuLabel>Agent options</DropdownMenuLabel>
-              <DropdownMenuItem onSelect={() => { setEditing(e => !e); setShowT(false); setShowK(false); setConfDel(false) }}>
-                <Pencil size={14} /> {editing ? 'Close editor' : 'Edit agent'}
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => { setShowT(s => !s); setEditing(false); setShowK(false); setConfDel(false) }}>
-                <Wrench size={14} /> {showT ? 'Hide tools' : 'Manage tools'}
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => { setShowK(s => !s); setEditing(false); setShowT(false); setConfDel(false) }}>
-                <BookOpen size={14} /> {showK ? 'Hide knowledge' : 'Manage knowledge'}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem destructive onSelect={() => { setConfDel(true); setEditing(false); setShowT(false); setShowK(false) }}>
-                <Trash2 size={14} /> Delete agent
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
 
-      {confirmDelete && (
-        <div className="employee-confirm-panel">
-          <span>Delete {employee.name}?</span>
-          <button onClick={() => setConfDel(false)}>Cancel</button>
-          <button onClick={() => { onDelete(); setConfDel(false) }} className="danger">Delete</button>
+          <div className="employee-card-right">
+            <div className={cn('employee-status-chip', isActive ? 'working' : 'idle')}>
+              {isActive ? <LiveBadge createdAt={activeSession!.createdAt} /> : statusLabel}
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="employee-menu-trigger" aria-label={`Agent options for ${employee.name}`}>
+                  <MoreHorizontal size={16} />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => { setEditing(true); setShowT(false); setShowK(false); setConfDel(false) }}>
+                  <Pencil size={14} /> Edit agent
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => { setShowT(true); setEditing(false); setShowK(false); setConfDel(false) }}>
+                  <Wrench size={14} /> Manage tools
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => { setShowK(true); setEditing(false); setShowT(false); setConfDel(false) }}>
+                  <BookOpen size={14} /> Manage knowledge
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem destructive onSelect={() => { setConfDel(true); setEditing(false); setShowT(false); setShowK(false) }}>
+                  <Trash2 size={14} /> Delete agent
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
-      )}
 
-      {/* Edit panel */}
-      {editing && (
-        <div style={panelStyle}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div className="field"><Label>Name</Label><Input value={name} onChange={e => setName(e.target.value)} /></div>
+        <div className="employee-card-body">
+          <p className="employee-summary-line">
+            <span>{roleLabel ?? 'Any role'}</span>
+            {personalityLabel && <><span className="sep">·</span><span>{personalityLabel}</span></>}
+          </p>
+          <div className="employee-card-stats">
+            <span>{assignedTools.length} tool{assignedTools.length !== 1 ? 's' : ''}</span>
+            <span>{knowledgeDocs.length} note{knowledgeDocs.length !== 1 ? 's' : ''}</span>
+          </div>
+        </div>
+
+        {isActive && activeTaskTitle && (
+          <div className="employee-active-task">
+            <span>Current task</span>
+            <strong>{activeTaskTitle}</strong>
+          </div>
+        )}
+
+        {confirmDelete && (
+          <div className="employee-confirm-panel">
+            <span>Delete {employee.name}?</span>
+            <button onClick={() => setConfDel(false)}>Cancel</button>
+            <button onClick={() => { onDelete(); setConfDel(false) }} className="danger">Delete</button>
+          </div>
+        )}
+      </article>
+
+      <Dialog open={editing} onOpenChange={setEditing}>
+        <DialogContent className="employee-manage-dialog">
+          <DialogHeader>
+            <DialogTitle>Edit {employee.name}</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Adjust their team, default role, and working style.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="employee-card-panel">
+            <div className="employee-panel-grid">
+              <div className="field"><Label>Name</Label><Input value={name} onChange={e => setName(e.target.value)} /></div>
+              <div className="field">
+                <Label>Department</Label>
+                <Select value={deptId || undefined} onValueChange={setDeptId}>
+                  <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                  <SelectContent>{deptList.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            </div>
             <div className="field">
-              <Label>Department</Label>
-              <Select value={deptId || undefined} onValueChange={setDeptId}>
-                <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
-                <SelectContent>{deptList.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent>
-              </Select>
+              <Label>Default Role</Label>
+              <div className="employee-role-pills">
+                {ROLES.map(r => (
+                  <button key={r.value} type="button" onClick={() => setRole(r.value)}
+                    className={cn('btn sm', role === r.value ? 'primary' : 'ghost')}>{r.label}</button>
+                ))}
+              </div>
+            </div>
+            <div className="field"><Label>Personality</Label><PersonalityPicker value={personality} onChange={setPersona} compact /></div>
+            <div className="employee-panel-actions">
+              <button className="btn sm" onClick={() => { setEditing(false); setName(employee.name); setPersona(employee.personality ?? ''); setRole(employee.role ?? 'any'); setDeptId(employee.departmentId ?? '') }}>Cancel</button>
+              <button className="btn sm primary" onClick={() => { onUpdate({ name: name.trim(), personality: personality.trim() || undefined, role, departmentId: deptId || null }); setEditing(false) }}>Save</button>
             </div>
           </div>
-          <div className="field">
-            <Label>Default Role</Label>
-            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-              {ROLES.map(r => (
-                <button key={r.value} type="button" onClick={() => setRole(r.value)}
-                  className={cn('btn sm', role === r.value ? 'primary' : 'ghost')}>{r.label}</button>
-              ))}
-            </div>
-          </div>
-          <div className="field"><Label>Personality</Label><PersonalityPicker value={personality} onChange={setPersona} compact /></div>
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button className="btn sm" onClick={() => { setEditing(false); setName(employee.name); setPersona(employee.personality ?? ''); setRole(employee.role ?? 'any'); setDeptId(employee.departmentId ?? '') }}>Cancel</button>
-            <button className="btn sm primary" onClick={() => { onUpdate({ name: name.trim(), personality: personality.trim() || undefined, role, departmentId: deptId || null }); setEditing(false) }}>Save</button>
-          </div>
-        </div>
-      )}
+        </DialogContent>
+      </Dialog>
 
-      {/* Tools panel */}
-      {showT && (
-        <div style={panelStyle}>
-          <p style={{ fontSize: 11, color: 'var(--muted)', margin: 0, fontFamily: 'var(--font-mono)', letterSpacing: 0, textTransform: 'uppercase' }}>Tools</p>
-          {allTools.length === 0 ? (
-            <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: 0 }}>No tools yet. <a href="/settings" style={{ color: 'var(--ember)' }}>Add in Settings.</a></p>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {allTools.map(tool => {
-                const assigned = assignedTools.some(t => t.id === tool.id)
-                return (
-                  <button key={tool.id} type="button" onClick={() => assigned ? onUnassignTool(tool.id) : onAssignTool(tool.id)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 7, border: `1px solid ${assigned ? 'color-mix(in srgb, var(--ember) 30%, transparent)' : 'transparent'}`, background: assigned ? 'var(--ember-wash)' : 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', width: '100%', transition: 'background .12s' }}
-                    onMouseOver={e => { if (!assigned) e.currentTarget.style.background = 'var(--panel-2)' }}
-                    onMouseOut={e => { if (!assigned) e.currentTarget.style.background = 'none' }}
-                  >
-                    <span style={{ width: 14, height: 14, borderRadius: 4, border: `1px solid ${assigned ? 'var(--ember)' : 'var(--rule)'}`, background: assigned ? 'var(--ember)' : 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 9, color: 'var(--on-ember)' }}>{assigned ? '✓' : ''}</span>
-                    <span style={{ fontSize: 13, color: 'var(--ink)' }}>{tool.name}</span>
-                    {tool.description && <span style={{ fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{tool.description}</span>}
-                  </button>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Knowledge panel */}
-      {showK && (
-        <div style={panelStyle}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <p style={{ fontSize: 11, color: 'var(--muted)', margin: 0, fontFamily: 'var(--font-mono)', letterSpacing: 0, textTransform: 'uppercase', flex: 1 }}>Personal knowledge</p>
-            <button onClick={onAddKnowledge} style={{ fontSize: 12.5, color: 'var(--ember)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>+ Add</button>
+      <Dialog open={showT} onOpenChange={setShowT}>
+        <DialogContent className="employee-manage-dialog">
+          <DialogHeader>
+            <DialogTitle>{employee.name}'s tools</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Choose the tools this agent can use while working.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="employee-card-panel">
+            {allTools.length === 0 ? (
+              <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: 0 }}>No tools yet. <a href="/settings" style={{ color: 'var(--ember)' }}>Add in Settings.</a></p>
+            ) : (
+              <div className="employee-tool-list">
+                {allTools.map(tool => {
+                  const assigned = assignedTools.some(t => t.id === tool.id)
+                  return (
+                    <button key={tool.id} type="button" onClick={() => assigned ? onUnassignTool(tool.id) : onAssignTool(tool.id)}
+                      className={cn('employee-tool-row', assigned && 'active')}
+                    >
+                      <span className="employee-tool-check">{assigned ? '✓' : ''}</span>
+                      <span>{tool.name}</span>
+                      {tool.description && <small>{tool.description}</small>}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
           </div>
-          {knowledgeDocs.length === 0 ? (
-            <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: 0 }}>No personal knowledge yet.</p>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {knowledgeDocs.map(doc => (
-                <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <span style={{ fontSize: 13, color: 'var(--ink)' }}>{doc.title}</span>
-                    {doc.content && <span style={{ fontSize: 11, color: 'var(--muted)', marginLeft: 8 }}>{doc.content.split('\n')[0].slice(0, 60)}</span>}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showK} onOpenChange={setShowK}>
+        <DialogContent className="employee-manage-dialog">
+          <DialogHeader>
+            <DialogTitle>{employee.name}'s knowledge</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Personal notes injected only when this agent works.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="employee-card-panel">
+            <div className="employee-panel-head">
+              <p className="employee-panel-title">Personal knowledge</p>
+              <button onClick={() => { setShowK(false); onAddKnowledge() }} style={{ fontSize: 12.5, color: 'var(--ember)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>+ Add</button>
+            </div>
+            {knowledgeDocs.length === 0 ? (
+              <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: 0 }}>No personal knowledge yet.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {knowledgeDocs.map(doc => (
+                  <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ fontSize: 13, color: 'var(--ink)' }}>{doc.title}</span>
+                      {doc.content && <span style={{ fontSize: 11, color: 'var(--muted)', marginLeft: 8 }}>{doc.content.split('\n')[0].slice(0, 60)}</span>}
+                    </div>
+                    <button onClick={() => { setShowK(false); onEditKnowledge(doc) }} style={{ fontSize: 11, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '0 4px', fontFamily: 'inherit' }}>edit</button>
+                    <button onClick={() => onDeleteKnowledge(doc.id)} style={{ fontSize: 13, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '0 4px', fontFamily: 'inherit', lineHeight: 1 }}>×</button>
                   </div>
-                  <button onClick={() => onEditKnowledge(doc)} style={{ fontSize: 11, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '0 4px', fontFamily: 'inherit' }}>edit</button>
-                  <button onClick={() => onDeleteKnowledge(doc.id)} style={{ fontSize: 13, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '0 4px', fontFamily: 'inherit', lineHeight: 1 }}>×</button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
 

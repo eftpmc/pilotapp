@@ -165,29 +165,52 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_agent_tools_agent   ON agent_tools (agent_id);
 `);
 
-// Migrations — safe to re-run, each ALTER is wrapped in try/catch
-try { db.exec('ALTER TABLE agents ADD COLUMN connection_id TEXT REFERENCES connections(id)'); } catch {}
-try { db.exec('ALTER TABLE connections ADD COLUMN model TEXT'); } catch {}
-try { db.exec('ALTER TABLE projects ADD COLUMN remote_url TEXT'); } catch {}
-try { db.exec('ALTER TABLE projects ADD COLUMN github_token TEXT'); } catch {}
-try { db.exec('ALTER TABLE projects ADD COLUMN local_path TEXT'); } catch {}
-try { db.exec('ALTER TABLE sessions ADD COLUMN spec_id TEXT REFERENCES specs(id)'); } catch {}
-try { db.exec('ALTER TABLE tasks ADD COLUMN priority INTEGER NOT NULL DEFAULT 0'); } catch {}
-try { db.exec('ALTER TABLE agents ADD COLUMN personality TEXT'); } catch {}
-try { db.exec("ALTER TABLE connections ADD COLUMN quota_status TEXT NOT NULL DEFAULT 'ok'"); } catch {}
-try { db.exec('ALTER TABLE connections ADD COLUMN quota_reset_at TEXT'); } catch {}
-try { db.exec("ALTER TABLE agents ADD COLUMN role TEXT NOT NULL DEFAULT 'any'"); } catch {}
-try { db.exec("ALTER TABLE tasks ADD COLUMN size TEXT NOT NULL DEFAULT 'm'"); } catch {}
-try { db.exec('ALTER TABLE agents ADD COLUMN department_id TEXT REFERENCES departments(id)'); } catch {}
-try { db.exec('ALTER TABLE sessions ADD COLUMN journal TEXT'); } catch {}
-try { db.exec('ALTER TABLE sessions ADD COLUMN parent_session_id TEXT REFERENCES sessions(id)'); } catch {}
-try { db.exec('ALTER TABLE sessions ADD COLUMN review_verdict TEXT'); } catch {}
-try { db.exec('ALTER TABLE sessions ADD COLUMN shift_id TEXT REFERENCES shifts(id)'); } catch {}
-try { db.exec('ALTER TABLE tasks ADD COLUMN shift_id TEXT REFERENCES shifts(id)'); } catch {}
-try { db.exec('ALTER TABLE shifts ADD COLUMN report TEXT'); } catch {}
-try { db.exec('ALTER TABLE tasks ADD COLUMN lead_session_id TEXT REFERENCES sessions(id)'); } catch {}
-
+// Migration tracking — each migration runs exactly once, failure throws so
+// the server doesn't start with a partially-applied schema.
 db.exec(`
+  CREATE TABLE IF NOT EXISTS schema_migrations (
+    id         TEXT PRIMARY KEY,
+    applied_at TEXT NOT NULL
+  );
+`);
+
+function migrate(id: string, sql: string): void {
+  if (db.prepare('SELECT id FROM schema_migrations WHERE id = ?').get(id)) return;
+  try {
+    db.exec(sql);
+  } catch (err: any) {
+    // Column/table already exists from the old try/catch migration approach — mark as applied.
+    if (/duplicate column|already exists/i.test(String(err?.message))) {
+      db.prepare('INSERT INTO schema_migrations (id, applied_at) VALUES (?, ?)').run(id, new Date().toISOString());
+      return;
+    }
+    console.error(`[db] Migration '${id}' failed:`, err);
+    throw err;
+  }
+  db.prepare('INSERT INTO schema_migrations (id, applied_at) VALUES (?, ?)').run(id, new Date().toISOString());
+}
+
+migrate('001_agents_connection_id',        'ALTER TABLE agents ADD COLUMN connection_id TEXT REFERENCES connections(id)');
+migrate('002_connections_model',           'ALTER TABLE connections ADD COLUMN model TEXT');
+migrate('003_projects_remote_url',         'ALTER TABLE projects ADD COLUMN remote_url TEXT');
+migrate('004_projects_github_token',       'ALTER TABLE projects ADD COLUMN github_token TEXT');
+migrate('005_projects_local_path',         'ALTER TABLE projects ADD COLUMN local_path TEXT');
+migrate('006_sessions_spec_id',            'ALTER TABLE sessions ADD COLUMN spec_id TEXT REFERENCES specs(id)');
+migrate('007_tasks_priority',              'ALTER TABLE tasks ADD COLUMN priority INTEGER NOT NULL DEFAULT 0');
+migrate('008_agents_personality',          'ALTER TABLE agents ADD COLUMN personality TEXT');
+migrate('009_connections_quota_status',    "ALTER TABLE connections ADD COLUMN quota_status TEXT NOT NULL DEFAULT 'ok'");
+migrate('010_connections_quota_reset_at',  'ALTER TABLE connections ADD COLUMN quota_reset_at TEXT');
+migrate('011_agents_role',                 "ALTER TABLE agents ADD COLUMN role TEXT NOT NULL DEFAULT 'any'");
+migrate('012_tasks_size',                  "ALTER TABLE tasks ADD COLUMN size TEXT NOT NULL DEFAULT 'm'");
+migrate('013_agents_department_id',        'ALTER TABLE agents ADD COLUMN department_id TEXT REFERENCES departments(id)');
+migrate('014_sessions_journal',            'ALTER TABLE sessions ADD COLUMN journal TEXT');
+migrate('015_sessions_parent_session_id',  'ALTER TABLE sessions ADD COLUMN parent_session_id TEXT REFERENCES sessions(id)');
+migrate('016_sessions_review_verdict',     'ALTER TABLE sessions ADD COLUMN review_verdict TEXT');
+migrate('017_sessions_shift_id',           'ALTER TABLE sessions ADD COLUMN shift_id TEXT REFERENCES shifts(id)');
+migrate('018_tasks_shift_id',              'ALTER TABLE tasks ADD COLUMN shift_id TEXT REFERENCES shifts(id)');
+migrate('019_shifts_report',               'ALTER TABLE shifts ADD COLUMN report TEXT');
+migrate('020_tasks_lead_session_id',       'ALTER TABLE tasks ADD COLUMN lead_session_id TEXT REFERENCES sessions(id)');
+migrate('021_department_tools', `
   CREATE TABLE IF NOT EXISTS department_tools (
     department_id TEXT NOT NULL REFERENCES departments(id) ON DELETE CASCADE,
     tool_id       TEXT NOT NULL REFERENCES tools(id)       ON DELETE CASCADE,

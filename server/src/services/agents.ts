@@ -593,7 +593,8 @@ export function isSessionActive(sessionId: string): boolean {
 
 export function killAgent(sessionId: string): void {
   const entry = active.get(sessionId);
-  if (entry) { entry.proc.kill('SIGTERM'); active.delete(sessionId); }
+  if (entry) entry.proc.kill('SIGTERM');
+  // Don't remove from active here — finish() handles cleanup when the process closes
 }
 
 export function agentHealth(): Record<string, { available: boolean; path: string | null }> {
