@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
-import { sessions, employees, tasks } from '../api/client'
-import type { Session, Employee, Task, SessionStatus } from '../api/client'
+import { sessions, agents, tasks } from '../api/client'
+import type { Session, Agent, Task, SessionStatus } from '../api/client'
 import { AgentAvatar } from '@/components/AgentAvatar'
 import { cn } from '@/lib/utils'
 
@@ -25,7 +25,7 @@ const STATUS_CONFIG: Record<string, { dot: string; label: string; color: string;
 }
 
 function SessionCard({ session, agent, task, onClick }: {
-  session: Session; agent?: Employee; task?: Task; onClick: () => void
+  session: Session; agent?: Agent; task?: Task; onClick: () => void
 }) {
   const cfg = STATUS_CONFIG[session.status] ?? STATUS_CONFIG.idle
   const isSpec = !!session.specId
@@ -86,7 +86,7 @@ export default function SessionsPage() {
     enabled: !!projectId,
     refetchInterval: 5000,
   })
-  const { data: agentList = [] } = useQuery({ queryKey: ['employees'],         queryFn: () => employees.list() })
+  const { data: agentList = [] } = useQuery({ queryKey: ['agents'],         queryFn: () => agents.list() })
   const { data: taskList  = [] } = useQuery({ queryKey: ['tasks', projectId], queryFn: () => tasks.list({ projectId }), enabled: !!projectId })
 
   function agentFor(s: Session) { return agentList.find(a => a.id === s.agentId) }

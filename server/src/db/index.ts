@@ -218,3 +218,16 @@ migrate('021_department_tools', `
   );
   CREATE INDEX IF NOT EXISTS idx_dept_tools_dept ON department_tools (department_id);
 `);
+migrate('022_sessions_runner_session_id', 'ALTER TABLE sessions ADD COLUMN runner_session_id TEXT');
+migrate('023_turns', `
+  CREATE TABLE IF NOT EXISTS turns (
+    id           TEXT PRIMARY KEY,
+    session_id   TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    turn_number  INTEGER NOT NULL,
+    prompt       TEXT NOT NULL,
+    status       TEXT NOT NULL DEFAULT 'running',
+    created_at   TEXT NOT NULL,
+    completed_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_turns_session_id ON turns (session_id);
+`);

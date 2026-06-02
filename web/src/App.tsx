@@ -4,7 +4,7 @@ import LoginPage from './pages/LoginPage'
 import Layout from './components/Layout'
 import ProjectLayout from './components/ProjectLayout'
 import OverviewPage from './pages/OverviewPage'
-import EmployeesPage from './pages/EmployeesPage'
+import AgentsPage from './pages/AgentsPage'
 import KnowledgePage from './pages/KnowledgePage'
 import ProjectsPage from './pages/ProjectsPage'
 import ProjectDetailPage from './pages/ProjectDetailPage'
@@ -31,7 +31,7 @@ export default function App() {
           <Route path="/" element={<RequireAuth><Layout /></RequireAuth>}>
             <Route index                element={<OverviewPage />} />
             <Route path="work"          element={<Navigate to="/" replace />} />
-            <Route path="employees"     element={<EmployeesPage />} />
+            <Route path="agents"        element={<AgentsPage />} />
             <Route path="projects"      element={<ProjectsPage />} />
             <Route path="knowledge"     element={<KnowledgePage />} />
             <Route path="tools"         element={<ToolsPage />} />

@@ -544,7 +544,7 @@ html.light {
 .row-go    { color: var(--ember); width: 14px; height: 14px; flex: none; }
 
 /* ── Employee cards ────────────────────────────────────────────────────────── */
-.employee-card {
+.agent-card {
   display: flex;
   flex-direction: column;
   gap: 13px;
@@ -556,37 +556,37 @@ html.light {
   box-shadow: var(--shadow-sm);
   transition: background .12s, border-color .12s, box-shadow .12s, transform .12s;
 }
-.employee-card:hover,
-.employee-card.is-open {
+.agent-card:hover,
+.agent-card.is-open {
   background: color-mix(in srgb, var(--panel) 84%, var(--bg));
   border-color: color-mix(in srgb, var(--rule) 64%, var(--ember) 36%);
   box-shadow: var(--shadow-md);
 }
-.employee-card.is-open {
+.agent-card.is-open {
   border-color: color-mix(in srgb, var(--red) 20%, var(--rule));
 }
-.employee-card:hover {
+.agent-card:hover {
   transform: translateY(-1px);
 }
-.employee-card-head {
+.agent-card-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
 }
-.employee-card-identity {
+.agent-card-identity {
   display: flex;
   align-items: center;
   gap: 12px;
   min-width: 0;
 }
-.employee-title-line {
+.agent-title-line {
   display: flex;
   align-items: center;
   gap: 7px;
   min-width: 0;
 }
-.employee-name {
+.agent-name {
   color: var(--ink);
   font-size: 16px;
   font-weight: 720;
@@ -595,62 +595,62 @@ html.light {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.employee-status-dot {
+.agent-status-dot {
   width: 7px;
   height: 7px;
   border-radius: 999px;
   background: var(--faint);
   flex-shrink: 0;
 }
-.employee-status-dot.working {
+.agent-status-dot.working {
   background: var(--green-dot);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--green-dot) 12%, transparent);
 }
-.employee-meta-line {
+.agent-meta-line {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
   min-width: 0;
 }
-.employee-meta-text,
-.employee-capability-chip,
-.employee-style-preview,
-.employee-task-preview {
+.agent-meta-text,
+.agent-capability-chip,
+.agent-style-preview,
+.agent-task-preview {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.25;
   min-width: 0;
 }
-.employee-meta-text {
+.agent-meta-text {
   color: var(--muted);
   font-size: 12px;
   font-weight: 550;
 }
-.employee-capability-chip {
+.agent-capability-chip {
   border: 1px solid var(--rule-soft);
   border-radius: 7px;
   background: color-mix(in srgb, var(--panel-2) 45%, transparent);
   padding: 2px 6px;
   white-space: nowrap;
 }
-.employee-style-preview,
-.employee-task-preview {
+.agent-style-preview,
+.agent-task-preview {
   max-width: 220px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.employee-task-preview {
+.agent-task-preview {
   color: var(--ink-2);
 }
-.employee-card-right {
+.agent-card-right {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
 }
-.employee-status-chip {
+.agent-status-chip {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -658,7 +658,7 @@ html.light {
   font-weight: 600;
   color: var(--faint);
 }
-.employee-status-chip.working {
+.agent-status-chip.working {
   min-height: 26px;
   border: 1px solid color-mix(in srgb, var(--green) 24%, var(--rule));
   border-radius: 999px;
@@ -666,13 +666,13 @@ html.light {
   color: var(--green);
   padding: 3px 9px;
 }
-.employee-card-body {
+.agent-card-body {
   display: flex;
   flex-direction: column;
   gap: 10px;
   min-width: 0;
 }
-.employee-summary-line {
+.agent-summary-line {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
@@ -683,16 +683,16 @@ html.light {
   margin: 0;
   min-width: 0;
 }
-.employee-summary-line .sep {
+.agent-summary-line .sep {
   color: var(--faint);
 }
-.employee-card-stats {
+.agent-card-stats {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 7px;
 }
-.employee-card-stats span {
+.agent-card-stats span {
   color: var(--muted);
   font-size: 12px;
   font-weight: 600;
@@ -702,7 +702,7 @@ html.light {
   border-radius: 999px;
   background: color-mix(in srgb, var(--bg) 28%, transparent);
 }
-.employee-active-task span {
+.agent-active-task span {
   display: block;
   color: var(--muted);
   font-size: 11px;
@@ -710,7 +710,7 @@ html.light {
   line-height: 1.2;
   margin-bottom: 5px;
 }
-.employee-active-task strong {
+.agent-active-task strong {
   display: block;
   min-width: 0;
   color: var(--ink);
@@ -721,13 +721,13 @@ html.light {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.employee-active-task {
+.agent-active-task {
   padding: 11px 12px;
   border: 1px solid color-mix(in srgb, var(--green) 22%, var(--rule));
   border-radius: 10px;
   background: color-mix(in srgb, var(--green) 7%, transparent);
 }
-.employee-menu-trigger {
+.agent-menu-trigger {
   display: grid;
   place-items: center;
   width: 30px;
@@ -739,13 +739,13 @@ html.light {
   cursor: pointer;
   transition: background .12s, border-color .12s, color .12s;
 }
-.employee-menu-trigger:hover,
-.employee-menu-trigger[data-state="open"] {
+.agent-menu-trigger:hover,
+.agent-menu-trigger[data-state="open"] {
   background: var(--panel-2);
   border-color: var(--rule);
   color: var(--ink);
 }
-.employee-confirm-panel {
+.agent-confirm-panel {
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -757,7 +757,7 @@ html.light {
   font-size: 12.5px;
   padding: 11px 12px;
 }
-.employee-confirm-panel button {
+.agent-confirm-panel button {
   border: 1px solid var(--rule);
   border-radius: 8px;
   background: transparent;
@@ -768,14 +768,14 @@ html.light {
   font-weight: 650;
   padding: 5px 9px;
 }
-.employee-confirm-panel button:hover {
+.agent-confirm-panel button:hover {
   background: var(--panel-2);
 }
-.employee-confirm-panel button.danger {
+.agent-confirm-panel button.danger {
   border-color: color-mix(in srgb, var(--red) 30%, var(--rule));
   color: var(--red);
 }
-.employee-card-panel {
+.agent-card-panel {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -784,42 +784,42 @@ html.light {
   border-radius: 12px;
   background: color-mix(in srgb, var(--bg) 40%, transparent);
 }
-.dialog-panel.employee-manage-dialog {
+.dialog-panel.agent-manage-dialog {
   width: min(620px, calc(100vw - 32px));
 }
-.employee-panel-grid {
+.agent-panel-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
 }
-.employee-role-pills,
-.employee-panel-actions,
-.employee-panel-head {
+.agent-role-pills,
+.agent-panel-actions,
+.agent-panel-head {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
 }
-.employee-panel-actions,
-.employee-panel-head {
+.agent-panel-actions,
+.agent-panel-head {
   justify-content: space-between;
 }
-.employee-panel-actions {
+.agent-panel-actions {
   justify-content: flex-end;
 }
-.employee-panel-title {
+.agent-panel-title {
   color: var(--ink-2);
   font-size: 12px;
   font-weight: 700;
   line-height: 1.2;
   margin: 0;
 }
-.employee-tool-list {
+.agent-tool-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
-.employee-tool-row {
+.agent-tool-row {
   display: grid;
   grid-template-columns: 16px minmax(0, auto) minmax(0, 1fr);
   align-items: center;
@@ -835,20 +835,20 @@ html.light {
   text-align: left;
   transition: background .12s, border-color .12s;
 }
-.employee-tool-row:hover {
+.agent-tool-row:hover {
   background: var(--panel-2);
 }
-.employee-tool-row.active {
+.agent-tool-row.active {
   border-color: color-mix(in srgb, var(--ember) 30%, transparent);
   background: var(--ember-wash);
 }
-.employee-tool-row small {
+.agent-tool-row small {
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.employee-tool-check {
+.agent-tool-check {
   display: grid;
   place-items: center;
   width: 15px;
@@ -859,11 +859,11 @@ html.light {
   font-size: 10px;
   line-height: 1;
 }
-.employee-tool-row.active .employee-tool-check {
+.agent-tool-row.active .agent-tool-check {
   border-color: var(--ember);
   background: var(--ember);
 }
-.employee-actions {
+.agent-actions {
   display: inline-flex;
   align-items: center;
   gap: 2px;
@@ -873,7 +873,7 @@ html.light {
   border-radius: 10px;
   background: color-mix(in srgb, var(--panel-2) 42%, transparent);
 }
-.employee-action {
+.agent-action {
   border: 0;
   border-radius: 7px;
   background: transparent;
@@ -885,16 +885,16 @@ html.light {
   transition: background .12s, color .12s;
   white-space: nowrap;
 }
-.employee-action:hover,
-.employee-action.active {
+.agent-action:hover,
+.agent-action.active {
   background: var(--panel-2);
   color: var(--ink);
 }
-.employee-action.muted {
+.agent-action.muted {
   color: var(--faint);
 }
-.employee-action.danger,
-.employee-action.hover-danger:hover {
+.agent-action.danger,
+.agent-action.hover-danger:hover {
   color: var(--red);
 }
 .agent-department-section {
@@ -1434,32 +1434,32 @@ html.light {
   .agent-department-list {
     grid-template-columns: 1fr;
   }
-  .employee-card {
+  .agent-card {
     min-height: 0;
     padding: 16px;
   }
-  .employee-card-head {
+  .agent-card-head {
     align-items: flex-start;
   }
-  .employee-card-right {
+  .agent-card-right {
     align-items: flex-end;
     flex-direction: column-reverse;
     gap: 7px;
   }
-  .employee-panel-grid {
+  .agent-panel-grid {
     grid-template-columns: 1fr;
   }
-  .employee-tool-row {
+  .agent-tool-row {
     grid-template-columns: 16px minmax(0, 1fr);
   }
-  .employee-tool-row small {
+  .agent-tool-row small {
     grid-column: 2;
   }
-  .employee-style-preview,
-  .employee-task-preview {
+  .agent-style-preview,
+  .agent-task-preview {
     max-width: 100%;
   }
-  .employee-confirm-panel {
+  .agent-confirm-panel {
     align-items: stretch;
     flex-wrap: wrap;
     justify-content: flex-start;
@@ -1514,44 +1514,123 @@ html.light {
 /* ── Command palette ───────────────────────────────────────────────────────── */
 .cmdk-overlay {
   position: fixed; inset: 0; z-index: 90;
-  background: color-mix(in srgb, var(--ink) 28%, transparent);
-  backdrop-filter: blur(4px);
-  display: flex; justify-content: center; align-items: flex-start; padding-top: 12vh;
+  background: color-mix(in srgb, var(--ink) 24%, transparent);
+  backdrop-filter: blur(6px);
+  display: flex; justify-content: center; align-items: flex-start; padding-top: 11vh;
   animation: overlay-in .1s ease;
 }
 .cmdk {
-  width: min(560px, 92vw); background: var(--bg);
-  border: 1px solid var(--rule); border-radius: 16px;
-  box-shadow: var(--shadow-dialog); overflow: hidden;
+  width: min(560px, 92vw);
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  border-radius: 16px;
+  box-shadow: var(--shadow-dialog);
+  overflow: hidden;
   animation: dialog-in .14s ease;
 }
+
+/* Header row (input + optional back button) */
+.cmdk-header {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.cmdk-back {
+  flex-shrink: 0;
+  padding: 0 4px 0 18px;
+  font-size: 16px;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  line-height: 1;
+  transition: color .1s;
+}
+.cmdk-back:hover { color: var(--ink); }
+
 .cmdk-input {
-  width: 100%; border: none; background: none; padding: 16px 20px;
-  font-family: inherit; font-weight: 400; font-size: 18px;
-  color: var(--ink); outline: none; border-bottom: 1px solid var(--rule-soft);
+  flex: 1;
+  border: none;
+  background: none;
+  padding: 15px 20px;
+  font-family: inherit;
+  font-weight: 400;
+  font-size: 15px;
+  color: var(--ink);
+  outline: none;
 }
 .cmdk-input::placeholder { color: var(--faint); }
-.cmdk-list { max-height: 44vh; overflow-y: auto; padding: 6px; }
+
+/* Context label (shown in sub-modes) */
+.cmdk-context {
+  padding: 6px 14px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--ember);
+  background: var(--ember-wash);
+  border-bottom: 1px solid color-mix(in srgb, var(--ember) 14%, transparent);
+  letter-spacing: .01em;
+}
+
+.cmdk-list { max-height: 42vh; overflow-y: auto; padding: 5px; }
+
+/* Section headers */
+.cmdk-section {
+  padding: 8px 12px 3px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.cmdk-section:first-child { padding-top: 4px; }
+
+/* Items */
 .cmdk-item {
-  display: flex; align-items: center; gap: 12px; padding: 9px 12px;
-  border-radius: 9px; cursor: pointer; transition: background .08s;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background .07s;
 }
-.cmdk-item.active { background: var(--panel); }
-.cmdk-item:hover  { background: var(--panel); }
-.cmdk-kind {
-  font-family: "JetBrains Mono Variable", monospace; font-size: 9.5px;
-  letter-spacing: 0; text-transform: uppercase; color: var(--muted); width: 52px; flex-shrink: 0;
+.cmdk-item.active,
+.cmdk-item:hover { background: var(--panel); }
+
+.cmdk-label {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--ink);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.cmdk-label { font-size: 13.5px; font-weight: 500; color: var(--ink); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cmdk-sub { font-size: 12px; color: var(--muted); flex-shrink: 0; }
+.cmdk-sub {
+  font-size: 11.5px;
+  color: var(--faint);
+  flex-shrink: 0;
+  font-family: "JetBrains Mono Variable", monospace;
+}
+
+/* Footer */
 .cmdk-foot {
-  display: flex; gap: 16px; padding: 9px 16px;
+  display: flex;
+  gap: 16px;
+  padding: 8px 16px;
   border-top: 1px solid var(--rule-soft);
-  font-family: "JetBrains Mono Variable", monospace; font-size: 10px; color: var(--muted);
+  font-family: "JetBrains Mono Variable", monospace;
+  font-size: 9.5px;
+  color: var(--faint);
 }
+
 .cmdk-empty {
-  padding: 28px; text-align: center; color: var(--muted);
-  font-size: 14px;
+  padding: 32px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 /* ── Status dots ───────────────────────────────────────────────────────────── */

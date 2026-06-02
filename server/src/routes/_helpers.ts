@@ -6,17 +6,19 @@ export interface SessionRow {
   worktree_path: string; status: string; created_at: string;
   journal: string | null; parent_session_id: string | null;
   review_verdict: string | null; shift_id: string | null;
+  runner_session_id: string | null;
 }
 
 export function toSession(r: SessionRow) {
   return {
     id: r.id, agentId: r.agent_id, projectId: r.project_id,
-    workTaskId:      r.work_task_id       ?? undefined,
-    specId:          r.spec_id            ?? undefined,
-    parentSessionId: r.parent_session_id  ?? undefined,
-    reviewVerdict:   r.review_verdict     ?? undefined,
-    shiftId:         r.shift_id           ?? undefined,
-    journal:         r.journal            ?? undefined,
+    workTaskId:       r.work_task_id       ?? undefined,
+    specId:           r.spec_id            ?? undefined,
+    parentSessionId:  r.parent_session_id  ?? undefined,
+    reviewVerdict:    r.review_verdict     ?? undefined,
+    shiftId:          r.shift_id           ?? undefined,
+    journal:          r.journal            ?? undefined,
+    runnerSessionId:  r.runner_session_id  ?? undefined,
     provider: r.provider as AgentProvider,
     branch: r.branch, worktreePath: r.worktree_path, status: r.status, createdAt: r.created_at,
   };

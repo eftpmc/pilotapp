@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { knowledge, employees, departments } from '../api/client'
-import type { KnowledgeDoc, Employee, Department } from '../api/client'
+import { knowledge, agents, departments } from '../api/client'
+import type { KnowledgeDoc, Agent, Department } from '../api/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -93,7 +93,7 @@ function DocRow({ doc, onEdit, onDelete }: {
 }
 
 // ---------------------------------------------------------------------------
-// Employee section
+// Agent section
 // ---------------------------------------------------------------------------
 
 function DeptSection({ dept, docs, onAdd, onEdit, onDelete }: {
@@ -134,7 +134,7 @@ function DeptSection({ dept, docs, onAdd, onEdit, onDelete }: {
 }
 
 function EmployeeSection({ employee, docs, onAdd, onEdit, onDelete }: {
-  employee: Employee; docs: KnowledgeDoc[]
+  employee: Agent; docs: KnowledgeDoc[]
   onAdd: () => void; onEdit: (doc: KnowledgeDoc) => void; onDelete: (id: string) => void
 }) {
   const [open, setOpen] = useState(false)
@@ -185,7 +185,7 @@ export default function KnowledgePage() {
   }>({ open: false, scope: 'company', scopeLabel: 'Company Library' })
 
   const { data: allKnowledge  = [] } = useQuery({ queryKey: ['knowledge'],   queryFn: () => knowledge.list() })
-  const { data: employeeList  = [] } = useQuery({ queryKey: ['employees'],   queryFn: () => employees.list() })
+  const { data: agentList  = [] } = useQuery({ queryKey: ['agents'],   queryFn: () => agents.list() })
   const { data: deptList      = [] } = useQuery({ queryKey: ['departments'], queryFn: () => departments.list() })
 
   const companyDocs  = allKnowledge.filter(d => d.scope === 'company')
@@ -209,7 +209,7 @@ export default function KnowledgePage() {
     setDialog({ open: true, doc: undefined, scope, scopeId, scopeLabel })
   }
   function openEdit(doc: KnowledgeDoc) {
-    const emp  = doc.scopeId ? employeeList.find(e => e.id === doc.scopeId) : undefined
+    const emp  = doc.scopeId ? agentList.find(e => e.id === doc.scopeId) : undefined
     const dept = doc.scopeId ? deptList.find(d => d.id === doc.scopeId) : undefined
     const label = emp ? `${emp.name}'s Knowledge` : dept ? `${dept.name} Knowledge` : 'Company Library'
     setDialog({ open: true, doc, scope: doc.scope as any, scopeId: doc.scopeId, scopeLabel: label })
@@ -269,11 +269,11 @@ export default function KnowledgePage() {
         <section className="flex flex-col gap-3">
           <p className="text-xs text-muted-foreground/50">Agent knowledge · personal context per agent</p>
 
-          {employeeList.length === 0 ? (
+          {agentList.length === 0 ? (
             <p className="text-sm text-muted-foreground/50">No agents yet.</p>
           ) : (
             <div className="flex flex-col gap-2">
-              {employeeList.map(emp => (
+              {agentList.map(emp => (
                 <EmployeeSection
                   key={emp.id}
                   employee={emp}

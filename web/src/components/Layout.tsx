@@ -1,23 +1,23 @@
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { sessions, employees, projects, tasks } from '../api/client'
+import { sessions, agents, projects, tasks } from '../api/client'
 import { cn } from '@/lib/utils'
 import { useEffect, useRef, useState, useCallback } from 'react'
 import {
-  BookOpen, ChevronRight, FolderOpen, Home, LogOut, Moon, Search,
+  BookOpen, ChevronRight, FolderOpen, Home, LogOut, Moon, Plus, Search,
   Settings, Sun, Users, Wrench,
 } from 'lucide-react'
 
 const BOTTOM_NAV = [
   { label: 'Today',    path: '/',          end: true,  icon: Home },
   { label: 'Projects', path: '/projects',  end: false, icon: FolderOpen },
-  { label: 'Agents',   path: '/employees', end: false, icon: Users },
+  { label: 'Agents',   path: '/agents', end: false, icon: Users },
   { label: 'Settings', path: '/settings',  end: false, icon: Settings },
 ]
 
 const NAV = [
   { label: 'Today',    path: '/',          end: true,  icon: Home },
-  { label: 'Agents',   path: '/employees', end: false, icon: Users },
+  { label: 'Agents',   path: '/agents', end: false, icon: Users },
   { label: 'Knowledge', path: '/knowledge', end: false, icon: BookOpen },
   { label: 'Tools', path: '/tools', end: false, icon: Wrench },
   { label: 'Settings', path: '/settings', end: false, icon: Settings },
@@ -36,96 +36,197 @@ function applyTheme(t: 'light' | 'dark') {
 }
 
 // ── Command palette ────────────────────────────────────────────────────────────
-interface CmdItem {
-  kind: string
-  label: string
-  sub: string
-  path: string
-}
+
+type PaletteMode = 'search' | 'pick-project'
+
+type CmdEntry =
+  | { type: 'section'; label: string }
+  | { type: 'item'; label: string; sub?: string; dot?: string; dotPulse?: boolean; icon?: React.ReactNode; action: () => void; terms?: string[] }
 
 function CommandPalette({ onClose }: { onClose: () => void }) {
   const navigate = useNavigate()
-  const [query, setQuery]   = useState('')
+  const [mode, setMode]   = useState<PaletteMode>('search')
+  const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef  = useRef<HTMLDivElement>(null)
 
   const { data: projectList  = [] } = useQuery({ queryKey: ['projects'],  queryFn: () => projects.list() })
-  const { data: employeeList = [] } = useQuery({ queryKey: ['employees'], queryFn: () => employees.list() })
+  const { data: agentList = [] } = useQuery({ queryKey: ['agents'], queryFn: () => agents.list() })
   const { data: sessionList  = [] } = useQuery({ queryKey: ['sessions'],  queryFn: () => sessions.list() })
   const { data: taskList     = [] } = useQuery({ queryKey: ['tasks'],     queryFn: () => tasks.list() })
 
-  const taskTitle = (id?: string) => id ? taskList.find(t => t.id === id)?.title : undefined
+  const taskTitleFor  = (id?: string) => id ? taskList.find(t => t.id === id)?.title : undefined
+  const agentNameFor  = (id: string)  => agentList.find(e => e.id === id)?.name ?? ''
 
-  const all: CmdItem[] = [
-    ...projectList.map(p => ({ kind: 'Project', label: p.name, sub: 'local', path: `/projects/${p.id}` })),
-    ...employeeList.map(e => ({ kind: 'Agent', label: e.name, sub: e.provider ?? '', path: '/employees' })),
-    ...sessionList.slice(0, 40).map(s => ({
-      kind: 'Session',
-      label: taskTitle(s.workTaskId) ?? s.branch ?? s.id.slice(0, 8),
-      sub: s.status,
-      path: `/sessions/${s.id}`,
-    })),
-  ]
-
-  const q = query.toLowerCase().trim()
-  const filtered = q ? all.filter(i => i.label.toLowerCase().includes(q) || i.kind.toLowerCase().includes(q) || i.sub.toLowerCase().includes(q)) : all
-
-  useEffect(() => { inputRef.current?.focus() }, [])
-  useEffect(() => { setActive(0) }, [query])
-
-  function go(item: CmdItem) {
-    navigate(item.path)
-    onClose()
+  function handleNewTask() {
+    if (projectList.length === 0) { navigate('/projects'); onClose(); return }
+    if (projectList.length === 1) { navigate(`/projects/${projectList[0].id}?new=1`); onClose(); return }
+    setMode('pick-project')
+    setQuery('')
   }
+
+  function buildEntries(): CmdEntry[] {
+    const result: CmdEntry[] = []
+
+    if (mode === 'pick-project') {
+      for (const p of projectList) {
+        result.push({ type: 'item', label: p.name, sub: p.repoPath?.split('/').pop(),
+          action: () => { navigate(`/projects/${p.id}?new=1`); onClose() } })
+      }
+      return result
+    }
+
+    // Actions
+    result.push({ type: 'section', label: 'Actions' })
+    result.push({ type: 'item', label: 'New task', sub: '⌘N',
+      icon: <Plus size={13} style={{ color: 'var(--ember)', flexShrink: 0 }} />,
+      action: handleNewTask, terms: ['create', 'add', 'task'] })
+
+    // Needs review
+    const review = sessionList.filter(s => !s.specId && (s.status === 'done' || s.status === 'error'))
+    if (review.length > 0) {
+      result.push({ type: 'section', label: 'Needs review' })
+      for (const s of review) {
+        result.push({ type: 'item',
+          label: taskTitleFor(s.workTaskId) ?? s.branch ?? s.id.slice(0, 8),
+          sub: agentNameFor(s.agentId),
+          dot: s.status === 'error' ? 'red' : 'amber',
+          action: () => { navigate(`/sessions/${s.id}`); onClose() },
+          terms: ['review', 'done', 'error'] })
+      }
+    }
+
+    // In progress
+    const running = sessionList.filter(s => s.status === 'running')
+    if (running.length > 0) {
+      result.push({ type: 'section', label: 'In progress' })
+      for (const s of running) {
+        result.push({ type: 'item',
+          label: taskTitleFor(s.workTaskId) ?? s.branch ?? s.id.slice(0, 8),
+          sub: agentNameFor(s.agentId),
+          dot: 'green', dotPulse: true,
+          action: () => { navigate(`/sessions/${s.id}`); onClose() },
+          terms: ['running', 'active'] })
+      }
+    }
+
+    // Projects
+    if (projectList.length > 0) {
+      result.push({ type: 'section', label: 'Projects' })
+      for (const p of projectList) {
+        result.push({ type: 'item', label: p.name, sub: p.repoPath?.split('/').pop(),
+          action: () => { navigate(`/projects/${p.id}`); onClose() } })
+      }
+    }
+
+    // Agents
+    if (agentList.length > 0) {
+      result.push({ type: 'section', label: 'Agents' })
+      for (const e of agentList) {
+        result.push({ type: 'item', label: e.name, sub: e.provider,
+          action: () => { navigate('/agents'); onClose() } })
+      }
+    }
+
+    return result
+  }
+
+  const allEntries = buildEntries()
+
+  // When searching, flatten to items only and filter
+  const q = query.toLowerCase().trim()
+  const displayEntries: CmdEntry[] = q
+    ? allEntries.filter((e): e is Extract<CmdEntry, { type: 'item' }> =>
+        e.type === 'item' && (
+          e.label.toLowerCase().includes(q) ||
+          (e.sub ?? '').toLowerCase().includes(q) ||
+          (e.terms ?? []).some(t => t.includes(q))
+        ))
+    : allEntries
+
+  // Selectable items only (for keyboard nav)
+  const selectables = displayEntries.filter(e => e.type === 'item') as Extract<CmdEntry, { type: 'item' }>[]
+
+  useEffect(() => { setTimeout(() => inputRef.current?.focus(), 0) }, [mode])
+  useEffect(() => { setActive(0) }, [query, mode])
 
   function onKey(e: React.KeyboardEvent) {
-    if (e.key === 'ArrowDown')  { e.preventDefault(); setActive(a => Math.min(a + 1, filtered.length - 1)) }
-    if (e.key === 'ArrowUp')    { e.preventDefault(); setActive(a => Math.max(a - 1, 0)) }
-    if (e.key === 'Enter')      { if (filtered[active]) go(filtered[active]) }
-    if (e.key === 'Escape')     { onClose() }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActive(a => Math.min(a + 1, selectables.length - 1)) }
+    if (e.key === 'ArrowUp')   { e.preventDefault(); setActive(a => Math.max(a - 1, 0)) }
+    if (e.key === 'Enter')     { selectables[active]?.action() }
+    if (e.key === 'Escape')    {
+      if (mode === 'pick-project') { setMode('search'); setQuery('') }
+      else onClose()
+    }
   }
 
+  // Keep active item scrolled into view
   useEffect(() => {
-    const el = listRef.current?.querySelector(`[data-idx="${active}"]`) as HTMLElement | null
+    const el = listRef.current?.querySelector(`[data-sel="${active}"]`) as HTMLElement | null
     el?.scrollIntoView({ block: 'nearest' })
   }, [active])
+
+  let selIdx = -1
 
   return (
     <div className="cmdk-overlay" onClick={onClose}>
       <div className="cmdk" onClick={e => e.stopPropagation()}>
-        <input
-          ref={inputRef}
-          className="cmdk-input"
-          placeholder="Search agents, projects, sessions…"
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          onKeyDown={onKey}
-          autoComplete="off"
-          spellCheck={false}
-        />
-        <div className="cmdk-list" ref={listRef}>
-          {filtered.length === 0
-            ? <div className="cmdk-empty">Nothing found</div>
-            : filtered.map((item, i) => (
-              <div
-                key={i}
-                data-idx={i}
-                className={cn('cmdk-item', i === active && 'active')}
-                onMouseEnter={() => setActive(i)}
-                onClick={() => go(item)}
-              >
-                <span className="cmdk-kind">{item.kind}</span>
-                <span className="cmdk-label">{item.label}</span>
-                <span className="cmdk-sub">{item.sub}</span>
-              </div>
-            ))
-          }
+
+        <div className="cmdk-header">
+          {mode === 'pick-project' && (
+            <button className="cmdk-back" onClick={() => { setMode('search'); setQuery('') }}>←</button>
+          )}
+          <input
+            ref={inputRef}
+            className="cmdk-input"
+            placeholder={mode === 'pick-project' ? 'Pick a project…' : 'Search or run a command…'}
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            onKeyDown={onKey}
+            autoComplete="off"
+            spellCheck={false}
+          />
         </div>
+
+        {mode === 'pick-project' && (
+          <div className="cmdk-context">New task · pick a project</div>
+        )}
+
+        <div className="cmdk-list" ref={listRef}>
+          {displayEntries.length === 0 ? (
+            <div className="cmdk-empty">Nothing found</div>
+          ) : displayEntries.map((entry, i) => {
+            if (entry.type === 'section') {
+              return <div key={`s-${i}`} className="cmdk-section">{entry.label}</div>
+            }
+            selIdx++
+            const myIdx = selIdx
+            return (
+              <div
+                key={`i-${i}`}
+                data-sel={myIdx}
+                className={cn('cmdk-item', myIdx === active && 'active')}
+                onMouseEnter={() => setActive(myIdx)}
+                onClick={() => entry.action()}
+              >
+                {entry.icon
+                  ? entry.icon
+                  : entry.dot && <span className={cn('dot', entry.dot, entry.dotPulse && 'pulse')} style={{ flexShrink: 0 }} />
+                }
+                <span className="cmdk-label" style={entry.icon ? { color: 'var(--ember)', fontWeight: 600 } : undefined}>
+                  {entry.label}
+                </span>
+                {entry.sub && <span className="cmdk-sub">{entry.sub}</span>}
+              </div>
+            )
+          })}
+        </div>
+
         <div className="cmdk-foot">
           <span>↑↓ navigate</span>
-          <span>↵ open</span>
-          <span>esc close</span>
+          <span>↵ select</span>
+          <span>esc {mode === 'pick-project' ? 'back' : 'close'}</span>
         </div>
       </div>
     </div>

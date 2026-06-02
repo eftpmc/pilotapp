@@ -5,7 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import { db } from '../db';
 import { createWorktree, removeWorktree, getDiff, mergeWorktree, commitWorktree } from '../services/git';
-import { killAgent, runAgent } from '../services/agents';
+import { killAgent, runAgent, continueAgent } from '../services/agents';
 import { writeEvent } from '../services/events';
 import { markSessionMerged, resetErroredSessionForRetry, resetTaskAfterSessionDiscard } from '../services/lifecycle';
 import { authMiddleware, userId } from '../middleware/auth';
@@ -233,6 +233,57 @@ router.post('/:id/run', (req: Request, res: Response) => {
 
   void runAgent(toSession(row), prompt, uid);
   res.json({ started: true });
+});
+
+// ---------------------------------------------------------------------------
+// GET /sessions/:id/turns
+// ---------------------------------------------------------------------------
+
+router.get('/:id/turns', (req: Request, res: Response) => {
+  const row = db.prepare('SELECT * FROM sessions WHERE id = ? AND user_id = ?').get(req.params.id, userId(req)) as SessionRow | undefined;
+  if (!row) { res.status(404).json({ error: 'Not found' }); return; }
+  interface TurnRow { id: string; session_id: string; turn_number: number; prompt: string; status: string; created_at: string; completed_at: string | null }
+  const turns = db.prepare('SELECT * FROM turns WHERE session_id = ? ORDER BY turn_number ASC').all(row.id) as TurnRow[];
+  res.json(turns.map(t => ({
+    id: t.id, sessionId: t.session_id, turnNumber: t.turn_number,
+    prompt: t.prompt, status: t.status, createdAt: t.created_at,
+    completedAt: t.completed_at ?? undefined,
+  })));
+});
+
+// ---------------------------------------------------------------------------
+// POST /sessions/:id/turns
+// ---------------------------------------------------------------------------
+
+const AddTurnSchema = z.object({ prompt: z.string().min(1) });
+
+router.post('/:id/turns', (req: Request, res: Response) => {
+  const parsed = AddTurnSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+
+  const uid = userId(req);
+  const row = db.prepare('SELECT * FROM sessions WHERE id = ? AND user_id = ?').get(req.params.id, uid) as SessionRow | undefined;
+  if (!row) { res.status(404).json({ error: 'Not found' }); return; }
+  if (row.status !== 'done' && row.status !== 'error') {
+    res.status(400).json({ error: 'Session must be done or error to add a turn' }); return;
+  }
+  if (!row.runner_session_id) {
+    res.status(400).json({ error: 'Session has no runner session ID — cannot continue' }); return;
+  }
+
+  interface CountRow { count: number }
+  const { count } = db.prepare('SELECT COUNT(*) as count FROM turns WHERE session_id = ?').get(row.id) as CountRow;
+  const turnNumber = count + 1;
+  const turnId     = uuid();
+  const now        = new Date().toISOString();
+
+  db.prepare('INSERT INTO turns (id, session_id, turn_number, prompt, status, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(turnId, row.id, turnNumber, parsed.data.prompt, 'running', now);
+
+  const sessionRef = toSession(row);
+  void continueAgent(sessionRef as any, turnId, turnNumber, parsed.data.prompt, uid);
+
+  res.status(201).json({ turnId, turnNumber, prompt: parsed.data.prompt, status: 'running', createdAt: now });
 });
 
 // ---------------------------------------------------------------------------

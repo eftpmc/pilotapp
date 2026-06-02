@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
-import { specs, employees, sessions } from '../api/client'
-import type { Spec, Employee } from '../api/client'
+import { specs, agents, sessions } from '../api/client'
+import type { Spec, Agent } from '../api/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -125,7 +125,7 @@ function PlanListRow({ spec, expanded, onToggle, onDelete, onExecute, onUpdate, 
 
 function NewPlanDialog({ projectId, agentList, onClose, onCreate }: {
   projectId: string
-  agentList: Employee[]
+  agentList: Agent[]
   onClose: () => void
   onCreate: (body: { projectId: string; title: string; brief?: string; agentId?: string }) => Promise<void>
 }) {
@@ -207,7 +207,7 @@ export default function PlansPage() {
     enabled: !!projectId,
     refetchInterval: q => anyPlanning(q.state.data ?? []) ? 3000 : false,
   })
-  const { data: agentList = [] } = useQuery({ queryKey: ['employees'], queryFn: () => employees.list() })
+  const { data: agentList = [] } = useQuery({ queryKey: ['agents'], queryFn: () => agents.list() })
 
   const stopPlan = useMutation({
     mutationFn: (sessionId: string) => sessions.stop(sessionId),

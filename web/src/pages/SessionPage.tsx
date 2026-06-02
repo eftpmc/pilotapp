@@ -1,16 +1,25 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { sessions, employees, projects, tasks } from '../api/client'
-import type { Employee } from '../api/client'
+import { sessions, agents, projects, tasks } from '../api/client'
+import type { Agent } from '../api/client'
 import { Textarea } from '@/components/ui/textarea'
 import { AgentAvatar } from '@/components/AgentAvatar'
 import { fmtSecs, useElapsed } from '@/lib/time'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, ChevronDown, ChevronRight } from 'lucide-react'
 
 const MAX_LINES = 2000
 
 interface Line { text: string; kind: 'text' | 'tool' | 'stderr' }
+
+interface TurnData {
+  id: string
+  number: number
+  prompt: string
+  lines: Line[]
+  status: 'running' | 'done' | 'error'
+  exitCode?: string
+}
 
 function formatToolCall(name: string, input: Record<string, unknown>): string {
   const entries = Object.entries(input)
@@ -50,7 +59,7 @@ function StatusStat({ status }: { status: string }) {
   return <span className="stat" style={{ color: 'var(--muted)' }}>{status}</span>
 }
 
-function ReviewerPickerButton({ agentList, onPick }: { agentList: Employee[]; onPick: (id: string) => void }) {
+function ReviewerPickerButton({ agentList, onPick }: { agentList: Agent[]; onPick: (id: string) => void }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -139,7 +148,6 @@ function JournalView({ text }: { text: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 0, maxWidth: '44em' }}>
       {blocks.map((block, i) => {
-        // Skip h1 — the tab label already says "Journal"
         if (block.type === 'h1') return null
         if (block.type === 'h2') {
           return (
@@ -182,27 +190,169 @@ function shortBranchName(branch?: string) {
   return branch.length > 34 ? `${branch.slice(0, 31)}...` : branch
 }
 
+// ---------------------------------------------------------------------------
+// Output line renderer
+// ---------------------------------------------------------------------------
+
+function OutputLines({ lines, done, exitCode, elapsedSecs, isRunning }: {
+  lines: Line[]; done: boolean; exitCode: string | null; elapsedSecs: number; isRunning: boolean
+}) {
+  const bottomRef = useRef<HTMLDivElement>(null)
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [lines])
+  return (
+    <div>
+      {lines.length === MAX_LINES && (
+        <p className="text-[11px] font-mono text-muted-foreground/40 mb-4 pb-3 border-b border-border">
+          ↑ earlier output truncated — showing last {MAX_LINES} lines
+        </p>
+      )}
+      {lines.length === 0 && !isRunning && !done && (
+        <p className="text-xs font-mono text-muted-foreground">waiting for output…</p>
+      )}
+      {lines.map((line, i) => (
+        <div key={i} style={{
+          fontFamily: 'var(--font-mono)', fontSize: 12.5, lineHeight: 1.85,
+          whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+          color: line.kind === 'tool' ? 'var(--ember)' : line.kind === 'stderr' ? 'var(--muted)' : 'var(--ink-2)',
+        }}>
+          {line.text}
+        </div>
+      ))}
+      {isRunning && !done && <span className="cursor-blink" style={{ marginTop: 4, display: 'inline-block' }} />}
+      {done && (
+        <p className="text-[11px] font-mono text-muted-foreground/40 mt-5 pt-3 border-t border-border/50">
+          process exited {exitCode ?? '0'} · {fmtSecs(elapsedSecs)}
+        </p>
+      )}
+      <div ref={bottomRef} />
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Turn card
+// ---------------------------------------------------------------------------
+
+function TurnCard({ turn, isActive, elapsedSecs }: { turn: TurnData; isActive: boolean; elapsedSecs: number }) {
+  const [expanded, setExpanded] = useState(isActive)
+  const bottomRef = useRef<HTMLDivElement>(null)
+
+  // Keep active turn scrolled to bottom
+  useEffect(() => {
+    if (isActive) bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [turn.lines, isActive])
+
+  // Auto-expand when this turn becomes active
+  useEffect(() => {
+    if (isActive) setExpanded(true)
+  }, [isActive])
+
+  const statusColor = turn.status === 'running' ? 'var(--green)' : turn.status === 'error' ? 'var(--red)' : 'var(--muted)'
+  const promptPreview = turn.prompt.length > 90 ? turn.prompt.slice(0, 88) + '…' : turn.prompt
+
+  return (
+    <div style={{
+      border: '1px solid var(--rule)',
+      borderRadius: 10,
+      overflow: 'hidden',
+      background: isActive ? 'var(--panel)' : 'transparent',
+      marginBottom: 10,
+    }}>
+      {/* Turn header */}
+      <button
+        type="button"
+        onClick={() => setExpanded(e => !e)}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'flex-start', gap: 10,
+          padding: '11px 14px', background: 'none', border: 'none', cursor: 'pointer',
+          textAlign: 'left', fontFamily: 'inherit',
+        }}
+      >
+        <div style={{ paddingTop: 2, color: 'var(--muted)', flexShrink: 0 }}>
+          {expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Turn {turn.number}
+            </span>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: statusColor, flexShrink: 0,
+              ...(turn.status === 'running' ? { animation: 'pulse 1.6s ease-out infinite' } : {}) }} />
+            {turn.status !== 'running' && turn.exitCode && (
+              <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--muted)' }}>
+                exit {turn.exitCode}
+              </span>
+            )}
+            {isActive && turn.status === 'running' && (
+              <span style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--green)' }}>
+                {fmtSecs(elapsedSecs)}
+              </span>
+            )}
+          </div>
+          <p style={{ fontSize: 13, color: 'var(--ink)', margin: 0, lineHeight: 1.5 }}>{promptPreview}</p>
+        </div>
+      </button>
+
+      {/* Turn output */}
+      {expanded && (
+        <div style={{ padding: '0 14px 14px', borderTop: '1px solid var(--rule-soft)' }}>
+          {turn.lines.length === 0 && turn.status === 'running' && (
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--muted)', marginTop: 12 }}>starting…</p>
+          )}
+          {turn.lines.map((line, i) => (
+            <div key={i} style={{
+              fontFamily: 'var(--font-mono)', fontSize: 12.5, lineHeight: 1.85,
+              whiteSpace: 'pre-wrap', wordBreak: 'break-word', marginTop: i === 0 ? 12 : 0,
+              color: line.kind === 'tool' ? 'var(--ember)' : line.kind === 'stderr' ? 'var(--muted)' : 'var(--ink-2)',
+            }}>
+              {line.text}
+            </div>
+          ))}
+          {isActive && turn.status === 'running' && <span className="cursor-blink" style={{ marginTop: 4, display: 'inline-block' }} />}
+          {turn.status !== 'running' && turn.lines.length > 0 && (
+            <p style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--muted)', marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--rule-soft)' }}>
+              exit {turn.exitCode ?? '0'}
+            </p>
+          )}
+          <div ref={bottomRef} />
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
+
 export default function SessionPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const qc = useQueryClient()
 
-  const [lines, setLines]           = useState<Line[]>([])
-  const [done, setDone]             = useState(false)
-  const [activeTab, setActiveTab]   = useState<'output' | 'diff' | 'journal'>('output')
-  const [diff, setDiff]             = useState<string | null>(null)
-  const [diffLoading, setDiffLoad]  = useState(false)
-  const [diffError, setDiffError]   = useState<string | null>(null)
-  const [hint, setHint]             = useState('')
-  const [idlePrompt, setIdlePrompt] = useState('')
-  const [pushed, setPushed]         = useState(false)
-  const [exitCode, setExitCode]     = useState<string | null>(null)
-  const bottomRef   = useRef<HTMLDivElement>(null)
-  const bufferRef   = useRef('')
-  const notifiedRef = useRef(false)
+  // Legacy (pre-turns) flat output state
+  const [legacyLines, setLegacyLines]   = useState<Line[]>([])
+  const [done, setDone]                 = useState(false)
+  const [exitCode, setExitCode]         = useState<string | null>(null)
+
+  // Turn-based state
+  const [turns, setTurns]               = useState<TurnData[]>([])
+  const activeTurnRef                   = useRef<string | null>(null)
+
+  const [activeTab, setActiveTab]       = useState<'output' | 'diff' | 'journal'>('output')
+  const [diff, setDiff]                 = useState<string | null>(null)
+  const [diffLoading, setDiffLoad]      = useState(false)
+  const [diffError, setDiffError]       = useState<string | null>(null)
+  const [hint, setHint]                 = useState('')
+  const [idlePrompt, setIdlePrompt]     = useState('')
+  const [continuePrompt, setContinue]   = useState('')
+  const [pushed, setPushed]             = useState(false)
+  const legacyBottomRef                 = useRef<HTMLDivElement>(null)
+  const bufferRef                       = useRef('')
+  const notifiedRef                     = useRef(false)
 
   const { data: session, refetch: refetchSession } = useQuery({ queryKey: ['session', id], queryFn: () => sessions.get(id!), enabled: !!id, refetchInterval: 3000 })
-  const { data: agentList   = [] } = useQuery({ queryKey: ['employees'], queryFn: () => employees.list() })
+  const { data: agentList   = [] } = useQuery({ queryKey: ['agents'], queryFn: () => agents.list() })
   const { data: projectList = [] } = useQuery({ queryKey: ['projects'],  queryFn: () => projects.list() })
   const { data: taskList    = [] } = useQuery({ queryKey: ['tasks', session?.projectId], queryFn: () => tasks.list({ projectId: session!.projectId }), enabled: !!session?.projectId })
 
@@ -214,8 +364,10 @@ export default function SessionPage() {
   const isDone    = session?.status === 'done'
   const isError   = session?.status === 'error'
   const isMerged  = session?.status === 'merged'
+  const hasTurns  = turns.length > 0
+  const activeRunning = isRunning || (hasTurns && turns[turns.length - 1]?.status === 'running')
 
-  const elapsedSecs = useElapsed(task?.startedAt ?? session?.createdAt, isRunning)
+  const elapsedSecs = useElapsed(task?.startedAt ?? session?.createdAt, activeRunning)
 
   const merge         = useMutation({ mutationFn: () => sessions.merge(id!),   onSuccess: () => { qc.invalidateQueries({ queryKey: ['sessions'] }); refetchSession() } })
   const push          = useMutation({ mutationFn: () => projects.push(project!.id), onSuccess: () => setPushed(true) })
@@ -224,7 +376,11 @@ export default function SessionPage() {
   const requestReview = useMutation({ mutationFn: (agentId: string) => sessions.requestReview(id!, agentId), onSuccess: () => refetchSession() })
   const retry         = useMutation({
     mutationFn: (prompt?: string) => sessions.run(id!, prompt),
-    onSuccess: () => { setLines([]); setDone(false); setExitCode(null); setDiff(null); setHint(''); bufferRef.current = ''; refetchSession() },
+    onSuccess: () => { setLegacyLines([]); setDone(false); setExitCode(null); setDiff(null); setHint(''); bufferRef.current = ''; refetchSession() },
+  })
+  const addTurn = useMutation({
+    mutationFn: (prompt: string) => sessions.addTurn(id!, prompt),
+    onSuccess: () => { setContinue(''); refetchSession() },
   })
 
   useEffect(() => { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission() }, [])
@@ -236,6 +392,7 @@ export default function SessionPage() {
     }
   }, [done, session])
 
+  // WebSocket — handles both legacy and turn-based output
   useEffect(() => {
     if (!id) return
     let ws: WebSocket | null = null, dead = false, delay = 1000
@@ -245,13 +402,33 @@ export default function SessionPage() {
       if (!token) return
       const proto = location.protocol === 'https:' ? 'wss' : 'ws'
       ws = new WebSocket(`${proto}://${location.host}/ws?token=${token}`)
-      ws.onopen = () => { delay = 1000; setLines([]); setDone(false); setExitCode(null); bufferRef.current = ''; ws!.send(JSON.stringify({ type: 'subscribe', sessionId: id })) }
+      ws.onopen = () => {
+        delay = 1000
+        setLegacyLines([]); setDone(false); setExitCode(null); setTurns([]); activeTurnRef.current = null; bufferRef.current = ''
+        ws!.send(JSON.stringify({ type: 'subscribe', sessionId: id }))
+      }
       ws.onmessage = (e) => {
         try {
           const msg = JSON.parse(e.data)
-          if (msg.type === 'done') { setDone(true); setExitCode(String(msg.data ?? '0')); refetchSession(); return }
+          if (msg.type === 'done') {
+            setDone(true); setExitCode(String(msg.data ?? '0')); refetchSession(); return
+          }
+          if (msg.type === 'turn_start') {
+            const { turnId, turnNumber, prompt } = JSON.parse(msg.data)
+            activeTurnRef.current = turnId
+            setTurns(prev => [...prev, { id: turnId, number: turnNumber, prompt, lines: [], status: 'running' }])
+            setDone(false); setExitCode(null)
+            return
+          }
+          if (msg.type === 'turn_done') {
+            const { turnId, exitCode: ec } = JSON.parse(msg.data)
+            activeTurnRef.current = null
+            setTurns(prev => prev.map(t => t.id === turnId ? { ...t, status: ec === '0' ? 'done' : 'error', exitCode: ec } : t))
+            setDone(true); setExitCode(ec); refetchSession()
+            return
+          }
           if (msg.type === 'stdout') processChunk(msg.data)
-          if (msg.type === 'stderr') addLine(msg.data, 'stderr')
+          if (msg.type === 'stderr') dispatchLine(msg.data, 'stderr')
         } catch {}
       }
       ws.onclose = () => { if (!dead) { setTimeout(connect, delay); delay = Math.min(delay * 2, 30_000) } }
@@ -261,60 +438,69 @@ export default function SessionPage() {
     return () => { dead = true; ws?.close() }
   }, [id])
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [lines])
+  useEffect(() => {
+    if (!hasTurns) legacyBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [legacyLines, hasTurns])
 
-  function addLine(text: string, kind: Line['kind']) {
-    setLines(prev => { const next = [...prev, { text, kind }]; return next.length > MAX_LINES ? next.slice(next.length - MAX_LINES) : next })
+  function dispatchLine(text: string, kind: Line['kind']) {
+    if (activeTurnRef.current) {
+      const turnId = activeTurnRef.current
+      setTurns(prev => prev.map(t => {
+        if (t.id !== turnId) return t
+        const next = [...t.lines, { text, kind }]
+        return { ...t, lines: next.length > MAX_LINES ? next.slice(-MAX_LINES) : next }
+      }))
+    } else {
+      setLegacyLines(prev => { const next = [...prev, { text, kind }]; return next.length > MAX_LINES ? next.slice(-MAX_LINES) : next })
+    }
   }
+
   function processChunk(chunk: string) {
     bufferRef.current += chunk
     const parts = bufferRef.current.split('\n')
     bufferRef.current = parts.pop() ?? ''
     for (const raw of parts) parseLine(raw.trim())
   }
+
   function parseLine(line: string) {
     if (!line) return
     try {
       const obj = JSON.parse(line)
       if (obj.type === 'assistant') {
         for (const block of (obj.message?.content ?? [])) {
-          if (block.type === 'text' && block.text?.trim())  addLine(block.text.trim(), 'text')
-          else if (block.type === 'tool_use')               addLine(formatToolCall(block.name, block.input ?? {}), 'tool')
+          if (block.type === 'text' && block.text?.trim())  dispatchLine(block.text.trim(), 'text')
+          else if (block.type === 'tool_use')               dispatchLine(formatToolCall(block.name, block.input ?? {}), 'tool')
         }
       } else if (obj.type === 'result' && obj.result?.trim()) {
-        addLine(obj.result.trim(), 'text')
+        dispatchLine(obj.result.trim(), 'text')
       }
-    } catch { if (line) addLine(line, 'text') }
+    } catch { if (line) dispatchLine(line, 'text') }
   }
 
   async function loadDiff() {
     if (!id || diffLoading) return
     if (diff !== null) { setActiveTab('diff'); return }
-    setDiffLoad(true)
-    setDiffError(null)
-    setActiveTab('diff')
+    setDiffLoad(true); setDiffError(null); setActiveTab('diff')
     try { const { diff: d } = await sessions.diff(id); setDiff(d) }
     catch (e) { setDiffError(e instanceof Error ? e.message : 'Could not load diff') }
     finally { setDiffLoad(false) }
   }
 
   const branchShort = shortBranchName(session?.branch)
+  const canContinue = isDone && !!session?.runnerSessionId && !isMerged && !session?.parentSessionId
 
   return (
     <div className="flex-1 flex flex-col bg-background" style={{ minHeight: 0 }}>
 
       {/* Header */}
       <div className="bg-background border-b border-border px-6 pt-5 pb-0">
-        <button
-          onClick={() => navigate(session?.projectId ? `/projects/${session.projectId}` : -1 as never)}
-          className="proj-back mb-4"
-        >
+        <button onClick={() => navigate(session?.projectId ? `/projects/${session.projectId}` : -1 as never)} className="proj-back mb-4">
           <ArrowLeft size={13} />
           {project?.name ?? 'Back'}
         </button>
 
         <div className="flex items-start gap-3 mb-4 flex-wrap">
-          <AgentAvatar agent={agent} size={34} running={isRunning} />
+          <AgentAvatar agent={agent} size={34} running={activeRunning} />
           <div className="flex-1 min-w-0">
             <h1 className="text-lg font-semibold tracking-tight text-foreground leading-snug">
               {task?.title ?? session?.branch ?? 'Session'}
@@ -323,18 +509,24 @@ export default function SessionPage() {
               {agent && <span className="text-sm text-muted-foreground font-medium">{agent.name}</span>}
               {agent && session && <span className="text-muted-foreground/30">·</span>}
               {session && <StatusStat status={session.status} />}
-              {isRunning && <span className="text-xs font-mono text-green-500 tabular-nums">{fmtSecs(elapsedSecs)}</span>}
+              {activeRunning && <span className="text-xs font-mono text-green-500 tabular-nums">{fmtSecs(elapsedSecs)}</span>}
               {branchShort && (
                 <>
                   <span className="text-muted-foreground/30">·</span>
                   <span className="text-xs font-mono text-muted-foreground/60 truncate max-w-[200px]" title={session?.branch}>{branchShort}</span>
                 </>
               )}
+              {hasTurns && (
+                <>
+                  <span className="text-muted-foreground/30">·</span>
+                  <span className="text-xs text-muted-foreground">{turns.length} turn{turns.length !== 1 ? 's' : ''}</span>
+                </>
+              )}
             </div>
           </div>
 
           <div className="flex gap-2 shrink-0 flex-wrap justify-end max-sm:basis-full max-sm:pl-[46px] max-sm:justify-start">
-            {isRunning && <button className="btn sm" onClick={() => stop.mutate()} disabled={stop.isPending}>{stop.isPending ? '…' : 'Stop'}</button>}
+            {activeRunning && <button className="btn sm" onClick={() => stop.mutate()} disabled={stop.isPending}>{stop.isPending ? '…' : 'Stop'}</button>}
             {(isDone || isError) && <button className="btn sm" onClick={loadDiff} disabled={diffLoading}>{diffLoading ? '…' : 'Diff'}</button>}
             {isDone && !session?.reviewVerdict && !isMerged && (
               <ReviewerPickerButton agentList={agentList.filter(a => a.id !== session?.agentId)} onPick={agentId => requestReview.mutate(agentId)} />
@@ -390,34 +582,31 @@ export default function SessionPage() {
               : diffError
               ? <p className="text-sm text-muted-foreground/60">{diffError}</p>
               : <ColoredDiff raw={diff ?? ''} />
-          ) : (
+          ) : hasTurns ? (
+            /* Turn timeline */
             <div>
-              {lines.length === MAX_LINES && (
-                <p className="text-[11px] font-mono text-muted-foreground/40 mb-4 pb-3 border-b border-border">
-                  ↑ earlier output truncated — showing last {MAX_LINES} lines
-                </p>
-              )}
-              {lines.length === 0 && !isRunning && !done && (
-                <p className="text-xs font-mono text-muted-foreground">waiting for output…</p>
-              )}
-              {lines.map((line, i) => (
-                <div key={i} style={{
-                  fontFamily: 'var(--font-mono)', fontSize: 12.5, lineHeight: 1.85,
-                  whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                  color: line.kind === 'tool' ? 'var(--ember)' : line.kind === 'stderr' ? 'var(--muted)' : 'var(--ink-2)',
-                }}>
-                  {line.text}
+              {/* Legacy output before first turn */}
+              {legacyLines.length > 0 && (
+                <div style={{ marginBottom: 24, paddingBottom: 20, borderBottom: '1px solid var(--rule)' }}>
+                  <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Initial run</p>
+                  <OutputLines lines={legacyLines} done={done && turns.length === 0} exitCode={exitCode} elapsedSecs={elapsedSecs} isRunning={isRunning && turns.length === 0} />
                 </div>
-              ))}
-              {isRunning && !done && <span className="cursor-blink" style={{ marginTop: 4, display: 'inline-block' }} />}
-              {done && (
-                <p className="text-[11px] font-mono text-muted-foreground/40 mt-5 pt-3 border-t border-border/50">
-                  process exited {exitCode ?? (isError ? '1' : '0')} · {task?.startedAt && task.completedAt
-                    ? `${Math.round((new Date(task.completedAt).getTime() - new Date(task.startedAt).getTime()) / 1000)}s`
-                    : fmtSecs(elapsedSecs)}
-                </p>
               )}
-              <div ref={bottomRef} />
+              {/* Turn cards */}
+              {turns.map((turn, i) => (
+                <TurnCard
+                  key={turn.id}
+                  turn={turn}
+                  isActive={i === turns.length - 1}
+                  elapsedSecs={i === turns.length - 1 ? elapsedSecs : 0}
+                />
+              ))}
+            </div>
+          ) : (
+            /* Legacy flat output */
+            <div>
+              <OutputLines lines={legacyLines} done={done} exitCode={exitCode} elapsedSecs={elapsedSecs} isRunning={isRunning} />
+              <div ref={legacyBottomRef} />
             </div>
           )}
         </div>
@@ -433,6 +622,36 @@ export default function SessionPage() {
           {project?.localPath && <CopyCommand text={`git -C ${project.localPath} pull ${project.repoPath} main`} />}
           {push.isError && <span className="text-sm text-destructive">{push.error?.message}</span>}
           <button className="btn sm" onClick={() => navigate(`/projects/${project?.id ?? ''}`)}>← Board</button>
+        </div>
+      )}
+
+      {/* Continue bar — shown when session is done and has a runner session ID */}
+      {canContinue && (
+        <div className="border-t border-border bg-background px-6 py-4">
+          <p className="text-sm font-semibold text-foreground mb-3">Add a follow-up</p>
+          <div className="flex gap-3 items-end">
+            <Textarea
+              value={continuePrompt}
+              onChange={e => setContinue(e.target.value)}
+              placeholder="Continue where it left off, fix something, or add to the work…"
+              rows={2}
+              className="flex-1"
+              autoFocus
+              onKeyDown={e => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && continuePrompt.trim()) {
+                  addTurn.mutate(continuePrompt.trim())
+                }
+              }}
+            />
+            <button
+              className="btn primary"
+              onClick={() => { if (!continuePrompt.trim()) return; addTurn.mutate(continuePrompt.trim()) }}
+              disabled={!continuePrompt.trim() || addTurn.isPending}
+            >
+              {addTurn.isPending ? '…' : 'Send'}
+            </button>
+          </div>
+          {addTurn.isError && <p className="text-xs text-destructive mt-2">{addTurn.error?.message}</p>}
         </div>
       )}
 

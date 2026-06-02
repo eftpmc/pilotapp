@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { brains, employees } from '../api/client'
-import type { Brain, AgentProvider, Employee } from '../api/client'
+import { connections, agents } from '../api/client'
+import type { Connection, AgentProvider, Agent } from '../api/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -27,10 +27,10 @@ function ProviderBadge({ type }: { type: string }) {
 }
 
 // ---------------------------------------------------------------------------
-// Add Brain dialog
+// Add Connection dialog
 // ---------------------------------------------------------------------------
 
-function AddBrainDialog({ open, onClose, onCreate, loading, error }: {
+function AddConnectionDialog({ open, onClose, onCreate, loading, error }: {
   open: boolean; onClose: () => void
   onCreate: (body: { name: string; type: AgentProvider; apiKey?: string; model?: string }) => void
   loading: boolean; error?: string
@@ -95,17 +95,17 @@ function AddBrainDialog({ open, onClose, onCreate, loading, error }: {
 }
 
 // ---------------------------------------------------------------------------
-// Brain row
+// Connection row
 // ---------------------------------------------------------------------------
 
-function BrainRow({ brain, employeeCount, onUpdate, onDelete, onClearQuota }: {
-  brain: Brain; employeeCount: number
+function ConnectionRow({ connection, agentCount, onUpdate, onDelete, onClearQuota }: {
+  connection: Connection; agentCount: number
   onUpdate: (body: { name?: string; apiKey?: string; model?: string }) => void
   onDelete: () => void; onClearQuota: () => void
 }) {
   const [editing, setEditing] = useState(false)
-  const [name,   setName]   = useState(brain.name)
-  const [model,  setModel]  = useState(brain.model ?? '')
+  const [name,   setName]   = useState(connection.name)
+  const [model,  setModel]  = useState(connection.model ?? '')
   const [apiKey, setApiKey] = useState('')
   const [confirmDelete, setConfirmDelete] = useState(false)
 
@@ -125,10 +125,10 @@ function BrainRow({ brain, employeeCount, onUpdate, onDelete, onClearQuota }: {
         <div className="flex flex-col gap-1">
           <Label className="text-xs">New API Key <span className="text-muted-foreground font-normal">(leave blank to keep existing)</span></Label>
           <Input type="password" value={apiKey} onChange={e => setApiKey(e.target.value)}
-            placeholder={brain.hasKey ? '••••••••' : 'no key set'} className="h-8 text-xs font-mono" />
+            placeholder={connection.hasKey ? '••••••••' : 'no key set'} className="h-8 text-xs font-mono" />
         </div>
         <div className="flex gap-2 justify-end">
-          <Button size="sm" variant="outline" onClick={() => { setEditing(false); setName(brain.name); setModel(brain.model ?? ''); setApiKey('') }}>
+          <Button size="sm" variant="outline" onClick={() => { setEditing(false); setName(connection.name); setModel(connection.model ?? ''); setApiKey('') }}>
             Cancel
           </Button>
           <Button size="sm" onClick={() => { onUpdate({ name, model: model || undefined, apiKey: apiKey || undefined }); setEditing(false); setApiKey('') }}>
@@ -143,8 +143,8 @@ function BrainRow({ brain, employeeCount, onUpdate, onDelete, onClearQuota }: {
     return (
       <div className="flex items-center gap-3 px-4 py-3 bg-destructive/5">
         <p className="text-xs text-muted-foreground flex-1">
-          {employeeCount > 0
-            ? `This connection is used by ${employeeCount} agent${employeeCount !== 1 ? 's' : ''}. They will lose access.`
+          {agentCount > 0
+            ? `This connection is used by ${agentCount} agent${agentCount !== 1 ? 's' : ''}. They will lose access.`
             : 'Delete this connection?'}
         </p>
         <Button size="sm" variant="outline" onClick={() => setConfirmDelete(false)}>Cancel</Button>
@@ -156,30 +156,30 @@ function BrainRow({ brain, employeeCount, onUpdate, onDelete, onClearQuota }: {
   return (
     <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:gap-3">
       <div className="min-w-0 flex-1">
-        <span className="block truncate text-sm text-foreground">{brain.name}</span>
+        <span className="block truncate text-sm text-foreground">{connection.name}</span>
         <div className="mt-1 flex flex-wrap items-center gap-1.5 sm:hidden">
-          {brain.model && <span className="font-mono text-[10px] text-muted-foreground">{brain.model}</span>}
+          {connection.model && <span className="font-mono text-[10px] text-muted-foreground">{connection.model}</span>}
           <Badge variant="outline" className={cn(
             'font-mono text-[10px]',
-            brain.hasKey ? 'text-muted-foreground' : 'text-green-500 border-green-500/30 bg-green-500/10'
+            connection.hasKey ? 'text-muted-foreground' : 'text-green-500 border-green-500/30 bg-green-500/10'
           )}>
-            {brain.hasKey ? 'API key' : brain.type === 'claude' ? 'subscription' : 'machine auth'}
+            {connection.hasKey ? 'API key' : connection.type === 'claude' ? 'subscription' : 'machine auth'}
           </Badge>
-          <ProviderBadge type={brain.type} />
+          <ProviderBadge type={connection.type} />
         </div>
       </div>
       <div className="hidden items-center gap-2 sm:flex">
-        {brain.model && <span className="font-mono text-[10px] text-muted-foreground">{brain.model}</span>}
+        {connection.model && <span className="font-mono text-[10px] text-muted-foreground">{connection.model}</span>}
         <Badge variant="outline" className={cn(
           'font-mono text-[10px]',
-          brain.hasKey ? 'text-muted-foreground' : 'text-green-500 border-green-500/30 bg-green-500/10'
+          connection.hasKey ? 'text-muted-foreground' : 'text-green-500 border-green-500/30 bg-green-500/10'
         )}>
-          {brain.hasKey ? 'API key' : brain.type === 'claude' ? 'subscription' : 'machine auth'}
+          {connection.hasKey ? 'API key' : connection.type === 'claude' ? 'subscription' : 'machine auth'}
         </Badge>
-        <ProviderBadge type={brain.type} />
+        <ProviderBadge type={connection.type} />
       </div>
       <div className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2">
-        {brain.quotaStatus === 'exceeded' && (
+        {connection.quotaStatus === 'exceeded' && (
           <button onClick={onClearQuota} className="flex items-center gap-1 cursor-pointer bg-transparent border-none p-0">
             <Badge variant="warning" className="text-[10px] gap-1 hover:opacity-80 transition-opacity">
               <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
@@ -201,30 +201,30 @@ function BrainRow({ brain, employeeCount, onUpdate, onDelete, onClearQuota }: {
 export default function SettingsPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
-  const [showAddBrain, setShowAddBrain] = useState(false)
+  const [showAddConnection, setShowAddBrain] = useState(false)
 
-  const { data: brainList    = [] } = useQuery({ queryKey: ['brains'],    queryFn: () => brains.list() })
-  const { data: employeeList = [] } = useQuery({ queryKey: ['employees'], queryFn: () => employees.list() })
+  const { data: connectionList    = [] } = useQuery({ queryKey: ['connections'],    queryFn: () => connections.list() })
+  const { data: agentList = [] } = useQuery({ queryKey: ['agents'], queryFn: () => agents.list() })
 
-  const createBrain = useMutation({
-    mutationFn: (body: Parameters<typeof brains.create>[0]) => brains.create(body),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['brains'] }); setShowAddBrain(false) },
+  const createConnection = useMutation({
+    mutationFn: (body: Parameters<typeof connections.create>[0]) => connections.create(body),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['connections'] }); setShowAddBrain(false) },
   })
-  const updateBrain = useMutation({
-    mutationFn: ({ id, body }: { id: string; body: Parameters<typeof brains.update>[1] }) => brains.update(id, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['brains'] }),
+  const updateConnection = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: Parameters<typeof connections.update>[1] }) => connections.update(id, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['connections'] }),
   })
-  const deleteBrain = useMutation({
-    mutationFn: (id: string) => brains.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['brains'] }),
+  const deleteConnection = useMutation({
+    mutationFn: (id: string) => connections.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['connections'] }),
   })
   const clearQuota = useMutation({
-    mutationFn: (id: string) => brains.clearQuota(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['brains'] }),
+    mutationFn: (id: string) => connections.clearQuota(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['connections'] }),
   })
 
-  function employeeCountForBrain(brainId: string): number {
-    return (employeeList as Employee[]).filter(e => e.connectionId === brainId).length
+  function agentCountForBrain(brainId: string): number {
+    return (agentList as Agent[]).filter(e => e.connectionId === brainId).length
   }
 
   function signOut() {
@@ -247,17 +247,17 @@ export default function SettingsPage() {
             <p className="text-xs text-muted-foreground/50">Connections · API credentials agents use to run tasks</p>
             <Button size="sm" onClick={() => setShowAddBrain(true)}>+ Add</Button>
           </div>
-          {brainList.length === 0 ? (
+          {connectionList.length === 0 ? (
             <p className="text-sm text-muted-foreground/50">No connections yet.</p>
           ) : (
             <div className="bg-card rounded-xl border border-border overflow-hidden">
-              {brainList.map((b, i) => (
+              {connectionList.map((b, i) => (
                 <div key={b.id} className={i > 0 ? 'border-t border-border/40' : ''}>
-                  <BrainRow
-                    brain={b}
-                    employeeCount={employeeCountForBrain(b.id)}
-                    onUpdate={body => updateBrain.mutate({ id: b.id, body })}
-                    onDelete={() => deleteBrain.mutate(b.id)}
+                  <ConnectionRow
+                    connection={b}
+                    agentCount={agentCountForBrain(b.id)}
+                    onUpdate={body => updateConnection.mutate({ id: b.id, body })}
+                    onDelete={() => deleteConnection.mutate(b.id)}
                     onClearQuota={() => clearQuota.mutate(b.id)}
                   />
                 </div>
@@ -279,12 +279,12 @@ export default function SettingsPage() {
 
       </div>
 
-      <AddBrainDialog
-        open={showAddBrain}
+      <AddConnectionDialog
+        open={showAddConnection}
         onClose={() => setShowAddBrain(false)}
-        onCreate={body => createBrain.mutate(body)}
-        loading={createBrain.isPending}
-        error={createBrain.error?.message}
+        onCreate={body => createConnection.mutate(body)}
+        loading={createConnection.isPending}
+        error={createConnection.error?.message}
       />
 
     </div>

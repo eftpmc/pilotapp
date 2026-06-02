@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { employees, brains, departments, sessions, tasks, knowledge, tools } from '../api/client'
-import type { Employee, Brain, Department, EmployeeRole, KnowledgeDoc, Tool } from '../api/client'
+import { agents, connections, departments, sessions, tasks, knowledge, tools } from '../api/client'
+import type { Agent, Connection, Department, AgentRole, KnowledgeDoc, Tool } from '../api/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -54,7 +54,7 @@ const PERSONALITY_PRESETS: { label: string; tag: string; prompt: string }[] = [
   },
 ]
 
-const ROLES: { value: EmployeeRole; label: string; desc: string }[] = [
+const ROLES: { value: AgentRole; label: string; desc: string }[] = [
   { value: 'any',      label: 'Any',      desc: 'Does whatever is needed' },
   { value: 'worker',   label: 'Worker',   desc: 'Executes tasks, writes code' },
   { value: 'reviewer', label: 'Reviewer', desc: 'Reviews diffs, gives feedback' },
@@ -176,19 +176,19 @@ function DepartmentDialog({ open, dept, onClose, onSave, loading, error }: {
 }
 
 // ---------------------------------------------------------------------------
-// Add Employee dialog
+// Add Agent dialog
 // ---------------------------------------------------------------------------
 
-function AddEmployeeDialog({ open, brainList, deptList, defaultDeptId, onClose, onCreate, loading, error }: {
-  open: boolean; brainList: Brain[]; deptList: Department[]; defaultDeptId?: string; onClose: () => void
-  onCreate: (body: { name: string; connectionId: string; personality?: string; role?: EmployeeRole; departmentId?: string }) => void
+function AddAgentDialog({ open, connectionList, deptList, defaultDeptId, onClose, onCreate, loading, error }: {
+  open: boolean; connectionList: Connection[]; deptList: Department[]; defaultDeptId?: string; onClose: () => void
+  onCreate: (body: { name: string; connectionId: string; personality?: string; role?: AgentRole; departmentId?: string }) => void
   loading: boolean; error?: string
 }) {
   const [step,         setStep]    = useState(0)
   const [name,         setName]    = useState('')
   const [connectionId, setConnId]  = useState('')
   const [personality,  setPersona] = useState('')
-  const [role,         setRole]    = useState<EmployeeRole>('worker')
+  const [role,         setRole]    = useState<AgentRole>('worker')
   const [departmentId, setDeptId]  = useState(defaultDeptId ?? '')
 
   useEffect(() => {
@@ -201,8 +201,8 @@ function AddEmployeeDialog({ open, brainList, deptList, defaultDeptId, onClose, 
     setDeptId(defaultDeptId ?? '')
   }, [open, defaultDeptId])
 
-  const effectiveConnId = connectionId || brainList[0]?.id || ''
-  const selectedBrain = brainList.find(b => b.id === effectiveConnId)
+  const effectiveConnId = connectionId || connectionList[0]?.id || ''
+  const selectedBrain = connectionList.find(b => b.id === effectiveConnId)
   const selectedDept = deptList.find(d => d.id === departmentId)
   const selectedRole = ROLES.find(r => r.value === role)
   const selectedPreset = PERSONALITY_PRESETS.find(p => p.prompt === personality)
@@ -222,7 +222,7 @@ function AddEmployeeDialog({ open, brainList, deptList, defaultDeptId, onClose, 
     })
   }
 
-  const steps = ['Identity', 'Role + brain', 'Working style']
+  const steps = ['Identity', 'Role + connection', 'Working style']
 
   return (
     <Dialog open={open} onOpenChange={o => !o && onClose()}>
@@ -233,7 +233,7 @@ function AddEmployeeDialog({ open, brainList, deptList, defaultDeptId, onClose, 
             Hire a teammate, choose how they work, and put them on the right connection.
           </DialogDescription>
         </DialogHeader>
-        {brainList.length === 0 ? (
+        {connectionList.length === 0 ? (
           <div className="flex flex-col gap-3">
             <p className="text-sm text-muted-foreground">
               You need a connection (API key) before you can add agents.
@@ -294,7 +294,7 @@ function AddEmployeeDialog({ open, brainList, deptList, defaultDeptId, onClose, 
               {step === 1 && (
                 <div className="agent-wizard-panel">
                   <div>
-                    <p className="agent-wizard-kicker">Role + brain</p>
+                    <p className="agent-wizard-kicker">Role + connection</p>
                     <h3 className="agent-wizard-heading">What should this agent be responsible for?</h3>
                   </div>
                   <div className="agent-role-grid">
@@ -315,7 +315,7 @@ function AddEmployeeDialog({ open, brainList, deptList, defaultDeptId, onClose, 
                     <Select value={effectiveConnId} onValueChange={setConnId}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        {brainList.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                        {connectionList.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
@@ -435,15 +435,15 @@ function KnowledgeDocDialog({ open, doc, onClose, onSave, loading, error }: {
 }
 
 // ---------------------------------------------------------------------------
-// Employee card
+// Agent card
 // ---------------------------------------------------------------------------
 
-function EmployeeCard({ employee, brain, deptList, activeSession, activeTaskTitle, knowledgeDocs, allTools, assignedTools, onUpdate, onDelete, onAddKnowledge, onEditKnowledge, onDeleteKnowledge, onAssignTool, onUnassignTool }: {
-  employee: Employee; brain?: Brain; deptList: Department[]
+function AgentCard({ employee, connection, deptList, activeSession, activeTaskTitle, knowledgeDocs, allTools, assignedTools, onUpdate, onDelete, onAddKnowledge, onEditKnowledge, onDeleteKnowledge, onAssignTool, onUnassignTool }: {
+  employee: Agent; connection?: Connection; deptList: Department[]
   activeSession?: { id: string; createdAt: string } | null
   activeTaskTitle?: string; knowledgeDocs: KnowledgeDoc[]
   allTools: Tool[]; assignedTools: Tool[]
-  onUpdate: (body: { name?: string; personality?: string; role?: EmployeeRole; departmentId?: string | null }) => void
+  onUpdate: (body: { name?: string; personality?: string; role?: AgentRole; departmentId?: string | null }) => void
   onDelete: () => void
   onAddKnowledge: () => void; onEditKnowledge: (doc: KnowledgeDoc) => void; onDeleteKnowledge: (id: string) => void
   onAssignTool: (toolId: string) => void; onUnassignTool: (toolId: string) => void
@@ -454,7 +454,7 @@ function EmployeeCard({ employee, brain, deptList, activeSession, activeTaskTitl
   const [confirmDelete, setConfDel] = useState(false)
   const [name,        setName]    = useState(employee.name)
   const [personality, setPersona] = useState(employee.personality ?? '')
-  const [role,        setRole]    = useState<EmployeeRole>(employee.role ?? 'any')
+  const [role,        setRole]    = useState<AgentRole>(employee.role ?? 'any')
   const [deptId,      setDeptId]  = useState(employee.departmentId ?? '')
 
   const isActive = !!activeSession
@@ -462,33 +462,33 @@ function EmployeeCard({ employee, brain, deptList, activeSession, activeTaskTitl
   const selectedPreset = PERSONALITY_PRESETS.find(p => p.prompt === employee.personality)
   const personalityLabel = selectedPreset?.label ?? (employee.personality ? employee.personality.split('\n')[0].slice(0, 48) : '')
   const statusLabel = isActive ? 'Working' : 'Idle'
-  const modelLabel = brain?.model || (brain?.hasKey ? 'API key' : brain?.type === 'claude' ? 'subscription' : 'machine auth')
+  const modelLabel = connection?.model || (connection?.hasKey ? 'API key' : connection?.type === 'claude' ? 'subscription' : 'machine auth')
 
   return (
     <>
-      <article className={cn('employee-card', confirmDelete && 'is-open')}>
-        <div className="employee-card-head">
-          <div className="employee-card-identity">
+      <article className={cn('agent-card', confirmDelete && 'is-open')}>
+        <div className="agent-card-head">
+          <div className="agent-card-identity">
             <AgentAvatar agent={employee} size={44} running={isActive} />
             <div className="min-w-0">
-              <div className="employee-title-line">
-                <span className="employee-name">{employee.name}</span>
-                <div className={cn('employee-status-dot', isActive ? 'working' : 'idle')} />
+              <div className="agent-title-line">
+                <span className="agent-name">{employee.name}</span>
+                <div className={cn('agent-status-dot', isActive ? 'working' : 'idle')} />
               </div>
-              <div className="employee-meta-line">
-                {brain && <ProviderBadge type={brain.type} />}
-                {modelLabel && <span className="employee-meta-text">{modelLabel}</span>}
+              <div className="agent-meta-line">
+                {connection && <ProviderBadge type={connection.type} />}
+                {modelLabel && <span className="agent-meta-text">{modelLabel}</span>}
               </div>
             </div>
           </div>
 
-          <div className="employee-card-right">
-            <div className={cn('employee-status-chip', isActive ? 'working' : 'idle')}>
+          <div className="agent-card-right">
+            <div className={cn('agent-status-chip', isActive ? 'working' : 'idle')}>
               {isActive ? <LiveBadge createdAt={activeSession!.createdAt} /> : statusLabel}
             </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="employee-menu-trigger" aria-label={`Agent options for ${employee.name}`}>
+                <button className="agent-menu-trigger" aria-label={`Agent options for ${employee.name}`}>
                   <MoreHorizontal size={16} />
                 </button>
               </DropdownMenuTrigger>
@@ -511,26 +511,26 @@ function EmployeeCard({ employee, brain, deptList, activeSession, activeTaskTitl
           </div>
         </div>
 
-        <div className="employee-card-body">
-          <p className="employee-summary-line">
+        <div className="agent-card-body">
+          <p className="agent-summary-line">
             <span>{roleLabel ?? 'Any role'}</span>
             {personalityLabel && <><span className="sep">·</span><span>{personalityLabel}</span></>}
           </p>
-          <div className="employee-card-stats">
+          <div className="agent-card-stats">
             <span>{assignedTools.length} tool{assignedTools.length !== 1 ? 's' : ''}</span>
             <span>{knowledgeDocs.length} note{knowledgeDocs.length !== 1 ? 's' : ''}</span>
           </div>
         </div>
 
         {isActive && activeTaskTitle && (
-          <div className="employee-active-task">
+          <div className="agent-active-task">
             <span>Current task</span>
             <strong>{activeTaskTitle}</strong>
           </div>
         )}
 
         {confirmDelete && (
-          <div className="employee-confirm-panel">
+          <div className="agent-confirm-panel">
             <span>Delete {employee.name}?</span>
             <button onClick={() => setConfDel(false)}>Cancel</button>
             <button onClick={() => { onDelete(); setConfDel(false) }} className="danger">Delete</button>
@@ -539,15 +539,15 @@ function EmployeeCard({ employee, brain, deptList, activeSession, activeTaskTitl
       </article>
 
       <Dialog open={editing} onOpenChange={setEditing}>
-        <DialogContent className="employee-manage-dialog">
+        <DialogContent className="agent-manage-dialog">
           <DialogHeader>
             <DialogTitle>Edit {employee.name}</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
               Adjust their team, default role, and working style.
             </DialogDescription>
           </DialogHeader>
-          <div className="employee-card-panel">
-            <div className="employee-panel-grid">
+          <div className="agent-card-panel">
+            <div className="agent-panel-grid">
               <div className="field"><Label>Name</Label><Input value={name} onChange={e => setName(e.target.value)} /></div>
               <div className="field">
                 <Label>Department</Label>
@@ -559,7 +559,7 @@ function EmployeeCard({ employee, brain, deptList, activeSession, activeTaskTitl
             </div>
             <div className="field">
               <Label>Default Role</Label>
-              <div className="employee-role-pills">
+              <div className="agent-role-pills">
                 {ROLES.map(r => (
                   <button key={r.value} type="button" onClick={() => setRole(r.value)}
                     className={cn('btn sm', role === r.value ? 'primary' : 'ghost')}>{r.label}</button>
@@ -567,7 +567,7 @@ function EmployeeCard({ employee, brain, deptList, activeSession, activeTaskTitl
               </div>
             </div>
             <div className="field"><Label>Personality</Label><PersonalityPicker value={personality} onChange={setPersona} compact /></div>
-            <div className="employee-panel-actions">
+            <div className="agent-panel-actions">
               <button className="btn sm" onClick={() => { setEditing(false); setName(employee.name); setPersona(employee.personality ?? ''); setRole(employee.role ?? 'any'); setDeptId(employee.departmentId ?? '') }}>Cancel</button>
               <button className="btn sm primary" onClick={() => { onUpdate({ name: name.trim(), personality: personality.trim() || undefined, role, departmentId: deptId || null }); setEditing(false) }}>Save</button>
             </div>
@@ -576,25 +576,25 @@ function EmployeeCard({ employee, brain, deptList, activeSession, activeTaskTitl
       </Dialog>
 
       <Dialog open={showT} onOpenChange={setShowT}>
-        <DialogContent className="employee-manage-dialog">
+        <DialogContent className="agent-manage-dialog">
           <DialogHeader>
             <DialogTitle>{employee.name}'s tools</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
               Choose the tools this agent can use while working.
             </DialogDescription>
           </DialogHeader>
-          <div className="employee-card-panel">
+          <div className="agent-card-panel">
             {allTools.length === 0 ? (
               <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: 0 }}>No tools yet. <a href="/settings" style={{ color: 'var(--ember)' }}>Add in Settings.</a></p>
             ) : (
-              <div className="employee-tool-list">
+              <div className="agent-tool-list">
                 {allTools.map(tool => {
                   const assigned = assignedTools.some(t => t.id === tool.id)
                   return (
                     <button key={tool.id} type="button" onClick={() => assigned ? onUnassignTool(tool.id) : onAssignTool(tool.id)}
-                      className={cn('employee-tool-row', assigned && 'active')}
+                      className={cn('agent-tool-row', assigned && 'active')}
                     >
-                      <span className="employee-tool-check">{assigned ? '✓' : ''}</span>
+                      <span className="agent-tool-check">{assigned ? '✓' : ''}</span>
                       <span>{tool.name}</span>
                       {tool.description && <small>{tool.description}</small>}
                     </button>
@@ -607,16 +607,16 @@ function EmployeeCard({ employee, brain, deptList, activeSession, activeTaskTitl
       </Dialog>
 
       <Dialog open={showK} onOpenChange={setShowK}>
-        <DialogContent className="employee-manage-dialog">
+        <DialogContent className="agent-manage-dialog">
           <DialogHeader>
             <DialogTitle>{employee.name}'s knowledge</DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
               Personal notes injected only when this agent works.
             </DialogDescription>
           </DialogHeader>
-          <div className="employee-card-panel">
-            <div className="employee-panel-head">
-              <p className="employee-panel-title">Personal knowledge</p>
+          <div className="agent-card-panel">
+            <div className="agent-panel-head">
+              <p className="agent-panel-title">Personal knowledge</p>
               <button onClick={() => { setShowK(false); onAddKnowledge() }} style={{ fontSize: 12.5, color: 'var(--ember)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>+ Add</button>
             </div>
             {knowledgeDocs.length === 0 ? (
@@ -646,18 +646,18 @@ function EmployeeCard({ employee, brain, deptList, activeSession, activeTaskTitl
 // Department section
 // ---------------------------------------------------------------------------
 
-function DepartmentSection({ dept, employeesInDept, brainList, deptList, sessionList, taskList, allKnowledge, allTools, assignedToolsMap, mutations, onAddEmployee }: {
+function DepartmentSection({ dept, agentsInDept, connectionList, deptList, sessionList, taskList, allKnowledge, allTools, assignedToolsMap, mutations, onAddAgent }: {
   dept: Department | null
-  employeesInDept: Employee[]
-  brainList: Brain[]; deptList: Department[]
+  agentsInDept: Agent[]
+  connectionList: Connection[]; deptList: Department[]
   sessionList: { agentId: string; status: string; id: string; createdAt: string; workTaskId?: string }[]
   taskList: { id: string; title: string }[]
   allKnowledge: KnowledgeDoc[]
   allTools: Tool[]
   assignedToolsMap: Map<string, Tool[]>
   mutations: {
-    updateEmployee: (id: string, body: Parameters<typeof employees.update>[1]) => void
-    deleteEmployee: (id: string) => void
+    updateAgent: (id: string, body: Parameters<typeof agents.update>[1]) => void
+    deleteAgent: (id: string) => void
     createKnowledge: (body: Parameters<typeof knowledge.create>[0]) => void
     updateKnowledge: (id: string, body: Parameters<typeof knowledge.update>[1]) => void
     deleteKnowledge: (id: string) => void
@@ -666,7 +666,7 @@ function DepartmentSection({ dept, employeesInDept, brainList, deptList, session
     editDept: (dept: Department) => void
     deleteDept: (id: string) => void
   }
-  onAddEmployee: (deptId?: string) => void
+  onAddAgent: (deptId?: string) => void
 }) {
   const [knowledgeDialog, setKnowledgeDialog] = useState<{ open: boolean; doc?: KnowledgeDoc; employeeId: string }>({ open: false, employeeId: '' })
   const [confirmDelDept, setConfirmDelDept] = useState(false)
@@ -678,15 +678,15 @@ function DepartmentSection({ dept, employeesInDept, brainList, deptList, session
     const s = activeSessionFor(empId)
     return s?.workTaskId ? taskList.find(t => t.id === s.workTaskId)?.title : undefined
   }
-  function brainFor(emp: Employee) {
-    return brainList.find(b => b.id === emp.connectionId)
+  function connectionFor(emp: Agent) {
+    return connectionList.find(b => b.id === emp.connectionId)
   }
   function knowledgeFor(empId: string) {
     return allKnowledge.filter(d => d.scope === 'employee' && d.scopeId === empId)
   }
 
   const isUnassigned = dept === null
-  const runningCount = employeesInDept.filter(emp => activeSessionFor(emp.id)).length
+  const runningCount = agentsInDept.filter(emp => activeSessionFor(emp.id)).length
 
   return (
     <section className="agent-department-section">
@@ -697,7 +697,7 @@ function DepartmentSection({ dept, employeesInDept, brainList, deptList, session
           <div className="min-w-0">
             <h2>{isUnassigned ? 'Unassigned' : dept.name}</h2>
             <p>
-              {employeesInDept.length} agent{employeesInDept.length !== 1 ? 's' : ''}
+              {agentsInDept.length} agent{agentsInDept.length !== 1 ? 's' : ''}
               {runningCount > 0 && <> · {runningCount} working</>}
             </p>
           </div>
@@ -716,29 +716,29 @@ function DepartmentSection({ dept, employeesInDept, brainList, deptList, session
               <button onClick={() => { mutations.deleteDept(dept!.id); setConfirmDelDept(false) }} className="danger">Delete</button>
             </div>
           )}
-          <button onClick={() => onAddEmployee(dept?.id)} className="agent-add-inline">
+          <button onClick={() => onAddAgent(dept?.id)} className="agent-add-inline">
             + Agent{!isUnassigned && dept ? ` to ${dept.name}` : ''}
           </button>
         </div>
       </div>
 
-      {/* Employee rows */}
+      {/* Agent rows */}
       <div className="agent-department-list">
-        {employeesInDept.length === 0 ? (
-          <button onClick={() => onAddEmployee(dept?.id)} className="agent-empty-department">
+        {agentsInDept.length === 0 ? (
+          <button onClick={() => onAddAgent(dept?.id)} className="agent-empty-department">
             Add the first agent{!isUnassigned && dept ? ` to ${dept.name}` : ''}
           </button>
         ) : (
-          employeesInDept.map(emp => (
-            <EmployeeCard
+          agentsInDept.map(emp => (
+            <AgentCard
               key={emp.id}
-              employee={emp} brain={brainFor(emp)} deptList={deptList}
+              employee={emp} connection={connectionFor(emp)} deptList={deptList}
               activeSession={activeSessionFor(emp.id)} activeTaskTitle={activeTaskFor(emp.id)}
               knowledgeDocs={knowledgeFor(emp.id)}
               allTools={allTools}
               assignedTools={assignedToolsMap.get(emp.id) ?? []}
-              onUpdate={body => mutations.updateEmployee(emp.id, body)}
-              onDelete={() => mutations.deleteEmployee(emp.id)}
+              onUpdate={body => mutations.updateAgent(emp.id, body)}
+              onDelete={() => mutations.deleteAgent(emp.id)}
               onAddKnowledge={() => setKnowledgeDialog({ open: true, doc: undefined, employeeId: emp.id })}
               onEditKnowledge={doc => setKnowledgeDialog({ open: true, doc, employeeId: emp.id })}
               onDeleteKnowledge={id => mutations.deleteKnowledge(id)}
@@ -771,14 +771,14 @@ function DepartmentSection({ dept, employeesInDept, brainList, deptList, session
 // Page
 // ---------------------------------------------------------------------------
 
-export default function EmployeesPage() {
+export default function AgentsPage() {
   const qc = useQueryClient()
 
-  const [addEmpDialog, setAddEmpDialog]   = useState<{ open: boolean; deptId?: string }>({ open: false })
+  const [addAgentDialog, setaddAgentDialog]   = useState<{ open: boolean; deptId?: string }>({ open: false })
   const [deptDialog,   setDeptDialog]     = useState<{ open: boolean; dept?: Department }>({ open: false })
 
-  const { data: employeeList  = [] } = useQuery({ queryKey: ['employees'],   queryFn: () => employees.list() })
-  const { data: brainList     = [] } = useQuery({ queryKey: ['brains'],      queryFn: () => brains.list() })
+  const { data: employeeList  = [] } = useQuery({ queryKey: ['agents'],   queryFn: () => agents.list() })
+  const { data: connectionList     = [] } = useQuery({ queryKey: ['connections'],      queryFn: () => connections.list() })
   const { data: deptList      = [] } = useQuery({ queryKey: ['departments'], queryFn: () => departments.list() })
   const { data: sessionList   = [] } = useQuery({ queryKey: ['sessions'],    queryFn: () => sessions.list(), refetchInterval: 5000 })
   const { data: taskList      = [] } = useQuery({ queryKey: ['tasks'],       queryFn: () => tasks.list(),    refetchInterval: 8000 })
@@ -786,17 +786,17 @@ export default function EmployeesPage() {
   const { data: allTools       = [] } = useQuery({ queryKey: ['tools'],        queryFn: () => tools.list() })
   const { data: toolAssignments = [] } = useQuery({ queryKey: ['agent-tools'], queryFn: () => tools.assignments() })
 
-  const createEmployee = useMutation({
-    mutationFn: (body: Parameters<typeof employees.create>[0]) => employees.create(body),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['employees'] }); setAddEmpDialog({ open: false }) },
+  const createAgent = useMutation({
+    mutationFn: (body: Parameters<typeof agents.create>[0]) => agents.create(body),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['agents'] }); setaddAgentDialog({ open: false }) },
   })
-  const updateEmployee = useMutation({
-    mutationFn: ({ id, body }: { id: string; body: Parameters<typeof employees.update>[1] }) => employees.update(id, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['employees'] }),
+  const updateAgent = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: Parameters<typeof agents.update>[1] }) => agents.update(id, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['agents'] }),
   })
-  const deleteEmployee = useMutation({
-    mutationFn: (id: string) => employees.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['employees'] }),
+  const deleteAgent = useMutation({
+    mutationFn: (id: string) => agents.delete(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['agents'] }),
   })
   const createDept = useMutation({
     mutationFn: (body: Parameters<typeof departments.create>[0]) => departments.create(body),
@@ -841,8 +841,8 @@ export default function EmployeesPage() {
   }
 
   const mutations = {
-    updateEmployee: (id: string, body: Parameters<typeof employees.update>[1]) => updateEmployee.mutate({ id, body }),
-    deleteEmployee: (id: string) => deleteEmployee.mutate(id),
+    updateAgent: (id: string, body: Parameters<typeof agents.update>[1]) => updateAgent.mutate({ id, body }),
+    deleteAgent: (id: string) => deleteAgent.mutate(id),
     createKnowledge: (body: Parameters<typeof knowledge.create>[0]) => createKnowledge.mutate(body),
     updateKnowledge: (id: string, body: Parameters<typeof knowledge.update>[1]) => updateKnowledge.mutate({ id, body }),
     deleteKnowledge: (id: string) => deleteKnowledge.mutate(id),
@@ -854,8 +854,8 @@ export default function EmployeesPage() {
 
   const busyCount = employeeList.filter(e => sessionList.some(s => s.agentId === e.id && s.status === 'running')).length
 
-  // Group employees by department
-  const empsByDept = new Map<string | null, Employee[]>()
+  // Group agents by department
+  const empsByDept = new Map<string | null, Agent[]>()
   for (const emp of employeeList) {
     const key = emp.departmentId ?? null
     if (!empsByDept.has(key)) empsByDept.set(key, [])
@@ -876,40 +876,40 @@ export default function EmployeesPage() {
           </div>
           <div className="flex gap-2 shrink-0">
             <Button size="sm" variant="outline" onClick={() => setDeptDialog({ open: true })}>+ Department</Button>
-            <Button size="sm" onClick={() => setAddEmpDialog({ open: true })}>+ Agent</Button>
+            <Button size="sm" onClick={() => setaddAgentDialog({ open: true })}>+ Agent</Button>
           </div>
         </div>
 
-        {/* Departments with their employees */}
+        {/* Departments with their agents */}
         {deptList.map(dept => (
           <DepartmentSection
             key={dept.id}
             dept={dept}
-            employeesInDept={empsByDept.get(dept.id) ?? []}
-            brainList={brainList} deptList={deptList}
+            agentsInDept={empsByDept.get(dept.id) ?? []}
+            connectionList={connectionList} deptList={deptList}
             sessionList={sessionList as any} taskList={taskList as any}
             allKnowledge={allKnowledge}
             allTools={allTools} assignedToolsMap={assignedToolsMap}
             mutations={mutations}
-            onAddEmployee={deptId => setAddEmpDialog({ open: true, deptId })}
+            onAddAgent={deptId => setaddAgentDialog({ open: true, deptId })}
           />
         ))}
 
-        {/* Unassigned employees */}
+        {/* Unassigned agents */}
         {(empsByDept.get(null)?.length ?? 0) > 0 && (
           <DepartmentSection
             dept={null}
-            employeesInDept={empsByDept.get(null) ?? []}
-            brainList={brainList} deptList={deptList}
+            agentsInDept={empsByDept.get(null) ?? []}
+            connectionList={connectionList} deptList={deptList}
             sessionList={sessionList as any} taskList={taskList as any}
             allKnowledge={allKnowledge}
             allTools={allTools} assignedToolsMap={assignedToolsMap}
             mutations={mutations}
-            onAddEmployee={() => setAddEmpDialog({ open: true })}
+            onAddAgent={() => setaddAgentDialog({ open: true })}
           />
         )}
 
-        {deptList.length === 0 && employeeList.length === 0 && brainList.length > 0 && (
+        {deptList.length === 0 && employeeList.length === 0 && connectionList.length > 0 && (
           <p className="empty-line">No agents yet. Create a department or add an agent directly.</p>
         )}
 
@@ -927,15 +927,15 @@ export default function EmployeesPage() {
         error={createDept.error?.message ?? updateDept.error?.message}
       />
 
-      <AddEmployeeDialog
-        open={addEmpDialog.open}
-        brainList={brainList}
+      <AddAgentDialog
+        open={addAgentDialog.open}
+        connectionList={connectionList}
         deptList={deptList}
-        defaultDeptId={addEmpDialog.deptId}
-        onClose={() => setAddEmpDialog({ open: false })}
-        onCreate={body => createEmployee.mutate(body)}
-        loading={createEmployee.isPending}
-        error={createEmployee.error?.message}
+        defaultDeptId={addAgentDialog.deptId}
+        onClose={() => setaddAgentDialog({ open: false })}
+        onCreate={body => createAgent.mutate(body)}
+        loading={createAgent.isPending}
+        error={createAgent.error?.message}
       />
     </div>
   )

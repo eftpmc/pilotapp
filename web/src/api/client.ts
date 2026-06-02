@@ -6,11 +6,11 @@ export type AgentProvider  = 'claude' | 'codex';
 export type ProjectRole    = 'any' | 'claude' | 'codex';
 export type TaskStatus     = 'pending' | 'running' | 'done' | 'failed';
 export type SessionStatus  = 'idle' | 'running' | 'done' | 'error' | 'merged';
-export type EmployeeRole   = 'any' | 'worker' | 'reviewer' | 'planner' | 'lead';
+export type AgentRole      = 'any' | 'worker' | 'reviewer' | 'planner' | 'lead';
 export type TaskSize       = 'xs' | 's' | 'm' | 'l' | 'xl';
-export type KnowledgeScope = 'company' | 'department' | 'employee';
+export type KnowledgeScope = 'company' | 'department' | 'agent';
 
-export interface Brain {
+export interface Connection {
   id: string; name: string; type: AgentProvider; model?: string;
   hasKey: boolean; quotaStatus: 'ok' | 'exceeded';
   createdAt: string;
@@ -19,9 +19,9 @@ export interface Project {
   id: string; name: string; repoPath: string; role: ProjectRole;
   remoteUrl?: string; localPath?: string; createdAt: string;
 }
-export interface Employee {
+export interface Agent {
   id: string; name: string; provider: AgentProvider;
-  role: EmployeeRole; connectionId?: string; personality?: string;
+  role: AgentRole; connectionId?: string; personality?: string;
   departmentId?: string; createdAt: string;
 }
 export interface Task {
@@ -34,8 +34,15 @@ export interface Task {
 export interface Session {
   id: string; agentId: string; projectId: string; workTaskId?: string; specId?: string;
   parentSessionId?: string; reviewVerdict?: string; shiftId?: string; journal?: string;
+  runnerSessionId?: string;
   provider: AgentProvider; branch: string; worktreePath: string;
   status: SessionStatus; createdAt: string;
+}
+
+export interface Turn {
+  id: string; sessionId: string; turnNumber: number; prompt: string;
+  status: 'running' | 'done' | 'error';
+  createdAt: string; completedAt?: string;
 }
 
 export interface Shift {
@@ -64,7 +71,7 @@ export interface Department {
 export interface CompanyEvent {
   id: string; type: string;
   sessionId?: string; taskId?: string; projectId?: string; agentId?: string;
-  data: { employeeName?: string; taskTitle?: string; projectName?: string };
+  data: { agentName?: string; taskTitle?: string; projectName?: string };
   createdAt: string;
 }
 
@@ -113,11 +120,6 @@ export const tools = {
   assignDept:       (toolId: string, deptId: string) => req<void>(`/tools/department/${deptId}/${toolId}`, { method: 'POST' }),
   unassignDept:     (toolId: string, deptId: string) => req<void>(`/tools/department/${deptId}/${toolId}`, { method: 'DELETE' }),
 };
-
-// Legacy aliases — keep existing code that uses Agent/Connection compiling
-export type Agent      = Employee;
-export type Connection = Brain;
-export type AgentRole  = EmployeeRole;
 
 // ---------------------------------------------------------------------------
 // Core fetch
@@ -187,37 +189,31 @@ export const projects = {
 };
 
 // ---------------------------------------------------------------------------
-// Brains (API connections / reasoning providers)
+// Connections (API keys / reasoning providers)
 // ---------------------------------------------------------------------------
 
-export const brains = {
-  list:       () => req<Brain[]>('/brains'),
+export const connections = {
+  list:       () => req<Connection[]>('/brains'),
   create:     (body: { name: string; type: AgentProvider; apiKey?: string; model?: string }) =>
-    req<Brain>('/brains', { method: 'POST', body: JSON.stringify(body) }),
+    req<Connection>('/brains', { method: 'POST', body: JSON.stringify(body) }),
   update:     (id: string, body: { name?: string; apiKey?: string; model?: string }) =>
-    req<Brain>(`/brains/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
-  clearQuota: (id: string) => req<Brain>(`/brains/${id}/clear-quota`, { method: 'POST' }),
+    req<Connection>(`/brains/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  clearQuota: (id: string) => req<Connection>(`/brains/${id}/clear-quota`, { method: 'POST' }),
   delete:     (id: string) => req<void>(`/brains/${id}`, { method: 'DELETE' }),
 };
 
-// Legacy alias
-export const connections = brains;
-
 // ---------------------------------------------------------------------------
-// Employees
+// Agents
 // ---------------------------------------------------------------------------
 
-export const employees = {
-  list:   () => req<Employee[]>('/employees'),
-  create: (body: { name: string; connectionId: string; personality?: string; role?: EmployeeRole; departmentId?: string }) =>
-    req<Employee>('/employees', { method: 'POST', body: JSON.stringify(body) }),
-  update: (id: string, body: { name?: string; personality?: string; role?: EmployeeRole; departmentId?: string | null }) =>
-    req<Employee>(`/employees/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+export const agents = {
+  list:   () => req<Agent[]>('/employees'),
+  create: (body: { name: string; connectionId: string; personality?: string; role?: AgentRole; departmentId?: string }) =>
+    req<Agent>('/employees', { method: 'POST', body: JSON.stringify(body) }),
+  update: (id: string, body: { name?: string; personality?: string; role?: AgentRole; departmentId?: string | null }) =>
+    req<Agent>(`/employees/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   delete: (id: string) => req<void>(`/employees/${id}`, { method: 'DELETE' }),
 };
-
-// Legacy alias
-export const agents = employees;
 
 // ---------------------------------------------------------------------------
 // Tasks
@@ -258,6 +254,9 @@ export const sessions = {
   requestReview: (id: string, agentId: string) =>
     req<Session>(`/sessions/${id}/request-review`, { method: 'POST', body: JSON.stringify({ agentId }) }),
   delete:        (id: string) => req<void>(`/sessions/${id}`, { method: 'DELETE' }),
+  turns:         (id: string) => req<Turn[]>(`/sessions/${id}/turns`),
+  addTurn:       (id: string, prompt: string) =>
+    req<Turn>(`/sessions/${id}/turns`, { method: 'POST', body: JSON.stringify({ prompt }) }),
 };
 
 // ---------------------------------------------------------------------------

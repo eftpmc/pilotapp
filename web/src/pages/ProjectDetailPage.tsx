@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useNavigate, useParams } from 'react-router-dom'
-import { tasks, employees, sessions, projects, brains } from '../api/client'
-import type { Task, Employee, Session, TaskSize } from '../api/client'
+import { useNavigate, useParams, useLocation } from 'react-router-dom'
+import { tasks, agents, sessions, projects, connections } from '../api/client'
+import type { Task, Agent, Session, TaskSize } from '../api/client'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
@@ -21,7 +21,7 @@ function ElapsedTimer({ createdAt }: { createdAt: string }) {
   return <span className="row-time tnum">{fmtSecs(secs)}</span>
 }
 
-function AgentPickerDropdown({ agentList, onAssign }: { agentList: Employee[]; onAssign: (id: string) => void }) {
+function AgentPickerDropdown({ agentList, onAssign }: { agentList: Agent[]; onAssign: (id: string) => void }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -70,17 +70,25 @@ export default function ProjectDetailPage() {
   const { id: projectId } = useParams<{ id: string }>()
   const qc = useQueryClient()
   const navigate = useNavigate()
+  const { search, pathname } = useLocation()
   const [showNew, setShowNew] = useState(false)
+
+  useEffect(() => {
+    if (new URLSearchParams(search).get('new') === '1') {
+      setShowNew(true)
+      navigate(pathname, { replace: true })
+    }
+  }, [search]) // eslint-disable-line react-hooks/exhaustive-deps
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const toggleSection = useCallback((id: string) => {
     setCollapsed(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
   }, [])
 
   const { data: taskList       = [] } = useQuery({ queryKey: ['tasks',    projectId], queryFn: () => tasks.list({ projectId }),    refetchInterval: 4000 })
-  const { data: agentList      = [] } = useQuery({ queryKey: ['employees'],            queryFn: () => employees.list() })
+  const { data: agentList      = [] } = useQuery({ queryKey: ['agents'],            queryFn: () => agents.list() })
   const { data: sessionList    = [] } = useQuery({ queryKey: ['sessions', projectId], queryFn: () => sessions.list({ projectId }), refetchInterval: 4000 })
   const { data: projectList    = [] } = useQuery({ queryKey: ['projects'],             queryFn: () => projects.list() })
-  const { data: connectionList = [] } = useQuery({ queryKey: ['brains'],               queryFn: () => brains.list() })
+  const { data: connectionList = [] } = useQuery({ queryKey: ['connections'],               queryFn: () => connections.list() })
 
   const project   = projectList.find(p => p.id === projectId)
 
@@ -345,7 +353,7 @@ export default function ProjectDetailPage() {
   )
 }
 
-function ReviewerPickerButton({ agentList, onPick }: { agentList: Employee[]; onPick: (id: string) => void }) {
+function ReviewerPickerButton({ agentList, onPick }: { agentList: Agent[]; onPick: (id: string) => void }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {

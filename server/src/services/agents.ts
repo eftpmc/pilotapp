@@ -100,12 +100,16 @@ function resolveConnectionId(agentId: string): string | undefined {
   return agent?.connection_id ?? undefined;
 }
 
-function buildCommand(provider: AgentProvider, prompt: string, model?: string, mcpConfigPath?: string): { cmd: string; args: string[] } {
+function buildCommand(provider: AgentProvider, prompt: string, model?: string, mcpConfigPath?: string, resumeId?: string): { cmd: string; args: string[] } {
   if (provider === 'claude') {
     const args = ['-p', prompt, '--dangerously-skip-permissions', '--verbose', '--output-format', 'stream-json'];
+    if (resumeId) args.push('--resume', resumeId);
     if (model) args.push('--model', model);
     if (mcpConfigPath) args.push('--mcp-config', mcpConfigPath);
     return { cmd: 'claude', args };
+  }
+  if (resumeId) {
+    return { cmd: 'codex', args: ['exec', 'resume', resumeId, prompt] };
   }
   const args = ['--approval-policy', 'auto', '-q', prompt];
   if (model) args.push('--model', model);
@@ -371,10 +375,12 @@ async function captureTasks(session: SessionRef, userId: string): Promise<void> 
       );
       writeEvent(userId, 'task.created', { taskId, projectId: session.projectId, agentId: session.agentId });
 
-      const role      = item.role ?? 'worker';
-      const idleAgent = findIdleAgentByRole(userId, role);
-      if (idleAgent) {
-        await autoAssignTask(taskId, idleAgent, session.projectId, baseBranch, userId);
+      const role = item.role ?? 'worker';
+      if (role !== 'reviewer') {
+        const idleAgent = findIdleAgentByRole(userId, role);
+        if (idleAgent) {
+          await autoAssignTask(taskId, idleAgent, session.projectId, baseBranch, userId);
+        }
       }
     }
 
@@ -495,7 +501,31 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
   entry.proc = proc;
   markSessionRunning(session.id);
 
-  proc.stdout.on('data', (chunk: Buffer) => broadcast('stdout', chunk.toString()));
+  // Capture the runner's session ID from the first parseable JSON line so we
+  // can resume the session in subsequent turns.
+  let runnerSidCaptured = false;
+  let stdoutLineBuf     = '';
+
+  proc.stdout.on('data', (chunk: Buffer) => {
+    const text = chunk.toString();
+    broadcast('stdout', text);
+    if (runnerSidCaptured) return;
+    stdoutLineBuf += text;
+    const lines = stdoutLineBuf.split('\n');
+    stdoutLineBuf = lines.pop() ?? '';
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const obj = JSON.parse(line.trim());
+        const sid = obj.session_id ?? obj.sessionId;
+        if (sid && typeof sid === 'string' && sid.length > 4) {
+          db.prepare('UPDATE sessions SET runner_session_id = ? WHERE id = ?').run(sid, session.id);
+          runnerSidCaptured = true;
+          break;
+        }
+      } catch { /* not JSON — skip */ }
+    }
+  });
   proc.stderr.on('data', (chunk: Buffer) => {
     const text = chunk.toString();
     stderrAccum += text;
@@ -529,6 +559,157 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
       }
     }
     // Detect quota/rate-limit errors and mark the connection
+    if (exitCode !== 0 && connectionId && QUOTA_PATTERNS.some(p => p.test(stderrAccum))) {
+      markConnectionQuotaExceeded(connectionId);
+      broadcast('stderr', '[pilot] Rate limit or quota detected — connection marked as cooling down for 1 hour.');
+    }
+  };
+
+  proc.on('close', (code, signal) => finish(code, signal));
+  proc.on('error', (err: NodeJS.ErrnoException) => {
+    broadcast('stderr', err.code === 'ENOENT'
+      ? `[pilot] Failed to start '${cmd}': not found`
+      : `[pilot] Process error: ${err.message}`
+    );
+    finish(1, null);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Turn continuation — resumes an existing runner session with a new prompt
+// ---------------------------------------------------------------------------
+
+export async function continueAgent(
+  session: SessionRef,
+  turnId: string,
+  turnNumber: number,
+  prompt: string,
+  userId: string,
+  agentId?: string,
+  explicitKey?: string,
+): Promise<void> {
+  if (active.has(session.id)) return;
+
+  const runnerRow = db.prepare('SELECT runner_session_id FROM sessions WHERE id = ?').get(session.id) as { runner_session_id: string | null } | undefined;
+  const runnerSessionId = runnerRow?.runner_session_id ?? undefined;
+
+  if (!runnerSessionId) {
+    // Broadcast an informative error into the session log so the UI shows it
+    const errEntry: ActiveSession = { proc: null as any, buffer: [], subs: new Set() };
+    active.set(session.id, errEntry);
+    const broadcastErr = (type: string, data: string) => {
+      const msg = JSON.stringify({ type, sessionId: session.id, data });
+      errEntry.buffer.push(msg);
+      fs.appendFileSync(sessionLogPath(session.id), msg + '\n');
+      for (const ws of errEntry.subs) { if (ws.readyState === WebSocket.OPEN) ws.send(msg); }
+    };
+    broadcastErr('turn_start', JSON.stringify({ turnId, turnNumber, prompt }));
+    broadcastErr('stderr', '[pilot] Cannot continue: no runner session ID captured from the original run.');
+    broadcastErr('turn_done', JSON.stringify({ turnId, exitCode: '1' }));
+    active.delete(session.id);
+    db.prepare("UPDATE turns SET status = 'error', completed_at = ? WHERE id = ?").run(new Date().toISOString(), turnId);
+    db.prepare("UPDATE sessions SET status = 'error' WHERE id = ?").run(session.id);
+    return;
+  }
+
+  const resolvedKey   = resolveApiKey(userId, session.provider, agentId, explicitKey);
+  const model         = resolveModel(session.agentId);
+  const mcpConfigPath = buildMcpConfig(session.agentId, `${session.id}-t${turnNumber}`);
+  const connectionId  = resolveConnectionId(session.agentId);
+
+  const { cmd, args } = buildCommand(session.provider, prompt, model, mcpConfigPath ?? undefined, runnerSessionId);
+  const env = resolvedKey
+    ? { ...resolvedEnv(process.env as Record<string, string | undefined>), ...apiKeyEnv(session.provider, resolvedKey) }
+    : resolvedEnv(process.env as Record<string, string | undefined>);
+
+  const entry: ActiveSession = { proc: null as any, buffer: [], subs: new Set() };
+  active.set(session.id, entry);
+
+  // Append to existing log (do NOT wipe — preserve prior turn output)
+  let stderrAccum = '';
+
+  const broadcast = (type: string, data: string) => {
+    const msg = JSON.stringify({ type, sessionId: session.id, data });
+    entry.buffer.push(msg);
+    if (entry.buffer.length > MAX_BUFFER) entry.buffer.shift();
+    fs.appendFileSync(sessionLogPath(session.id), msg + '\n');
+    for (const ws of entry.subs) {
+      if (ws.readyState === WebSocket.OPEN) ws.send(msg);
+    }
+  };
+
+  broadcast('turn_start', JSON.stringify({ turnId, turnNumber, prompt }));
+
+  if (!resolvedKey) {
+    broadcast('stderr', `[pilot] No API key set — using machine auth for ${session.provider}.`);
+  }
+
+  const bin = findBinary(cmd);
+  if (!bin) {
+    broadcast('stderr', `[pilot] Command not found: '${cmd}'`);
+    broadcast('turn_done', JSON.stringify({ turnId, exitCode: '127' }));
+    active.delete(session.id);
+    db.prepare("UPDATE turns SET status = 'error', completed_at = ? WHERE id = ?").run(new Date().toISOString(), turnId);
+    db.prepare("UPDATE sessions SET status = 'error' WHERE id = ?").run(session.id);
+    if (mcpConfigPath) { try { fs.unlinkSync(mcpConfigPath); } catch { /* gone */ } }
+    return;
+  }
+
+  broadcast('stderr', `[pilot] Continuing ${cmd} (turn ${turnNumber})`);
+  db.prepare("UPDATE sessions SET status = 'running' WHERE id = ?").run(session.id);
+
+  let runnerSidCaptured = !!runnerSessionId; // already have one, update if new one emitted
+  let stdoutLineBuf     = '';
+
+  const proc = spawn(bin, args, { cwd: session.worktreePath, env, stdio: ['ignore', 'pipe', 'pipe'] });
+  entry.proc = proc;
+
+  proc.stdout.on('data', (chunk: Buffer) => {
+    const text = chunk.toString();
+    broadcast('stdout', text);
+    if (runnerSidCaptured) return;
+    stdoutLineBuf += text;
+    const lines = stdoutLineBuf.split('\n');
+    stdoutLineBuf = lines.pop() ?? '';
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const obj = JSON.parse(line.trim());
+        const sid = obj.session_id ?? obj.sessionId;
+        if (sid && typeof sid === 'string' && sid.length > 4) {
+          db.prepare('UPDATE sessions SET runner_session_id = ? WHERE id = ?').run(sid, session.id);
+          runnerSidCaptured = true;
+          break;
+        }
+      } catch { /* skip */ }
+    }
+  });
+
+  proc.stderr.on('data', (chunk: Buffer) => {
+    const text = chunk.toString();
+    stderrAccum += text;
+    broadcast('stderr', text);
+  });
+
+  const finish = (code: number | null, _signal: string | null) => {
+    const exitCode = code ?? 1;
+    const now      = new Date().toISOString();
+    broadcast('stderr', exitCode === 0 ? '[pilot] Turn finished (exit 0)' : `[pilot] Turn exited with code ${exitCode}`);
+    broadcast('turn_done', JSON.stringify({ turnId, exitCode: String(exitCode) }));
+
+    completed.set(session.id, [...entry.buffer]);
+    setTimeout(() => completed.delete(session.id), COMPLETED_TTL_MS);
+    active.delete(session.id);
+
+    const sessionStatus = exitCode === 0 ? 'done' : 'error';
+    db.prepare('UPDATE sessions SET status = ? WHERE id = ?').run(sessionStatus, session.id);
+    db.prepare('UPDATE turns SET status = ?, completed_at = ? WHERE id = ?').run(sessionStatus, now, turnId);
+
+    if (mcpConfigPath) { try { fs.unlinkSync(mcpConfigPath); } catch { /* gone */ } }
+    captureJournal(session.id, session.worktreePath);
+    writeEvent(userId, exitCode === 0 ? 'session.completed' : 'session.failed', {
+      sessionId: session.id, taskId: session.workTaskId, projectId: session.projectId, agentId: session.agentId,
+    });
     if (exitCode !== 0 && connectionId && QUOTA_PATTERNS.some(p => p.test(stderrAccum))) {
       markConnectionQuotaExceeded(connectionId);
       broadcast('stderr', '[pilot] Rate limit or quota detected — connection marked as cooling down for 1 hour.');

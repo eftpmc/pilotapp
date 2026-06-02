@@ -1,4 +1,4 @@
-import type { Employee } from '../api/client'
+import type { Agent } from '../api/client'
 
 const PALETTE = [
   { bg: '#4B7EC8', fg: '#fff' },
@@ -23,7 +23,7 @@ export function AgentAvatar({
   size = 32,
   running = false,
 }: {
-  agent?: Employee
+  agent?: Agent
   name?: string
   size?: number
   running?: boolean

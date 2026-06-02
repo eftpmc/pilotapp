@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { sessions, tasks, employees, projects, events } from '../api/client'
+import { sessions, tasks, agents, projects, events } from '../api/client'
 import type { CompanyEvent } from '../api/client'
 import { AgentAvatar } from '@/components/AgentAvatar'
 import { useElapsed, fmtSecs } from '@/lib/time'
@@ -61,7 +61,7 @@ export default function OverviewPage() {
 
   const { data: sessionList  = [] } = useQuery({ queryKey: ['sessions'],  queryFn: () => sessions.list(),  refetchInterval: 30_000 })
   const { data: taskList     = [] } = useQuery({ queryKey: ['tasks'],     queryFn: () => tasks.list(),     refetchInterval: 30_000 })
-  const { data: employeeList = [] } = useQuery({ queryKey: ['employees'], queryFn: () => employees.list() })
+  const { data: agentList = [] } = useQuery({ queryKey: ['agents'], queryFn: () => agents.list() })
   const { data: projectList  = [] } = useQuery({ queryKey: ['projects'],  queryFn: () => projects.list()  })
   const { data: eventList    = [] } = useQuery({ queryKey: ['events'],    queryFn: () => events.list(30),  refetchInterval: 30_000 })
 
@@ -70,7 +70,7 @@ export default function OverviewPage() {
   const review       = codeSessions.filter(s => s.status === 'done' || s.status === 'error')
   const queued       = taskList.filter(t => t.status === 'pending')
 
-  function agentFor(id: string)    { return employeeList.find(e => e.id === id) }
+  function agentFor(id: string)    { return agentList.find(e => e.id === id) }
   function projectName(id: string) { return projectList.find(p => p.id === id)?.name ?? 'Unknown' }
   function taskTitle(wid?: string) { return wid ? taskList.find(t => t.id === wid)?.title : undefined }
 
@@ -101,7 +101,7 @@ export default function OverviewPage() {
             <p className="text-xs text-muted-foreground/50 mb-1">Get started</p>
             {[
               { n: '1', label: 'Add a project',  desc: 'Connect a GitHub repo or local path.', path: '/projects'  },
-              { n: '2', label: 'Add agents',      desc: 'Configure API keys and create named agents.', path: '/employees' },
+              { n: '2', label: 'Add agents',      desc: 'Configure API keys and create named agents.', path: '/agents' },
               { n: '3', label: 'Dispatch work',   desc: 'Open a project, create tasks, assign to agents.', path: '/projects' },
             ].map(({ n, label, desc, path }) => (
               <button

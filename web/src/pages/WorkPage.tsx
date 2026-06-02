@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { tasks, employees, sessions, projects, brains, shifts } from '../api/client'
-import type { Task, Employee, Session, TaskSize, Shift } from '../api/client'
+import { tasks, agents, sessions, projects, connections, shifts } from '../api/client'
+import type { Task, Agent, Session, TaskSize, Shift } from '../api/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -60,7 +60,7 @@ function ColHead({ title, count }: { title: string; count: number }) {
 // Agent picker
 // ---------------------------------------------------------------------------
 
-function AgentPicker({ employeeList, onAssign }: { employeeList: Employee[]; onAssign: (id: string) => void }) {
+function AgentPicker({ agentList, onAssign }: { agentList: Agent[]; onAssign: (id: string) => void }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -77,7 +77,7 @@ function AgentPicker({ employeeList, onAssign }: { employeeList: Employee[]; onA
       </button>
       {open && (
         <div className="absolute right-0 top-[calc(100%+4px)] z-30 bg-card border border-border rounded-xl shadow-xl overflow-hidden min-w-[130px]">
-          {employeeList.map(e => (
+          {agentList.map(e => (
             <button key={e.id} onClick={() => { onAssign(e.id); setOpen(false) }}
               className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors cursor-pointer bg-transparent border-none text-left">
               <AgentAvatar agent={e} size={18} />
@@ -111,8 +111,8 @@ function SizeBadge({ size }: { size?: string }) {
   )
 }
 
-function QueueCard({ task, employeeList, projectList, onAssign, onDelete }: {
-  task: Task; employeeList: Employee[]
+function QueueCard({ task, agentList, projectList, onAssign, onDelete }: {
+  task: Task; agentList: Agent[]
   projectList: { id: string; name: string }[]
   onAssign: (id: string) => void; onDelete: () => void
 }) {
@@ -153,8 +153,8 @@ function QueueCard({ task, employeeList, projectList, onAssign, onDelete }: {
           </span>
         )}
         <div className="flex-1" />
-        {employeeList.length > 0
-          ? <AgentPicker employeeList={employeeList} onAssign={onAssign} />
+        {agentList.length > 0
+          ? <AgentPicker agentList={agentList} onAssign={onAssign} />
           : <span className="text-[11px] text-muted-foreground/40">No agents</span>
         }
         <button onClick={onDelete}
@@ -164,13 +164,13 @@ function QueueCard({ task, employeeList, projectList, onAssign, onDelete }: {
   )
 }
 
-function WorkingCard({ session, employee, task, projectName, taskList, onClick }: {
-  session: Session; employee?: Employee; task?: Task; projectName?: string
+function WorkingCard({ session, agent, task, projectName, taskList, onClick }: {
+  session: Session; agent?: Agent; task?: Task; projectName?: string
   taskList: Task[]; onClick: () => void
 }) {
   const secs       = useElapsed(session.createdAt, true)
   const shortId    = session.id.slice(0, 7)
-  const isLead     = employee?.role === 'lead'
+  const isLead     = agent?.role === 'lead'
   const shiftTotal = session.shiftId ? taskList.filter(t => t.shiftId === session.shiftId).length : 0
   const shiftDone  = session.shiftId ? taskList.filter(t => t.shiftId === session.shiftId && (t.status === 'done' || t.status === 'failed')).length : 0
 
@@ -198,8 +198,8 @@ function WorkingCard({ session, employee, task, projectName, taskList, onClick }
       </div>
 
       <div className="flex items-center gap-2 px-3.5 pb-3 border-t border-border/30 pt-2.5">
-        <AgentAvatar agent={employee} size={18} />
-        <span className="text-xs text-muted-foreground">{employee?.name ?? '—'}</span>
+        <AgentAvatar agent={agent} size={18} />
+        <span className="text-xs text-muted-foreground">{agent?.name ?? '—'}</span>
         {projectName && <span className="text-[11px] text-muted-foreground/40">· {projectName}</span>}
         <span className="font-mono text-[10px] text-muted-foreground/30">#{shortId}</span>
       </div>
@@ -207,7 +207,7 @@ function WorkingCard({ session, employee, task, projectName, taskList, onClick }
   )
 }
 
-function ReviewerPicker({ employeeList, onPick }: { employeeList: Employee[]; onPick: (id: string) => void }) {
+function ReviewerPicker({ agentList, onPick }: { agentList: Agent[]; onPick: (id: string) => void }) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -224,7 +224,7 @@ function ReviewerPicker({ employeeList, onPick }: { employeeList: Employee[]; on
       {open && (
         <div className="absolute right-0 top-[calc(100%+4px)] z-30 bg-card border border-border rounded-xl shadow-xl overflow-hidden min-w-[150px]">
           <p className="text-[10px] text-muted-foreground px-3 py-2 border-b border-border/60">Pick reviewer</p>
-          {employeeList.map(e => (
+          {agentList.map(e => (
             <button key={e.id} onClick={() => { onPick(e.id); setOpen(false) }}
               className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors cursor-pointer bg-transparent border-none text-left">
               <AgentAvatar agent={e} size={16} />
@@ -237,9 +237,9 @@ function ReviewerPicker({ employeeList, onPick }: { employeeList: Employee[]; on
   )
 }
 
-function ReviewCard({ session, employee, task, projectName, hasRemote, allEmployees, onMerge, onMergePush, onClick, isMerging, onRequestReview }: {
-  session: Session; employee?: Employee; task?: Task; projectName?: string
-  hasRemote: boolean; allEmployees: Employee[]
+function ReviewCard({ session, agent, task, projectName, hasRemote, allAgents, onMerge, onMergePush, onClick, isMerging, onRequestReview }: {
+  session: Session; agent?: Agent; task?: Task; projectName?: string
+  hasRemote: boolean; allAgents: Agent[]
   onMerge: () => void; onMergePush: () => void; onClick: () => void; isMerging?: boolean
   onRequestReview: (agentId: string) => void
 }) {
@@ -276,8 +276,8 @@ function ReviewCard({ session, employee, task, projectName, hasRemote, allEmploy
       </div>
 
       <div className="flex items-center gap-2 px-3.5 pb-2.5">
-        <AgentAvatar agent={employee} size={18} />
-        <span className="text-xs text-muted-foreground">{employee?.name ?? '—'}</span>
+        <AgentAvatar agent={agent} size={18} />
+        <span className="text-xs text-muted-foreground">{agent?.name ?? '—'}</span>
         {projectName && <span className="text-[11px] text-muted-foreground/40">· {projectName}</span>}
       </div>
 
@@ -289,7 +289,7 @@ function ReviewCard({ session, employee, task, projectName, hasRemote, allEmploy
         ) : (
           <>
             <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground" onClick={onClick}>Log</Button>
-            {!verdict && <ReviewerPicker employeeList={allEmployees.filter(e => e.id !== session.agentId)} onPick={onRequestReview} />}
+            {!verdict && <ReviewerPicker agentList={allAgents.filter(e => e.id !== session.agentId)} onPick={onRequestReview} />}
             {hasRemote ? (
               <>
                 <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs flex-1" onClick={onMerge} disabled={isMerging}>
@@ -325,17 +325,17 @@ export default function WorkPage() {
   const [reportShift,  setReportShift]  = useState<Shift | null>(null)
 
   const { data: taskList      = [], isLoading: tasksLoading   } = useQuery({ queryKey: ['tasks'],    queryFn: () => tasks.list(),       refetchInterval: 4000 })
-  const { data: employeeList  = []                             } = useQuery({ queryKey: ['employees'], queryFn: () => employees.list() })
+  const { data: agentList  = []                             } = useQuery({ queryKey: ['agents'], queryFn: () => agents.list() })
   const { data: sessionList   = [], isLoading: sessionsLoading } = useQuery({ queryKey: ['sessions'], queryFn: () => sessions.list(),    refetchInterval: 4000 })
   const { data: projectList   = []                             } = useQuery({ queryKey: ['projects'],  queryFn: () => projects.list() })
-  const { data: connectionList = []                            } = useQuery({ queryKey: ['brains'],    queryFn: () => brains.list() })
+  const { data: connectionList = []                            } = useQuery({ queryKey: ['connections'],    queryFn: () => connections.list() })
   const { data: shiftList     = []                             } = useQuery({ queryKey: ['shifts'],    queryFn: () => shifts.list(),      refetchInterval: 10_000 })
   const isLoading = tasksLoading || sessionsLoading
 
   const codeSessions   = sessionList.filter(s => !s.specId && !s.parentSessionId)
   const busyIds        = new Set(codeSessions.filter(s => s.status === 'running').map(s => s.agentId))
   const quotaConnIds   = new Set(connectionList.filter(c => c.quotaStatus === 'exceeded').map(c => c.id))
-  const idleEmployees  = employeeList.filter(e => !busyIds.has(e.id) && !quotaConnIds.has(e.connectionId ?? ''))
+  const idleAgents  = agentList.filter(e => !busyIds.has(e.id) && !quotaConnIds.has(e.connectionId ?? ''))
   const queue          = taskList.filter(t => t.status === 'pending').sort((a, b) => {
     if ((b.priority ?? 0) !== (a.priority ?? 0)) return (b.priority ?? 0) - (a.priority ?? 0)
     return a.createdAt.localeCompare(b.createdAt)
@@ -368,7 +368,7 @@ export default function WorkPage() {
     onSuccess: ({ session }) => { qc.invalidateQueries({ queryKey: ['tasks'] }); qc.invalidateQueries({ queryKey: ['sessions'] }); setShiftDialog(false); navigate(`/sessions/${session.id}`) },
   })
 
-  function employeeFor(s: Session) { return employeeList.find(e => e.id === s.agentId) }
+  function employeeFor(s: Session) { return agentList.find(e => e.id === s.agentId) }
   function taskFor(s: Session)     { return taskList.find(t => t.id === s.workTaskId) }
   function projectFor(s: Session)  { return projectList.find(p => p.id === s.projectId) }
 
@@ -442,11 +442,11 @@ export default function WorkPage() {
       const tag = (e.target as HTMLElement).tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || e.metaKey || e.ctrlKey || e.altKey) return
       if (e.key === 'n' && !showNew && projectList.length > 0) { e.preventDefault(); setShowNew(true) }
-      if (e.key === 'r' && queue.length > 0 && idleEmployees.length > 0 && !runQueue.isPending) { e.preventDefault(); runQueue.mutate() }
+      if (e.key === 'r' && queue.length > 0 && idleAgents.length > 0 && !runQueue.isPending) { e.preventDefault(); runQueue.mutate() }
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [showNew, queue.length, idleEmployees.length, projectList.length, runQueue.isPending])
+  }, [showNew, queue.length, idleAgents.length, projectList.length, runQueue.isPending])
 
   const COLS: { title: MobileCol; count: number }[] = [
     { title: 'Queue',   count: queue.length   },
@@ -476,12 +476,12 @@ export default function WorkPage() {
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {queue.length > 0 && idleEmployees.length > 0 && (
+          {queue.length > 0 && idleAgents.length > 0 && (
             <Button variant="outline" size="sm" onClick={() => runQueue.mutate()} disabled={runQueue.isPending}>
               {runQueue.isPending ? '…' : '▶ Run queue'}
             </Button>
           )}
-          {queue.length >= 2 && idleEmployees.length > 0 && (
+          {queue.length >= 2 && idleAgents.length > 0 && (
             <Button variant="outline" size="sm" onClick={() => setShiftDialog(true)}>Shift ↓</Button>
           )}
           <Button size="sm" disabled={projectList.length === 0} onClick={() => setShowNew(true)}>
@@ -491,7 +491,7 @@ export default function WorkPage() {
       </div>
 
       <ShiftStrip
-        shiftList={shiftList} employeeList={employeeList}
+        shiftList={shiftList} agentList={agentList}
         onViewReport={shift => setReportShift(shift)}
       />
 
@@ -531,7 +531,7 @@ export default function WorkPage() {
                       <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleQueueDragEnd}>
                         <SortableContext items={queue.map(t => t.id)} strategy={verticalListSortingStrategy}>
                           {queue.map(task => (
-                            <QueueCard key={task.id} task={task} employeeList={idleEmployees} projectList={projectList}
+                            <QueueCard key={task.id} task={task} agentList={idleAgents} projectList={projectList}
                               onAssign={agentId => assignTask.mutate({ taskId: task.id, agentId })}
                               onDelete={() => deleteTask.mutate(task.id)} />
                           ))}
@@ -541,15 +541,15 @@ export default function WorkPage() {
                 ) : title === 'Working' ? (
                   working.length === 0
                     ? <EmptyState icon={Loader2} title="Nobody working" description="Assign a task from the Queue." />
-                    : working.map(s => <WorkingCard key={s.id} session={s} employee={employeeFor(s)} task={taskFor(s)} projectName={projectFor(s)?.name} taskList={taskList} onClick={() => navigate(`/sessions/${s.id}`)} />)
+                    : working.map(s => <WorkingCard key={s.id} session={s} agent={employeeFor(s)} task={taskFor(s)} projectName={projectFor(s)?.name} taskList={taskList} onClick={() => navigate(`/sessions/${s.id}`)} />)
                 ) : (
                   review.length === 0
                     ? <EmptyState icon={GitMerge} title="Nothing to review" description="Completed sessions will appear here." />
                     : review.map(s => {
                         const proj = projectFor(s)
                         return (
-                          <ReviewCard key={s.id} session={s} employee={employeeFor(s)} task={taskFor(s)} projectName={proj?.name}
-                            hasRemote={!!proj?.remoteUrl} allEmployees={employeeList}
+                          <ReviewCard key={s.id} session={s} agent={employeeFor(s)} task={taskFor(s)} projectName={proj?.name}
+                            hasRemote={!!proj?.remoteUrl} allAgents={agentList}
                             onMerge={() => mergeSession.mutate(s.id)}
                             onMergePush={() => mergePushSession.mutate(s)}
                             onClick={() => navigate(`/sessions/${s.id}`)}
@@ -577,12 +577,12 @@ export default function WorkPage() {
       )}
 
       {reportShift && (
-        <ShiftReportDialog shift={reportShift} employeeList={employeeList} onClose={() => setReportShift(null)} />
+        <ShiftReportDialog shift={reportShift} agentList={agentList} onClose={() => setReportShift(null)} />
       )}
 
       {shiftDialog && (
         <ShiftDialog
-          employeeList={idleEmployees}
+          agentList={idleAgents}
           queueTasks={queue}
           projectList={projectList}
           onClose={() => setShiftDialog(false)}
@@ -595,7 +595,7 @@ export default function WorkPage() {
       {showNew && (
         <NewTaskDialog
           projectList={projectList}
-          hasIdleEmployee={idleEmployees.length > 0}
+          hasIdleEmployee={idleAgents.length > 0}
           onClose={() => setShowNew(false)}
           onCreate={async body => { await tasks.create(body); qc.invalidateQueries({ queryKey: ['tasks'] }); setShowNew(false) }}
           onCreateAndRun={async body => {
@@ -616,8 +616,8 @@ export default function WorkPage() {
 // Shift strip — active and recent completed shifts
 // ---------------------------------------------------------------------------
 
-function ShiftStrip({ shiftList, employeeList, onViewReport }: {
-  shiftList: Shift[]; employeeList: Employee[]
+function ShiftStrip({ shiftList, agentList, onViewReport }: {
+  shiftList: Shift[]; agentList: Agent[]
   onViewReport: (shift: Shift) => void
 }) {
   const recent = shiftList.filter(s => s.status === 'running' || s.status === 'completed').slice(0, 5)
@@ -626,7 +626,7 @@ function ShiftStrip({ shiftList, employeeList, onViewReport }: {
     <div className="shrink-0 flex items-center gap-2 px-4 py-2 border-b border-border/40 overflow-x-auto">
       <span className="text-xs font-semibold text-muted-foreground/60 shrink-0">Shifts</span>
       {recent.map(shift => {
-        const emp = employeeList.find(e => e.id === shift.agentId)
+        const emp = agentList.find(e => e.id === shift.agentId)
         const isRunning = shift.status === 'running'
         const pct = shift.taskCount > 0 ? Math.round((shift.doneCount / shift.taskCount) * 100) : 0
         return (
@@ -665,10 +665,10 @@ function ShiftStrip({ shiftList, employeeList, onViewReport }: {
 // Shift report dialog
 // ---------------------------------------------------------------------------
 
-function ShiftReportDialog({ shift, employeeList, onClose }: {
-  shift: Shift; employeeList: Employee[]; onClose: () => void
+function ShiftReportDialog({ shift, agentList, onClose }: {
+  shift: Shift; agentList: Agent[]; onClose: () => void
 }) {
-  const emp = employeeList.find(e => e.id === shift.agentId)
+  const emp = agentList.find(e => e.id === shift.agentId)
   return (
     <Dialog open onOpenChange={o => !o && onClose()}>
       <DialogContent className="max-w-lg">
@@ -753,7 +753,7 @@ function NewTaskDialog({ projectList, hasIdleEmployee, onClose, onCreate, onCrea
           <div className="flex flex-col gap-1.5">
             <Label>Title</Label>
             <Input autoFocus value={title} onChange={e => setTitle(e.target.value)}
-              placeholder="What should the employee do?"
+              placeholder="What should the agent do?"
               onKeyDown={e => { if (e.key === 'Enter' && isValid) void submit(onCreate) }} />
           </div>
           <div className="flex flex-col gap-1.5">
@@ -800,8 +800,8 @@ function NewTaskDialog({ projectList, hasIdleEmployee, onClose, onCreate, onCrea
 // Shift creation dialog
 // ---------------------------------------------------------------------------
 
-function ShiftDialog({ employeeList, queueTasks, projectList, onClose, onCreate, loading, error }: {
-  employeeList: Employee[]
+function ShiftDialog({ agentList, queueTasks, projectList, onClose, onCreate, loading, error }: {
+  agentList: Agent[]
   queueTasks: Task[]
   projectList: { id: string; name: string }[]
   onClose: () => void
@@ -809,7 +809,7 @@ function ShiftDialog({ employeeList, queueTasks, projectList, onClose, onCreate,
   loading: boolean
   error?: string
 }) {
-  const [agentId,  setAgentId]  = useState(employeeList[0]?.id ?? '')
+  const [agentId,  setAgentId]  = useState(agentList[0]?.id ?? '')
   const [selected, setSelected] = useState<Set<string>>(new Set())
 
   function toggle(id: string) {
@@ -824,14 +824,14 @@ function ShiftDialog({ employeeList, queueTasks, projectList, onClose, onCreate,
         <DialogHeader><DialogTitle>Create Shift</DialogTitle></DialogHeader>
         <div className="flex flex-col gap-4">
           <p className="text-xs text-muted-foreground -mt-1">
-            Assign a batch of tasks to one employee. They'll run sequentially, unattended.
+            Assign a batch of tasks to one agent. They'll run sequentially, unattended.
           </p>
           <div className="flex flex-col gap-1.5">
-            <Label>Employee</Label>
+            <Label>Agent</Label>
             <Select value={agentId} onValueChange={setAgentId}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {employeeList.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
+                {agentList.map(e => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
