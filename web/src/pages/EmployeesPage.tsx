@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { employees, brains, departments, sessions, tasks, knowledge, tools } from '../api/client'
 import type { Employee, Brain, Department, EmployeeRole, KnowledgeDoc, Tool } from '../api/client'
@@ -7,11 +7,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { AgentAvatar } from '@/components/AgentAvatar'
 import { cn } from '@/lib/utils'
 import { fmtSecs, useElapsed } from '@/lib/time'
+import { BookOpen, MoreHorizontal, Pencil, Trash2, Wrench } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -182,19 +184,55 @@ function AddEmployeeDialog({ open, brainList, deptList, defaultDeptId, onClose, 
   onCreate: (body: { name: string; connectionId: string; personality?: string; role?: EmployeeRole; departmentId?: string }) => void
   loading: boolean; error?: string
 }) {
+  const [step,         setStep]    = useState(0)
   const [name,         setName]    = useState('')
   const [connectionId, setConnId]  = useState('')
   const [personality,  setPersona] = useState('')
-  const [role,         setRole]    = useState<EmployeeRole>('any')
+  const [role,         setRole]    = useState<EmployeeRole>('worker')
   const [departmentId, setDeptId]  = useState(defaultDeptId ?? '')
 
-  // Fall back to first brain if state hasn't been set yet (async load)
+  useEffect(() => {
+    if (!open) return
+    setStep(0)
+    setName('')
+    setConnId('')
+    setPersona('')
+    setRole('worker')
+    setDeptId(defaultDeptId ?? '')
+  }, [open, defaultDeptId])
+
   const effectiveConnId = connectionId || brainList[0]?.id || ''
+  const selectedBrain = brainList.find(b => b.id === effectiveConnId)
+  const selectedDept = deptList.find(d => d.id === departmentId)
+  const selectedRole = ROLES.find(r => r.value === role)
+  const selectedPreset = PERSONALITY_PRESETS.find(p => p.prompt === personality)
+  const brainAuthLabel = selectedBrain && !selectedBrain.hasKey
+    ? selectedBrain.type === 'claude' ? 'subscription' : 'machine auth'
+    : null
+  const canCreate = name.trim().length > 0 && !!effectiveConnId
+
+  function submit() {
+    if (!canCreate) return
+    onCreate({
+      name: name.trim(),
+      connectionId: effectiveConnId,
+      personality: personality.trim() || undefined,
+      role,
+      departmentId: departmentId || undefined,
+    })
+  }
+
+  const steps = ['Identity', 'Role + brain', 'Working style']
 
   return (
     <Dialog open={open} onOpenChange={o => !o && onClose()}>
-      <DialogContent>
-        <DialogHeader><DialogTitle>Add Agent</DialogTitle></DialogHeader>
+      <DialogContent className="agent-wizard-dialog">
+        <DialogHeader className="agent-wizard-header">
+          <DialogTitle>Add Agent</DialogTitle>
+          <DialogDescription className="text-xs text-muted-foreground">
+            Hire a teammate, choose how they work, and put them on the right connection.
+          </DialogDescription>
+        </DialogHeader>
         {brainList.length === 0 ? (
           <div className="flex flex-col gap-3">
             <p className="text-sm text-muted-foreground">
@@ -208,56 +246,143 @@ function AddEmployeeDialog({ open, brainList, deptList, defaultDeptId, onClose, 
             </div>
           </div>
         ) : (
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <Label>Name</Label>
-              <Input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="Atlas" />
+          <div className="agent-wizard">
+            <div className="agent-wizard-steps">
+              {steps.map((label, i) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => setStep(i)}
+                  className={cn('agent-wizard-step', step === i && 'active', i < step && 'complete')}
+                >
+                  <span>{i + 1}</span>
+                  {label}
+                </button>
+              ))}
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1.5">
-                <Label>Connection</Label>
-                <Select value={effectiveConnId} onValueChange={setConnId}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {brainList.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+
+            <div className="agent-wizard-body">
+              {step === 0 && (
+                <div className="agent-wizard-panel">
+                  <div>
+                    <p className="agent-wizard-kicker">Identity</p>
+                    <h3 className="agent-wizard-heading">Who is joining the team?</h3>
+                  </div>
+                  <div className="grid grid-cols-[48px_minmax(0,1fr)] gap-3 items-end max-sm:grid-cols-1">
+                    <div className="h-12 w-12 rounded-xl bg-muted border border-border grid place-items-center font-bold text-sm text-foreground">
+                      {name.trim().slice(0, 2).toUpperCase() || 'AI'}
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label>Name</Label>
+                      <Input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="Carl" />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Department <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                    <Select value={departmentId || '__none'} onValueChange={v => setDeptId(v === '__none' ? '' : v)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none">No department</SelectItem>
+                        {deptList.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Departments keep agents grouped by team. You can move them later.</p>
+                </div>
+              )}
+
+              {step === 1 && (
+                <div className="agent-wizard-panel">
+                  <div>
+                    <p className="agent-wizard-kicker">Role + brain</p>
+                    <h3 className="agent-wizard-heading">What should this agent be responsible for?</h3>
+                  </div>
+                  <div className="agent-role-grid">
+                    {ROLES.filter(r => r.value !== 'any').map(r => (
+                      <button
+                        key={r.value}
+                        type="button"
+                        onClick={() => setRole(r.value)}
+                        className={cn('agent-choice-card', role === r.value && 'active')}
+                      >
+                        <span className="agent-choice-title">{r.label}</span>
+                        <span className="agent-choice-desc">{r.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Connection</Label>
+                    <Select value={effectiveConnId} onValueChange={setConnId}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {brainList.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {selectedBrain && (
+                    <div className="agent-wizard-summary slim">
+                      <span>{selectedBrain.name}</span>
+                      <ProviderBadge type={selectedBrain.type} />
+                      {selectedBrain.model && <span className="font-mono text-[10px] text-muted-foreground">{selectedBrain.model}</span>}
+                      {brainAuthLabel && <Badge variant="outline" className="text-[10px] text-green-500 border-green-500/30 bg-green-500/10">{brainAuthLabel}</Badge>}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {step === 2 && (
+                <div className="agent-wizard-panel">
+                  <div>
+                    <p className="agent-wizard-kicker">Working style</p>
+                    <h3 className="agent-wizard-heading">How should they approach work?</h3>
+                  </div>
+                  <div className="agent-personality-grid">
+                    {PERSONALITY_PRESETS.map(preset => {
+                      const active = personality === preset.prompt
+                      return (
+                        <button
+                          key={preset.label}
+                          type="button"
+                          onClick={() => setPersona(active ? '' : preset.prompt)}
+                          className={cn('agent-choice-card', active && 'active')}
+                        >
+                          <span className="agent-choice-title">{preset.label}</span>
+                          <span className="agent-choice-desc">{preset.tag}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Custom instructions <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                    <Textarea
+                      value={personality}
+                      onChange={e => setPersona(e.target.value)}
+                      rows={4}
+                      placeholder="Describe how this agent should approach their work."
+                      className="resize-y text-xs"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="agent-wizard-footer">
+              <div className="agent-wizard-summary">
+                <span className="font-semibold text-foreground">{name.trim() || 'Unnamed agent'}</span>
+                <span>{selectedRole?.label ?? 'Worker'}</span>
+                <span>{selectedBrain?.name ?? 'No connection'}</span>
+                {selectedDept && <span>{selectedDept.name}</span>}
+                {selectedPreset && <span>{selectedPreset.label}</span>}
               </div>
-              <div className="flex flex-col gap-1.5">
-                <Label>Department <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                <Select value={departmentId || undefined} onValueChange={setDeptId}>
-                  <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
-                  <SelectContent>
-                    {deptList.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+              {error && <p className="text-sm text-destructive">{error}</p>}
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={onClose}>Cancel</Button>
+                {step > 0 && <Button variant="outline" onClick={() => setStep(s => Math.max(0, s - 1))}>Back</Button>}
+                {step < 2 && <Button variant="secondary" onClick={() => setStep(s => Math.min(2, s + 1))}>Next</Button>}
+                <Button disabled={!canCreate || loading} onClick={submit}>
+                  {loading ? '…' : step < 2 ? 'Create now' : 'Create agent'}
+                </Button>
               </div>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Default Role</Label>
-              <div className="grid grid-cols-3 gap-1.5">
-                {ROLES.map(r => (
-                  <button key={r.value} type="button" onClick={() => setRole(r.value)} className={cn(
-                    'py-1.5 px-2 rounded-lg border text-xs font-semibold transition-colors cursor-pointer text-left',
-                    role === r.value ? 'border-primary bg-primary/10 text-primary' : 'border-border bg-transparent text-muted-foreground hover:text-foreground'
-                  )}>
-                    {r.label}
-                    <span className="block font-normal text-[10px] opacity-70 truncate">{r.desc}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Personality <span className="text-muted-foreground font-normal">(optional)</span></Label>
-              <PersonalityPicker value={personality} onChange={setPersona} />
-            </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={onClose}>Cancel</Button>
-              <Button className="flex-1" disabled={!name || !effectiveConnId || loading}
-                onClick={() => onCreate({ name, connectionId: effectiveConnId, personality: personality.trim() || undefined, role, departmentId: departmentId || undefined })}>
-                {loading ? '…' : 'Add Agent'}
-              </Button>
             </div>
           </div>
         )}
@@ -328,6 +453,11 @@ function EmployeeCard({ employee, brain, deptList, activeSession, activeTaskTitl
   const [deptId,      setDeptId]  = useState(employee.departmentId ?? '')
 
   const isActive = !!activeSession
+  const roleLabel = ROLES.find(r => r.value === (employee.role ?? 'any'))?.label
+  const selectedPreset = PERSONALITY_PRESETS.find(p => p.prompt === employee.personality)
+  const personalityLabel = selectedPreset?.label ?? (employee.personality ? employee.personality.split('\n')[0].slice(0, 48) : '')
+  const statusLabel = isActive ? 'Working' : 'Idle'
+  const modelLabel = brain?.model || (brain?.hasKey ? 'API key' : brain?.type === 'claude' ? 'subscription' : 'machine auth')
 
   const panelStyle: React.CSSProperties = {
     padding: '14px 4px 14px 52px',
@@ -344,33 +474,54 @@ function EmployeeCard({ employee, brain, deptList, activeSession, activeTaskTitl
         <div className="row-main employee-main">
           <div className="employee-title-line">
             <span className="row-title">{employee.name}</span>
-            {employee.role && employee.role !== 'any' && <Badge variant="outline" className="font-mono text-[10px] text-muted-foreground">{employee.role}</Badge>}
+            {employee.role && employee.role !== 'any' && <Badge variant="outline" className="font-mono text-[10px] text-muted-foreground">{roleLabel}</Badge>}
           </div>
-          <div className="row-meta">
+          <div className="employee-meta-line">
             {brain && <ProviderBadge type={brain.type} />}
-            {brain?.model && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--muted)' }}>{brain.model}</span>}
-            {isActive ? <LiveBadge createdAt={activeSession!.createdAt} /> : <span style={{ fontSize: 10, color: 'var(--faint)' }}>idle</span>}
-            {isActive && activeTaskTitle && <span style={{ fontSize: 10, color: 'var(--muted)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{activeTaskTitle}</span>}
+            {modelLabel && <span className="employee-meta-text">{modelLabel}</span>}
+            {assignedTools.length > 0 && <span className="employee-capability-chip">{assignedTools.length} tool{assignedTools.length !== 1 ? 's' : ''}</span>}
+            {knowledgeDocs.length > 0 && <span className="employee-capability-chip">{knowledgeDocs.length} note{knowledgeDocs.length !== 1 ? 's' : ''}</span>}
+            {personalityLabel && <span className="employee-style-preview">{personalityLabel}</span>}
+            {isActive && activeTaskTitle && <span className="employee-task-preview">{activeTaskTitle}</span>}
           </div>
         </div>
-        <div className="employee-actions">
-          {[
-            { key: 'tools',     label: assignedTools.length > 0 ? `${assignedTools.length} tools` : 'tools',           active: showT, toggle: () => setShowT(s => !s) },
-            { key: 'knowledge', label: knowledgeDocs.length > 0 ? `${knowledgeDocs.length} docs` : 'knowledge',        active: showK, toggle: () => setShowK(s => !s) },
-            { key: 'edit',      label: editing ? 'done' : 'edit',                                                       active: editing, toggle: () => setEditing(e => !e) },
-          ].map(({ key, label, active, toggle }) => (
-            <button key={key} onClick={toggle} className={cn('employee-action', active && 'active')}>{label}</button>
-          ))}
-          {confirmDelete ? (
-            <>
-              <button onClick={() => setConfDel(false)} className="employee-action">cancel</button>
-              <button onClick={() => { onDelete(); setConfDel(false) }} className="employee-action danger">confirm</button>
-            </>
-          ) : (
-            <button onClick={() => setConfDel(true)} className="employee-action muted hover-danger">delete</button>
-          )}
+        <div className="employee-card-right">
+          <div className={cn('employee-status-chip', isActive ? 'working' : 'idle')}>
+            {isActive ? <LiveBadge createdAt={activeSession!.createdAt} /> : statusLabel}
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="employee-menu-trigger" aria-label={`Agent options for ${employee.name}`}>
+                <MoreHorizontal size={16} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuLabel>Agent options</DropdownMenuLabel>
+              <DropdownMenuItem onSelect={() => { setEditing(e => !e); setShowT(false); setShowK(false); setConfDel(false) }}>
+                <Pencil size={14} /> {editing ? 'Close editor' : 'Edit agent'}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => { setShowT(s => !s); setEditing(false); setShowK(false); setConfDel(false) }}>
+                <Wrench size={14} /> {showT ? 'Hide tools' : 'Manage tools'}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => { setShowK(s => !s); setEditing(false); setShowT(false); setConfDel(false) }}>
+                <BookOpen size={14} /> {showK ? 'Hide knowledge' : 'Manage knowledge'}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem destructive onSelect={() => { setConfDel(true); setEditing(false); setShowT(false); setShowK(false) }}>
+                <Trash2 size={14} /> Delete agent
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
+
+      {confirmDelete && (
+        <div className="employee-confirm-panel">
+          <span>Delete {employee.name}?</span>
+          <button onClick={() => setConfDel(false)}>Cancel</button>
+          <button onClick={() => { onDelete(); setConfDel(false) }} className="danger">Delete</button>
+        </div>
+      )}
 
       {/* Edit panel */}
       {editing && (
@@ -502,57 +653,68 @@ function DepartmentSection({ dept, employeesInDept, brainList, deptList, session
   }
 
   const isUnassigned = dept === null
+  const runningCount = employeesInDept.filter(emp => activeSessionFor(emp.id)).length
 
   return (
-    <section className="mb-8">
+    <section className="agent-department-section">
       {/* Section header */}
-      <div className="flex items-center gap-2 mb-3">
-        {!isUnassigned && <span className="w-2 h-2 rounded-sm shrink-0" style={{ background: dept.color }} />}
-        <p className="text-xs text-muted-foreground/50">
-          {isUnassigned ? 'Unassigned' : dept.name} · {employeesInDept.length} agent{employeesInDept.length !== 1 ? 's' : ''}
-        </p>
-        <div className="flex-1" />
-        {!isUnassigned && !confirmDelDept && (
-          <>
-            <button onClick={() => mutations.editDept(dept)} className="text-xs text-muted-foreground/40 hover:text-muted-foreground bg-transparent border-none cursor-pointer transition-colors">edit</button>
-            <button onClick={() => setConfirmDelDept(true)} className="text-xs text-muted-foreground/40 hover:text-destructive bg-transparent border-none cursor-pointer transition-colors">delete</button>
-          </>
-        )}
-        {confirmDelDept && (
-          <>
-            <span className="text-xs text-muted-foreground">Delete {dept?.name}?</span>
-            <button onClick={() => setConfirmDelDept(false)} className="text-xs text-muted-foreground bg-transparent border-none cursor-pointer">cancel</button>
-            <button onClick={() => { mutations.deleteDept(dept!.id); setConfirmDelDept(false) }} className="text-xs text-destructive bg-transparent border-none cursor-pointer">delete</button>
-          </>
-        )}
+      <div className="agent-department-header">
+        <div className="agent-department-title">
+          {!isUnassigned && <span className="agent-department-dot" style={{ background: dept.color }} />}
+          <div className="min-w-0">
+            <h2>{isUnassigned ? 'Unassigned' : dept.name}</h2>
+            <p>
+              {employeesInDept.length} agent{employeesInDept.length !== 1 ? 's' : ''}
+              {runningCount > 0 && <> · {runningCount} working</>}
+            </p>
+          </div>
+        </div>
+        <div className="agent-department-actions">
+          {!isUnassigned && !confirmDelDept && (
+            <>
+              <button onClick={() => mutations.editDept(dept)} className="agent-department-action">Edit</button>
+              <button onClick={() => setConfirmDelDept(true)} className="agent-department-action danger">Delete</button>
+            </>
+          )}
+          {confirmDelDept && (
+            <div className="agent-department-confirm">
+              <span>Delete {dept?.name}?</span>
+              <button onClick={() => setConfirmDelDept(false)}>Cancel</button>
+              <button onClick={() => { mutations.deleteDept(dept!.id); setConfirmDelDept(false) }} className="danger">Delete</button>
+            </div>
+          )}
+          <button onClick={() => onAddEmployee(dept?.id)} className="agent-add-inline">
+            + Agent{!isUnassigned && dept ? ` to ${dept.name}` : ''}
+          </button>
+        </div>
       </div>
 
       {/* Employee rows */}
-      <div className="flex flex-col gap-2">
-        {employeesInDept.map(emp => (
-          <EmployeeCard
-            key={emp.id}
-            employee={emp} brain={brainFor(emp)} deptList={deptList}
-            activeSession={activeSessionFor(emp.id)} activeTaskTitle={activeTaskFor(emp.id)}
-            knowledgeDocs={knowledgeFor(emp.id)}
-            allTools={allTools}
-            assignedTools={assignedToolsMap.get(emp.id) ?? []}
-            onUpdate={body => mutations.updateEmployee(emp.id, body)}
-            onDelete={() => mutations.deleteEmployee(emp.id)}
-            onAddKnowledge={() => setKnowledgeDialog({ open: true, doc: undefined, employeeId: emp.id })}
-            onEditKnowledge={doc => setKnowledgeDialog({ open: true, doc, employeeId: emp.id })}
-            onDeleteKnowledge={id => mutations.deleteKnowledge(id)}
-            onAssignTool={toolId => mutations.assignTool(toolId, emp.id)}
-            onUnassignTool={toolId => mutations.unassignTool(toolId, emp.id)}
-          />
-        ))}
+      <div className="agent-department-list">
+        {employeesInDept.length === 0 ? (
+          <button onClick={() => onAddEmployee(dept?.id)} className="agent-empty-department">
+            Add the first agent{!isUnassigned && dept ? ` to ${dept.name}` : ''}
+          </button>
+        ) : (
+          employeesInDept.map(emp => (
+            <EmployeeCard
+              key={emp.id}
+              employee={emp} brain={brainFor(emp)} deptList={deptList}
+              activeSession={activeSessionFor(emp.id)} activeTaskTitle={activeTaskFor(emp.id)}
+              knowledgeDocs={knowledgeFor(emp.id)}
+              allTools={allTools}
+              assignedTools={assignedToolsMap.get(emp.id) ?? []}
+              onUpdate={body => mutations.updateEmployee(emp.id, body)}
+              onDelete={() => mutations.deleteEmployee(emp.id)}
+              onAddKnowledge={() => setKnowledgeDialog({ open: true, doc: undefined, employeeId: emp.id })}
+              onEditKnowledge={doc => setKnowledgeDialog({ open: true, doc, employeeId: emp.id })}
+              onDeleteKnowledge={id => mutations.deleteKnowledge(id)}
+              onAssignTool={toolId => mutations.assignTool(toolId, emp.id)}
+              onUnassignTool={toolId => mutations.unassignTool(toolId, emp.id)}
+            />
+          ))
+        )}
       </div>
-
-      {/* Add agent */}
-      <button
-        onClick={() => onAddEmployee(dept?.id)}
-        className="text-xs text-muted-foreground/50 hover:text-primary bg-transparent border-none cursor-pointer text-left pt-3 pb-1 transition-colors block"
-      >+ Add agent{!isUnassigned && dept ? ` to ${dept.name}` : ''}</button>
 
       <KnowledgeDocDialog
         open={knowledgeDialog.open}
