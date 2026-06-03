@@ -547,26 +547,30 @@ html.light {
 .agent-card {
   display: flex;
   flex-direction: column;
-  gap: 13px;
-  min-height: 148px;
-  padding: 18px 18px 16px;
   background: var(--panel);
   border: 1px solid var(--rule);
   border-radius: 12px;
   box-shadow: var(--shadow-sm);
   transition: background .12s, border-color .12s, box-shadow .12s, transform .12s;
+  overflow: hidden;
 }
-.agent-card:hover,
-.agent-card.is-open {
+.agent-card:hover {
   background: color-mix(in srgb, var(--panel) 84%, var(--bg));
   border-color: color-mix(in srgb, var(--rule) 64%, var(--ember) 36%);
   box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
 }
 .agent-card.is-open {
   border-color: color-mix(in srgb, var(--red) 20%, var(--rule));
 }
-.agent-card:hover {
-  transform: translateY(-1px);
+.agent-card-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
 }
 .agent-card-head {
   display: flex;
@@ -1434,17 +1438,8 @@ html.light {
   .agent-department-list {
     grid-template-columns: 1fr;
   }
-  .agent-card {
-    min-height: 0;
-    padding: 16px;
-  }
-  .agent-card-head {
-    align-items: flex-start;
-  }
-  .agent-card-right {
-    align-items: flex-end;
-    flex-direction: column-reverse;
-    gap: 7px;
+  .agent-card-row {
+    padding: 12px 14px;
   }
   .agent-panel-grid {
     grid-template-columns: 1fr;

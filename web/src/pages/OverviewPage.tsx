@@ -202,24 +202,21 @@ export default function OverviewPage() {
         {eventList.length > 0 && (
           <section>
             <p className="text-xs font-medium text-muted-foreground/60 mb-3">Activity</p>
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col">
               {(eventList as CompanyEvent[]).slice(0, 12).map(ev => {
+                const name = ev.data.employeeName ?? ''
                 const [verb, colorClass] = EVENT_VERB[ev.type] ?? ['updated', 'text-muted-foreground']
                 return (
                   <button
                     key={ev.id}
                     onClick={() => ev.sessionId && navigate(`/sessions/${ev.sessionId}`)}
                     disabled={!ev.sessionId}
-                    className="flex items-center gap-3 px-4 py-2.5 bg-card border border-border rounded-lg hover:bg-muted/50 transition-colors text-left w-full disabled:cursor-default"
+                    className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-muted/40 transition-colors text-left w-full disabled:cursor-default"
                   >
-                    <AgentAvatar name={ev.data.employeeName ?? ''} size={30} />
-                    <span className="w-[56px] shrink-0 text-xs font-semibold text-foreground truncate">{ev.data.employeeName ?? '—'}</span>
-                    <span className={cn('w-[72px] shrink-0 text-xs font-medium max-sm:hidden', colorClass)}>{verb}</span>
-                    <span className="flex-1 min-w-0 text-xs text-muted-foreground truncate">
-                      <span className={cn('mr-1 max-sm:inline hidden', colorClass)}>{verb}</span>
-                      {ev.data.taskTitle ?? ''}
-                    </span>
-                    <span className="text-xs text-muted-foreground/40 shrink-0 font-mono">{timeAgo(ev.createdAt)}</span>
+                    <span className="w-[52px] shrink-0 text-xs font-semibold truncate text-foreground">{name || '—'}</span>
+                    <span className={cn('w-[60px] shrink-0 text-xs', colorClass)}>{verb}</span>
+                    <span className="flex-1 min-w-0 text-xs text-muted-foreground truncate">{ev.data.taskTitle ?? ''}</span>
+                    <span className="text-xs text-muted-foreground/40 shrink-0 tabular-nums">{timeAgo(ev.createdAt)}</span>
                   </button>
                 )
               })}

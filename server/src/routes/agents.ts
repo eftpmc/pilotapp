@@ -15,7 +15,7 @@ export type AgentRole = typeof AGENT_ROLES[number];
 interface Row {
   id: string; user_id: string; name: string; provider: string;
   connection_id?: string | null; personality?: string | null;
-  role: AgentRole; department_id?: string | null; created_at: string;
+  role: AgentRole; department_id?: string | null; avatar_seed?: string | null; created_at: string;
 }
 
 function toAgent(row: Row | Record<string, unknown>) {
@@ -27,6 +27,7 @@ function toAgent(row: Row | Record<string, unknown>) {
     connectionId:   (row.connection_id   as string | null | undefined) ?? undefined,
     personality:    (row.personality     as string | null | undefined) ?? undefined,
     departmentId:   (row.department_id   as string | null | undefined) ?? undefined,
+    avatarSeed:     (row.avatar_seed     as string | null | undefined) ?? undefined,
     createdAt:    row.created_at,
   };
 }
@@ -46,6 +47,7 @@ const CreateSchema = z.object({
   personality:  z.string().optional(),
   role:         z.enum(AGENT_ROLES).default('any'),
   departmentId: z.string().optional(),
+  avatarSeed:   z.string().optional(),
 });
 
 router.post('/', (req: Request, res: Response) => {
@@ -69,12 +71,13 @@ router.post('/', (req: Request, res: Response) => {
     personality: parsed.data.personality ?? null,
     role: parsed.data.role,
     department_id: parsed.data.departmentId ?? null,
+    avatar_seed: parsed.data.avatarSeed ?? null,
     created_at: new Date().toISOString(),
   };
 
-  db.prepare('INSERT INTO agents (id, user_id, name, provider, connection_id, personality, role, department_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
+  db.prepare('INSERT INTO agents (id, user_id, name, provider, connection_id, personality, role, department_id, avatar_seed, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(
     agent.id, agent.user_id, agent.name, agent.provider,
-    agent.connection_id, agent.personality, agent.role, agent.department_id, agent.created_at
+    agent.connection_id, agent.personality, agent.role, agent.department_id, agent.avatar_seed, agent.created_at
   );
 
   res.status(201).json(toAgent(agent));
@@ -87,6 +90,7 @@ const PatchSchema = z.object({
   personality:  z.string().optional(),
   role:         z.enum(AGENT_ROLES).optional(),
   departmentId: z.string().nullable().optional(),
+  avatarSeed:   z.string().nullable().optional(),
 });
 
 router.patch('/:id', (req: Request, res: Response) => {
@@ -108,6 +112,7 @@ router.patch('/:id', (req: Request, res: Response) => {
   if (parsed.data.personality  !== undefined) { sets.push('personality = ?');   vals.push(parsed.data.personality || null) }
   if (parsed.data.role         !== undefined) { sets.push('role = ?');          vals.push(parsed.data.role) }
   if (parsed.data.departmentId !== undefined) { sets.push('department_id = ?'); vals.push(parsed.data.departmentId) }
+  if (parsed.data.avatarSeed   !== undefined) { sets.push('avatar_seed = ?');   vals.push(parsed.data.avatarSeed) }
   if (sets.length > 0) { vals.push(row.id); db.prepare(`UPDATE agents SET ${sets.join(', ')} WHERE id = ?`).run(...vals); }
 
   const updated = db.prepare('SELECT * FROM agents WHERE id = ?').get(row.id) as Row;

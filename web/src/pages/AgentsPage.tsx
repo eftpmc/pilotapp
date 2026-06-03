@@ -1,20 +1,18 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { agents, connections, departments, sessions, tasks, knowledge, tools } from '../api/client'
 import type { Agent, Connection, Department, AgentRole, KnowledgeDoc, Tool } from '../api/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { AgentAvatar } from '@/components/AgentAvatar'
-import { SpineAvatar } from '@/components/SpineAvatar'
 import { cn } from '@/lib/utils'
 import { fmtSecs, useElapsed } from '@/lib/time'
-import { BookOpen, MoreHorizontal, Pencil, Trash2, Wrench } from 'lucide-react'
+import { Shuffle, Trash2 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -144,7 +142,7 @@ function DepartmentDialog({ open, dept, onClose, onSave, loading, error }: {
   return (
     <Dialog open={open} onOpenChange={o => !o && onClose()}>
       <DialogContent>
-        <DialogHeader><DialogTitle>{dept ? 'Edit Department' : 'New Department'}</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>{dept ? 'Edit Team' : 'New Team'}</DialogTitle></DialogHeader>
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
             <Label>Name</Label>
@@ -180,9 +178,13 @@ function DepartmentDialog({ open, dept, onClose, onSave, loading, error }: {
 // Add Agent dialog
 // ---------------------------------------------------------------------------
 
+function randomSeed() {
+  return Math.random().toString(36).slice(2, 10)
+}
+
 function AddAgentDialog({ open, connectionList, deptList, defaultDeptId, onClose, onCreate, loading, error }: {
   open: boolean; connectionList: Connection[]; deptList: Department[]; defaultDeptId?: string; onClose: () => void
-  onCreate: (body: { name: string; connectionId: string; personality?: string; role?: AgentRole; departmentId?: string }) => void
+  onCreate: (body: { name: string; connectionId: string; personality?: string; role?: AgentRole; departmentId?: string; avatarSeed?: string }) => void
   loading: boolean; error?: string
 }) {
   const [step,         setStep]    = useState(0)
@@ -191,6 +193,7 @@ function AddAgentDialog({ open, connectionList, deptList, defaultDeptId, onClose
   const [personality,  setPersona] = useState('')
   const [role,         setRole]    = useState<AgentRole>('worker')
   const [departmentId, setDeptId]  = useState(defaultDeptId ?? '')
+  const [seed,         setSeed]    = useState(() => randomSeed())
 
   useEffect(() => {
     if (!open) return
@@ -200,6 +203,7 @@ function AddAgentDialog({ open, connectionList, deptList, defaultDeptId, onClose
     setPersona('')
     setRole('worker')
     setDeptId(defaultDeptId ?? '')
+    setSeed(randomSeed())
   }, [open, defaultDeptId])
 
   const effectiveConnId = connectionId || connectionList[0]?.id || ''
@@ -220,6 +224,7 @@ function AddAgentDialog({ open, connectionList, deptList, defaultDeptId, onClose
       personality: personality.trim() || undefined,
       role,
       departmentId: departmentId || undefined,
+      avatarSeed: seed,
     })
   }
 
@@ -270,8 +275,17 @@ function AddAgentDialog({ open, connectionList, deptList, defaultDeptId, onClose
                     <h3 className="agent-wizard-heading">Who is joining the team?</h3>
                   </div>
                   <div className="grid grid-cols-[48px_minmax(0,1fr)] gap-3 items-end max-sm:grid-cols-1">
-                    <div className="h-12 w-12 rounded-xl bg-muted border border-border grid place-items-center font-bold text-sm text-foreground">
-                      {name.trim().slice(0, 2).toUpperCase() || 'AI'}
+                    <div className="flex flex-col items-center gap-1">
+                      <AgentAvatar name={name.trim() || 'New'} seed={seed} size={48} animated />
+                      <button
+                        type="button"
+                        onClick={() => setSeed(randomSeed())}
+                        title="Randomize avatar"
+                        className="flex items-center gap-0.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                      >
+                        <Shuffle size={9} />
+                        shuffle
+                      </button>
                     </div>
                     <div className="flex flex-col gap-1.5">
                       <Label>Name</Label>
@@ -279,16 +293,16 @@ function AddAgentDialog({ open, connectionList, deptList, defaultDeptId, onClose
                     </div>
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <Label>Department <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                    <Label>Team <span className="text-muted-foreground font-normal">(optional)</span></Label>
                     <Select value={departmentId || '__none'} onValueChange={v => setDeptId(v === '__none' ? '' : v)}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__none">No department</SelectItem>
+                        <SelectItem value="__none">No team</SelectItem>
                         {deptList.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
-                  <p className="text-xs text-muted-foreground">Departments keep agents grouped by team. You can move them later.</p>
+                  <p className="text-xs text-muted-foreground">Teams keep agents grouped. You can move them later.</p>
                 </div>
               )}
 
@@ -369,7 +383,7 @@ function AddAgentDialog({ open, connectionList, deptList, defaultDeptId, onClose
 
             <div className="agent-wizard-footer">
               <div className="agent-wizard-preview">
-                <AgentAvatar name={name.trim() || undefined} size={30} />
+                <AgentAvatar name={name.trim() || 'New'} seed={seed} size={30} animated={false} />
                 <div className="min-w-0 flex-1">
                   <p className="agent-wizard-preview-name">{name.trim() || 'Unnamed agent'}</p>
                   <p className="agent-wizard-preview-meta">
@@ -436,210 +450,55 @@ function KnowledgeDocDialog({ open, doc, onClose, onSave, loading, error }: {
 }
 
 // ---------------------------------------------------------------------------
-// Agent card
+// Agent row (slim, navigates to profile)
 // ---------------------------------------------------------------------------
 
-function AgentCard({ employee, connection, deptList, activeSession, activeTaskTitle, knowledgeDocs, allTools, assignedTools, onUpdate, onDelete, onAddKnowledge, onEditKnowledge, onDeleteKnowledge, onAssignTool, onUnassignTool }: {
-  employee: Agent; connection?: Connection; deptList: Department[]
+function AgentCard({ employee, connection, activeSession, activeTaskTitle, onDelete }: {
+  employee: Agent; connection?: Connection
   activeSession?: { id: string; createdAt: string } | null
-  activeTaskTitle?: string; knowledgeDocs: KnowledgeDoc[]
-  allTools: Tool[]; assignedTools: Tool[]
-  onUpdate: (body: { name?: string; personality?: string; role?: AgentRole; departmentId?: string | null }) => void
+  activeTaskTitle?: string
   onDelete: () => void
-  onAddKnowledge: () => void; onEditKnowledge: (doc: KnowledgeDoc) => void; onDeleteKnowledge: (id: string) => void
-  onAssignTool: (toolId: string) => void; onUnassignTool: (toolId: string) => void
 }) {
-  const [editing, setEditing]       = useState(false)
-  const [showK,   setShowK]         = useState(false)
-  const [showT,   setShowT]         = useState(false)
+  const navigate = useNavigate()
   const [confirmDelete, setConfDel] = useState(false)
-  const [name,        setName]    = useState(employee.name)
-  const [personality, setPersona] = useState(employee.personality ?? '')
-  const [role,        setRole]    = useState<AgentRole>(employee.role ?? 'any')
-  const [deptId,      setDeptId]  = useState(employee.departmentId ?? '')
-
   const isActive = !!activeSession
   const roleLabel = ROLES.find(r => r.value === (employee.role ?? 'any'))?.label
   const selectedPreset = PERSONALITY_PRESETS.find(p => p.prompt === employee.personality)
-  const personalityLabel = selectedPreset?.label ?? (employee.personality ? employee.personality.split('\n')[0].slice(0, 48) : '')
-  const statusLabel = isActive ? 'Working' : 'Idle'
-  const modelLabel = connection?.model || (connection?.hasKey ? 'API key' : connection?.type === 'claude' ? 'subscription' : 'machine auth')
+  const personalityLabel = selectedPreset?.label ?? (employee.personality ? employee.personality.split('\n')[0].slice(0, 40) : '')
 
   return (
-    <>
-      <article className={cn('agent-card', confirmDelete && 'is-open')}>
-        <div className="agent-card-head">
-          <div className="agent-card-identity">
-            <AgentAvatar agent={employee} size={44} running={isActive} />
-            <div className="min-w-0">
-              <div className="agent-title-line">
-                <span className="agent-name">{employee.name}</span>
-                <div className={cn('agent-status-dot', isActive ? 'working' : 'idle')} />
-              </div>
-              <div className="agent-meta-line">
-                {connection && <ProviderBadge type={connection.type} />}
-                {modelLabel && <span className="agent-meta-text">{modelLabel}</span>}
-              </div>
-            </div>
+    <article className={cn('agent-card', confirmDelete && 'is-open')}>
+      <button
+        className="agent-card-row"
+        onClick={() => navigate(`/agents/${employee.id}`)}
+      >
+        <AgentAvatar agent={employee} size={44} running={isActive} />
+        <div className="min-w-0 flex-1">
+          <div className="agent-title-line">
+            <span className="agent-name">{employee.name}</span>
+            <div className={cn('agent-status-dot', isActive ? 'working' : 'idle')} />
           </div>
-
-          <div className="agent-card-right">
-            <div className={cn('agent-status-chip', isActive ? 'working' : 'idle')}>
-              {isActive ? <LiveBadge createdAt={activeSession!.createdAt} /> : statusLabel}
-            </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="agent-menu-trigger" aria-label={`Agent options for ${employee.name}`}>
-                  <MoreHorizontal size={16} />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => { setEditing(true); setShowT(false); setShowK(false); setConfDel(false) }}>
-                  <Pencil size={14} /> Edit agent
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => { setShowT(true); setEditing(false); setShowK(false); setConfDel(false) }}>
-                  <Wrench size={14} /> Manage tools
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => { setShowK(true); setEditing(false); setShowT(false); setConfDel(false) }}>
-                  <BookOpen size={14} /> Manage knowledge
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem destructive onSelect={() => { setConfDel(true); setEditing(false); setShowT(false); setShowK(false) }}>
-                  <Trash2 size={14} /> Delete agent
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-
-        <div className="agent-card-body">
           <p className="agent-summary-line">
             <span>{roleLabel ?? 'Any role'}</span>
             {personalityLabel && <><span className="sep">·</span><span>{personalityLabel}</span></>}
+            {isActive && activeTaskTitle && <><span className="sep">·</span><span className="text-green-500">{activeTaskTitle}</span></>}
           </p>
-          <div className="agent-card-stats">
-            <span>{assignedTools.length} tool{assignedTools.length !== 1 ? 's' : ''}</span>
-            <span>{knowledgeDocs.length} note{knowledgeDocs.length !== 1 ? 's' : ''}</span>
-          </div>
         </div>
+        {isActive
+          ? <LiveBadge createdAt={activeSession!.createdAt} />
+          : <span className="text-xs text-muted-foreground/40">Idle</span>
+        }
+        <svg className="w-3 h-3 text-muted-foreground/30 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </button>
 
-        {isActive && activeTaskTitle && (
-          <div className="agent-active-task">
-            <span>Current task</span>
-            <strong>{activeTaskTitle}</strong>
-          </div>
-        )}
-
-        {confirmDelete && (
-          <div className="agent-confirm-panel">
-            <span>Delete {employee.name}?</span>
-            <button onClick={() => setConfDel(false)}>Cancel</button>
-            <button onClick={() => { onDelete(); setConfDel(false) }} className="danger">Delete</button>
-          </div>
-        )}
-      </article>
-
-      <Dialog open={editing} onOpenChange={setEditing}>
-        <DialogContent className="agent-manage-dialog">
-          <DialogHeader>
-            <DialogTitle>Edit {employee.name}</DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
-              Adjust their team, default role, and working style.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="agent-card-panel">
-            <div className="agent-panel-grid">
-              <div className="field"><Label>Name</Label><Input value={name} onChange={e => setName(e.target.value)} /></div>
-              <div className="field">
-                <Label>Department</Label>
-                <Select value={deptId || undefined} onValueChange={setDeptId}>
-                  <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
-                  <SelectContent>{deptList.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="field">
-              <Label>Default Role</Label>
-              <div className="agent-role-pills">
-                {ROLES.map(r => (
-                  <button key={r.value} type="button" onClick={() => setRole(r.value)}
-                    className={cn('btn sm', role === r.value ? 'primary' : 'ghost')}>{r.label}</button>
-                ))}
-              </div>
-            </div>
-            <div className="field"><Label>Personality</Label><PersonalityPicker value={personality} onChange={setPersona} compact /></div>
-            <div className="agent-panel-actions">
-              <button className="btn sm" onClick={() => { setEditing(false); setName(employee.name); setPersona(employee.personality ?? ''); setRole(employee.role ?? 'any'); setDeptId(employee.departmentId ?? '') }}>Cancel</button>
-              <button className="btn sm primary" onClick={() => { onUpdate({ name: name.trim(), personality: personality.trim() || undefined, role, departmentId: deptId || null }); setEditing(false) }}>Save</button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={showT} onOpenChange={setShowT}>
-        <DialogContent className="agent-manage-dialog">
-          <DialogHeader>
-            <DialogTitle>{employee.name}'s tools</DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
-              Choose the tools this agent can use while working.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="agent-card-panel">
-            {allTools.length === 0 ? (
-              <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: 0 }}>No tools yet. <a href="/settings" style={{ color: 'var(--ember)' }}>Add in Settings.</a></p>
-            ) : (
-              <div className="agent-tool-list">
-                {allTools.map(tool => {
-                  const assigned = assignedTools.some(t => t.id === tool.id)
-                  return (
-                    <button key={tool.id} type="button" onClick={() => assigned ? onUnassignTool(tool.id) : onAssignTool(tool.id)}
-                      className={cn('agent-tool-row', assigned && 'active')}
-                    >
-                      <span className="agent-tool-check">{assigned ? '✓' : ''}</span>
-                      <span>{tool.name}</span>
-                      {tool.description && <small>{tool.description}</small>}
-                    </button>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={showK} onOpenChange={setShowK}>
-        <DialogContent className="agent-manage-dialog">
-          <DialogHeader>
-            <DialogTitle>{employee.name}'s knowledge</DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
-              Personal notes injected only when this agent works.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="agent-card-panel">
-            <div className="agent-panel-head">
-              <p className="agent-panel-title">Personal knowledge</p>
-              <button onClick={() => { setShowK(false); onAddKnowledge() }} style={{ fontSize: 12.5, color: 'var(--ember)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>+ Add</button>
-            </div>
-            {knowledgeDocs.length === 0 ? (
-              <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: 0 }}>No personal knowledge yet.</p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {knowledgeDocs.map(doc => (
-                  <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <span style={{ fontSize: 13, color: 'var(--ink)' }}>{doc.title}</span>
-                      {doc.content && <span style={{ fontSize: 11, color: 'var(--muted)', marginLeft: 8 }}>{doc.content.split('\n')[0].slice(0, 60)}</span>}
-                    </div>
-                    <button onClick={() => { setShowK(false); onEditKnowledge(doc) }} style={{ fontSize: 11, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '0 4px', fontFamily: 'inherit' }}>edit</button>
-                    <button onClick={() => onDeleteKnowledge(doc.id)} style={{ fontSize: 13, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '0 4px', fontFamily: 'inherit', lineHeight: 1 }}>×</button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-    </>
+      {confirmDelete && (
+        <div className="agent-confirm-panel">
+          <span>Delete {employee.name}?</span>
+          <button onClick={() => setConfDel(false)}>Cancel</button>
+          <button onClick={() => { onDelete(); setConfDel(false) }} className="danger">Delete</button>
+        </div>
+      )}
+    </article>
   )
 }
 
@@ -647,29 +506,19 @@ function AgentCard({ employee, connection, deptList, activeSession, activeTaskTi
 // Department section
 // ---------------------------------------------------------------------------
 
-function DepartmentSection({ dept, agentsInDept, connectionList, deptList, sessionList, taskList, allKnowledge, allTools, assignedToolsMap, mutations, onAddAgent }: {
+function DepartmentSection({ dept, agentsInDept, connectionList, sessionList, taskList, mutations, onAddAgent }: {
   dept: Department | null
   agentsInDept: Agent[]
-  connectionList: Connection[]; deptList: Department[]
+  connectionList: Connection[]
   sessionList: { agentId: string; status: string; id: string; createdAt: string; workTaskId?: string }[]
   taskList: { id: string; title: string }[]
-  allKnowledge: KnowledgeDoc[]
-  allTools: Tool[]
-  assignedToolsMap: Map<string, Tool[]>
   mutations: {
-    updateAgent: (id: string, body: Parameters<typeof agents.update>[1]) => void
     deleteAgent: (id: string) => void
-    createKnowledge: (body: Parameters<typeof knowledge.create>[0]) => void
-    updateKnowledge: (id: string, body: Parameters<typeof knowledge.update>[1]) => void
-    deleteKnowledge: (id: string) => void
-    assignTool: (toolId: string, agentId: string) => void
-    unassignTool: (toolId: string, agentId: string) => void
     editDept: (dept: Department) => void
     deleteDept: (id: string) => void
   }
   onAddAgent: (deptId?: string) => void
 }) {
-  const [knowledgeDialog, setKnowledgeDialog] = useState<{ open: boolean; doc?: KnowledgeDoc; employeeId: string }>({ open: false, employeeId: '' })
   const [confirmDelDept, setConfirmDelDept] = useState(false)
 
   function activeSessionFor(empId: string) {
@@ -682,16 +531,12 @@ function DepartmentSection({ dept, agentsInDept, connectionList, deptList, sessi
   function connectionFor(emp: Agent) {
     return connectionList.find(b => b.id === emp.connectionId)
   }
-  function knowledgeFor(empId: string) {
-    return allKnowledge.filter(d => d.scope === 'employee' && d.scopeId === empId)
-  }
 
   const isUnassigned = dept === null
   const runningCount = agentsInDept.filter(emp => activeSessionFor(emp.id)).length
 
   return (
     <section className="agent-department-section">
-      {/* Section header */}
       <div className="agent-department-header">
         <div className="agent-department-title">
           {!isUnassigned && <span className="agent-department-dot" style={{ background: dept.color }} />}
@@ -707,7 +552,7 @@ function DepartmentSection({ dept, agentsInDept, connectionList, deptList, sessi
           {!isUnassigned && !confirmDelDept && (
             <>
               <button onClick={() => mutations.editDept(dept)} className="agent-department-action">Edit</button>
-              <button onClick={() => setConfirmDelDept(true)} className="agent-department-action danger">Delete</button>
+              <button onClick={() => setConfirmDelDept(true)} className="agent-department-action danger">Delete team</button>
             </>
           )}
           {confirmDelDept && (
@@ -723,7 +568,6 @@ function DepartmentSection({ dept, agentsInDept, connectionList, deptList, sessi
         </div>
       </div>
 
-      {/* Agent rows */}
       <div className="agent-department-list">
         {agentsInDept.length === 0 ? (
           <button onClick={() => onAddAgent(dept?.id)} className="agent-empty-department">
@@ -733,37 +577,15 @@ function DepartmentSection({ dept, agentsInDept, connectionList, deptList, sessi
           agentsInDept.map(emp => (
             <AgentCard
               key={emp.id}
-              employee={emp} connection={connectionFor(emp)} deptList={deptList}
-              activeSession={activeSessionFor(emp.id)} activeTaskTitle={activeTaskFor(emp.id)}
-              knowledgeDocs={knowledgeFor(emp.id)}
-              allTools={allTools}
-              assignedTools={assignedToolsMap.get(emp.id) ?? []}
-              onUpdate={body => mutations.updateAgent(emp.id, body)}
+              employee={emp}
+              connection={connectionFor(emp)}
+              activeSession={activeSessionFor(emp.id)}
+              activeTaskTitle={activeTaskFor(emp.id)}
               onDelete={() => mutations.deleteAgent(emp.id)}
-              onAddKnowledge={() => setKnowledgeDialog({ open: true, doc: undefined, employeeId: emp.id })}
-              onEditKnowledge={doc => setKnowledgeDialog({ open: true, doc, employeeId: emp.id })}
-              onDeleteKnowledge={id => mutations.deleteKnowledge(id)}
-              onAssignTool={toolId => mutations.assignTool(toolId, emp.id)}
-              onUnassignTool={toolId => mutations.unassignTool(toolId, emp.id)}
             />
           ))
         )}
       </div>
-
-      <KnowledgeDocDialog
-        open={knowledgeDialog.open}
-        doc={knowledgeDialog.doc}
-        onClose={() => setKnowledgeDialog(d => ({ ...d, open: false }))}
-        onSave={body => {
-          if (knowledgeDialog.doc) {
-            mutations.updateKnowledge(knowledgeDialog.doc.id, body)
-          } else {
-            mutations.createKnowledge({ ...body, scope: 'employee', scopeId: knowledgeDialog.employeeId })
-          }
-          setKnowledgeDialog(d => ({ ...d, open: false }))
-        }}
-        loading={false}
-      />
     </section>
   )
 }
@@ -778,22 +600,15 @@ export default function AgentsPage() {
   const [addAgentDialog, setaddAgentDialog]   = useState<{ open: boolean; deptId?: string }>({ open: false })
   const [deptDialog,   setDeptDialog]     = useState<{ open: boolean; dept?: Department }>({ open: false })
 
-  const { data: employeeList  = [] } = useQuery({ queryKey: ['agents'],   queryFn: () => agents.list() })
-  const { data: connectionList     = [] } = useQuery({ queryKey: ['connections'],      queryFn: () => connections.list() })
-  const { data: deptList      = [] } = useQuery({ queryKey: ['departments'], queryFn: () => departments.list() })
-  const { data: sessionList   = [] } = useQuery({ queryKey: ['sessions'],    queryFn: () => sessions.list(), refetchInterval: 5000 })
-  const { data: taskList      = [] } = useQuery({ queryKey: ['tasks'],       queryFn: () => tasks.list(),    refetchInterval: 8000 })
-  const { data: allKnowledge  = [] } = useQuery({ queryKey: ['knowledge'],   queryFn: () => knowledge.list() })
-  const { data: allTools       = [] } = useQuery({ queryKey: ['tools'],        queryFn: () => tools.list() })
-  const { data: toolAssignments = [] } = useQuery({ queryKey: ['agent-tools'], queryFn: () => tools.assignments() })
+  const { data: employeeList   = [] } = useQuery({ queryKey: ['agents'],      queryFn: () => agents.list() })
+  const { data: connectionList = [] } = useQuery({ queryKey: ['connections'],  queryFn: () => connections.list() })
+  const { data: deptList       = [] } = useQuery({ queryKey: ['departments'],  queryFn: () => departments.list() })
+  const { data: sessionList    = [] } = useQuery({ queryKey: ['sessions'],     queryFn: () => sessions.list(), refetchInterval: 5000 })
+  const { data: taskList       = [] } = useQuery({ queryKey: ['tasks'],        queryFn: () => tasks.list(),    refetchInterval: 8000 })
 
   const createAgent = useMutation({
     mutationFn: (body: Parameters<typeof agents.create>[0]) => agents.create(body),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['agents'] }); setaddAgentDialog({ open: false }) },
-  })
-  const updateAgent = useMutation({
-    mutationFn: ({ id, body }: { id: string; body: Parameters<typeof agents.update>[1] }) => agents.update(id, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['agents'] }),
   })
   const deleteAgent = useMutation({
     mutationFn: (id: string) => agents.delete(id),
@@ -811,46 +626,11 @@ export default function AgentsPage() {
     mutationFn: (id: string) => departments.delete(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['departments'] }),
   })
-  const createKnowledge = useMutation({
-    mutationFn: (body: Parameters<typeof knowledge.create>[0]) => knowledge.create(body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['knowledge'] }),
-  })
-  const updateKnowledge = useMutation({
-    mutationFn: ({ id, body }: { id: string; body: Parameters<typeof knowledge.update>[1] }) => knowledge.update(id, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['knowledge'] }),
-  })
-  const deleteKnowledge = useMutation({
-    mutationFn: (id: string) => knowledge.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['knowledge'] }),
-  })
-  const assignTool = useMutation({
-    mutationFn: ({ toolId, agentId }: { toolId: string; agentId: string }) => tools.assign(toolId, agentId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['agent-tools'] }),
-  })
-  const unassignTool = useMutation({
-    mutationFn: ({ toolId, agentId }: { toolId: string; agentId: string }) => tools.unassign(toolId, agentId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['agent-tools'] }),
-  })
-
-  const toolById = new Map(allTools.map(t => [t.id, t]))
-  const assignedToolsMap = new Map<string, Tool[]>()
-  for (const { agentId, toolId } of toolAssignments) {
-    const tool = toolById.get(toolId)
-    if (!tool) continue
-    if (!assignedToolsMap.has(agentId)) assignedToolsMap.set(agentId, [])
-    assignedToolsMap.get(agentId)!.push(tool)
-  }
 
   const mutations = {
-    updateAgent: (id: string, body: Parameters<typeof agents.update>[1]) => updateAgent.mutate({ id, body }),
     deleteAgent: (id: string) => deleteAgent.mutate(id),
-    createKnowledge: (body: Parameters<typeof knowledge.create>[0]) => createKnowledge.mutate(body),
-    updateKnowledge: (id: string, body: Parameters<typeof knowledge.update>[1]) => updateKnowledge.mutate({ id, body }),
-    deleteKnowledge: (id: string) => deleteKnowledge.mutate(id),
-    assignTool:   (toolId: string, agentId: string) => assignTool.mutate({ toolId, agentId }),
-    unassignTool: (toolId: string, agentId: string) => unassignTool.mutate({ toolId, agentId }),
-    editDept:   (dept: Department) => setDeptDialog({ open: true, dept }),
-    deleteDept: (id: string) => deleteDept.mutate(id),
+    editDept:    (dept: Department) => setDeptDialog({ open: true, dept }),
+    deleteDept:  (id: string) => deleteDept.mutate(id),
   }
 
   const busyCount = employeeList.filter(e => sessionList.some(s => s.agentId === e.id && s.status === 'running')).length
@@ -876,7 +656,7 @@ export default function AgentsPage() {
             </p>
           </div>
           <div className="flex gap-2 shrink-0">
-            <Button size="sm" variant="outline" onClick={() => setDeptDialog({ open: true })}>+ Department</Button>
+            <Button size="sm" variant="outline" onClick={() => setDeptDialog({ open: true })}>+ Team</Button>
             <Button size="sm" onClick={() => setaddAgentDialog({ open: true })}>+ Agent</Button>
           </div>
         </div>
@@ -887,10 +667,8 @@ export default function AgentsPage() {
             key={dept.id}
             dept={dept}
             agentsInDept={empsByDept.get(dept.id) ?? []}
-            connectionList={connectionList} deptList={deptList}
+            connectionList={connectionList}
             sessionList={sessionList as any} taskList={taskList as any}
-            allKnowledge={allKnowledge}
-            allTools={allTools} assignedToolsMap={assignedToolsMap}
             mutations={mutations}
             onAddAgent={deptId => setaddAgentDialog({ open: true, deptId })}
           />
@@ -901,10 +679,8 @@ export default function AgentsPage() {
           <DepartmentSection
             dept={null}
             agentsInDept={empsByDept.get(null) ?? []}
-            connectionList={connectionList} deptList={deptList}
+            connectionList={connectionList}
             sessionList={sessionList as any} taskList={taskList as any}
-            allKnowledge={allKnowledge}
-            allTools={allTools} assignedToolsMap={assignedToolsMap}
             mutations={mutations}
             onAddAgent={() => setaddAgentDialog({ open: true })}
           />

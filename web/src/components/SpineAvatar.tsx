@@ -211,12 +211,14 @@ export function SpineAvatar({
   height,
   mode = 'head',
   animation = 'Idle',
+  animated = true,
 }: {
   name: string
   width: number
   height: number
   mode?: 'head' | 'cover'
   animation?: string
+  animated?: boolean
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
@@ -243,13 +245,13 @@ export function SpineAvatar({
       const animState = new AnimationState(animStateData)
       animState.setAnimation(0, animation, true)
 
-      // "head": crop to worldY 43–90 (chin to hair top) — body excluded
-      //         scale = (height−4)/47,  offsetY = 2 + 90*scale
+      // "head": crop to worldY 40–93 (chin to above hair) — body excluded
+      //         scale = (height−4)/53,  offsetY = 3 + 93*scale
       // "cover": full body
       //         scale = (height−16)/96, offsetY = height−4
-      const scale = mode === 'cover' ? (height - 16) / 96 : (height - 4) / 47
+      const scale = mode === 'cover' ? (height - 16) / 96 : (height - 4) / 53
       const offsetX = width / 2
-      const offsetY = mode === 'cover' ? height - 4 : 2 + 90 * scale
+      const offsetY = mode === 'cover' ? height - 4 : 3 + 93 * scale
 
       function render(time: number) {
         if (cancelled) return
@@ -267,7 +269,7 @@ export function SpineAvatar({
         drawWithTints(ctx, skeleton, slotColors)
 
         ctx.restore()
-        rafId = requestAnimationFrame(render)
+        if (animated) rafId = requestAnimationFrame(render)
       }
 
       rafId = requestAnimationFrame(render)
@@ -277,7 +279,7 @@ export function SpineAvatar({
       cancelled = true
       cancelAnimationFrame(rafId)
     }
-  }, [name, width, height, mode, animation])
+  }, [name, width, height, mode, animation, animated])
 
   return (
     <canvas

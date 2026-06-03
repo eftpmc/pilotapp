@@ -22,7 +22,7 @@ export interface Project {
 export interface Agent {
   id: string; name: string; provider: AgentProvider;
   role: AgentRole; connectionId?: string; personality?: string;
-  departmentId?: string; createdAt: string;
+  departmentId?: string; avatarSeed?: string; createdAt: string;
 }
 export interface Task {
   id: string; projectId: string; title: string; prompt: string;
@@ -209,9 +209,9 @@ export const connections = {
 
 export const agents = {
   list:   () => req<Agent[]>('/employees'),
-  create: (body: { name: string; connectionId: string; personality?: string; role?: AgentRole; departmentId?: string }) =>
+  create: (body: { name: string; connectionId: string; personality?: string; role?: AgentRole; departmentId?: string; avatarSeed?: string }) =>
     req<Agent>('/employees', { method: 'POST', body: JSON.stringify(body) }),
-  update: (id: string, body: { name?: string; personality?: string; role?: AgentRole; departmentId?: string | null }) =>
+  update: (id: string, body: { name?: string; personality?: string; role?: AgentRole; departmentId?: string | null; avatarSeed?: string | null }) =>
     req<Agent>(`/employees/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   delete: (id: string) => req<void>(`/employees/${id}`, { method: 'DELETE' }),
 };

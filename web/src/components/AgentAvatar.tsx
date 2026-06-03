@@ -15,26 +15,37 @@ function hashIndex(str: string): number {
 export function AgentAvatar({
   agent,
   name: nameProp,
+  seed: seedProp,
   size = 32,
+  height: heightProp,
   running = false,
+  animated = true,
+  mode = 'head',
 }: {
   agent?: Agent
   name?: string
+  seed?: string
   size?: number
+  height?: number
   running?: boolean
+  animated?: boolean
+  mode?: 'head' | 'cover'
 }) {
   const displayName = (nameProp ?? agent?.name ?? '').trim()
   if (!displayName) return null
 
-  const bg = PALETTE[hashIndex(displayName)]
-  const br = size <= 24 ? 6 : size <= 36 ? 8 : 10
+  const hashKey = seedProp ?? agent?.avatarSeed ?? displayName
+  const bg = PALETTE[hashIndex(hashKey)]
+  const w = size
+  const h = heightProp ?? size
+  const br = w <= 24 ? 6 : w <= 36 ? 8 : 10
 
   return (
     <span
       className={running ? 'av ring-green' : 'av'}
-      style={{ width: size, height: size, flexShrink: 0, borderRadius: br, overflow: 'hidden', background: bg }}
+      style={{ width: w, height: h, flexShrink: 0, borderRadius: br, overflow: 'hidden', background: bg }}
     >
-      <SpineAvatar name={displayName} width={size} height={size} mode="head" />
+      <SpineAvatar name={hashKey} width={w} height={h} mode={mode} animated={animated} />
     </span>
   )
 }

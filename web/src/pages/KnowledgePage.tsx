@@ -249,7 +249,7 @@ export default function KnowledgePage() {
         {/* Department Knowledge */}
         {deptList.length > 0 && (
           <section className="flex flex-col gap-3">
-            <p className="text-xs text-muted-foreground/50">Department knowledge · injected for all agents in a department</p>
+            <p className="text-xs text-muted-foreground/50">Team knowledge · injected for all agents in a team</p>
             <div className="flex flex-col gap-2">
               {deptList.map(dept => (
                 <DeptSection

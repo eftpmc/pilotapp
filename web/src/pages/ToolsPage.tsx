@@ -376,7 +376,7 @@ function ToolCard({ tool, deptList, deptToolIds, employeeToolIds, onEdit, onDele
       {/* Department assignments */}
       {deptList.length > 0 && (
         <div className="px-4 pb-4 border-t border-border/40 pt-3">
-          <p className="text-xs font-semibold text-muted-foreground/60 mb-2">Departments</p>
+          <p className="text-xs font-semibold text-muted-foreground/60 mb-2">Teams</p>
           <div className="flex flex-wrap gap-1.5">
             {deptList.map(dept => {
               const assigned = deptToolIds.has(dept.id)

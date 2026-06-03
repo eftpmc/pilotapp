@@ -5,6 +5,7 @@ import Layout from './components/Layout'
 import ProjectLayout from './components/ProjectLayout'
 import OverviewPage from './pages/OverviewPage'
 import AgentsPage from './pages/AgentsPage'
+import AgentPage from './pages/AgentPage'
 import KnowledgePage from './pages/KnowledgePage'
 import ProjectsPage from './pages/ProjectsPage'
 import ProjectDetailPage from './pages/ProjectDetailPage'
@@ -32,6 +33,7 @@ export default function App() {
             <Route index                element={<OverviewPage />} />
             <Route path="work"          element={<Navigate to="/" replace />} />
             <Route path="agents"        element={<AgentsPage />} />
+            <Route path="agents/:id"    element={<AgentPage />} />
             <Route path="projects"      element={<ProjectsPage />} />
             <Route path="knowledge"     element={<KnowledgePage />} />
             <Route path="tools"         element={<ToolsPage />} />
