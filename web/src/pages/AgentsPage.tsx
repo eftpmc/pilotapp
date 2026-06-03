@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { AgentAvatar } from '@/components/AgentAvatar'
+import { SpineAvatar } from '@/components/SpineAvatar'
 import { cn } from '@/lib/utils'
 import { fmtSecs, useElapsed } from '@/lib/time'
 import { BookOpen, MoreHorizontal, Pencil, Trash2, Wrench } from 'lucide-react'

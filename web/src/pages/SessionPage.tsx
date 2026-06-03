@@ -10,7 +10,9 @@ import { ArrowLeft, ChevronDown, ChevronRight } from 'lucide-react'
 
 const MAX_LINES = 2000
 
-interface Line { text: string; kind: 'text' | 'tool' | 'stderr' }
+interface Line { text: string; kind: 'text' | 'tool' | 'tool-result' | 'thinking' | 'stderr' | 'mcp-error' }
+
+interface TokenStats { input: number; output: number; cacheRead: number; costUsd: number | null }
 
 interface TurnData {
   id: string
@@ -30,6 +32,19 @@ function formatToolCall(name: string, input: Record<string, unknown>): string {
   }
   const parts = entries.slice(0, 2).map(([k, v]) => `${k}: ${String(v).slice(0, 35)}`)
   return `▸ ${name}  ${parts.join('  ')}`
+}
+
+function formatToolResult(content: unknown): string | null {
+  if (typeof content === 'string') {
+    const t = content.trim()
+    return t.length > 0 ? (t.length > 180 ? '  ' + t.slice(0, 178) + '…' : '  ' + t) : null
+  }
+  if (Array.isArray(content)) {
+    const texts = content.filter((c: any) => c.type === 'text').map((c: any) => c.text?.trim()).filter(Boolean)
+    const joined = texts.join(' ')
+    return joined.length > 0 ? (joined.length > 180 ? '  ' + joined.slice(0, 178) + '…' : '  ' + joined) : null
+  }
+  return null
 }
 
 function ColoredDiff({ raw }: { raw: string }) {
@@ -82,7 +97,7 @@ function ReviewerPickerButton({ agentList, onPick }: { agentList: Agent[]; onPic
               onMouseOver={e => (e.currentTarget.style.background = 'var(--panel)')}
               onMouseOut={e => (e.currentTarget.style.background = 'none')}
             >
-              <AgentAvatar agent={a} size={20} />{a.name}
+              <AgentAvatar agent={a} size={28} />{a.name}
             </button>
           ))}
         </div>
@@ -195,8 +210,30 @@ function shortBranchName(branch?: string) {
 // Output line renderer
 // ---------------------------------------------------------------------------
 
-function OutputLines({ lines, done, exitCode, elapsedSecs, isRunning }: {
-  lines: Line[]; done: boolean; exitCode: string | null; elapsedSecs: number; isRunning: boolean
+function lineColor(kind: Line['kind']): string {
+  if (kind === 'tool')        return 'var(--ember)'
+  if (kind === 'tool-result') return 'var(--muted)'
+  if (kind === 'thinking')    return 'oklch(0.55 0.08 280)'
+  if (kind === 'stderr')      return 'var(--muted)'
+  if (kind === 'mcp-error')   return 'var(--red)'
+  return 'var(--ink-2)'
+}
+
+function TokenBar({ stats }: { stats: TokenStats }) {
+  const fmt = (n: number) => n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n)
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--rule-soft)' }}>
+      <span style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--muted)' }}>
+        in {fmt(stats.input)} · out {fmt(stats.output)}
+        {stats.cacheRead > 0 && ` · cache hit ${fmt(stats.cacheRead)}`}
+        {stats.costUsd != null && ` · $${stats.costUsd.toFixed(4)}`}
+      </span>
+    </div>
+  )
+}
+
+function OutputLines({ lines, done, exitCode, elapsedSecs, isRunning, tokens }: {
+  lines: Line[]; done: boolean; exitCode: string | null; elapsedSecs: number; isRunning: boolean; tokens?: TokenStats
 }) {
   const bottomRef = useRef<HTMLDivElement>(null)
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [lines])
@@ -214,7 +251,8 @@ function OutputLines({ lines, done, exitCode, elapsedSecs, isRunning }: {
         <div key={i} style={{
           fontFamily: 'var(--font-mono)', fontSize: 12.5, lineHeight: 1.85,
           whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-          color: line.kind === 'tool' ? 'var(--ember)' : line.kind === 'stderr' ? 'var(--muted)' : 'var(--ink-2)',
+          color: lineColor(line.kind),
+          opacity: line.kind === 'tool-result' || line.kind === 'thinking' ? 0.7 : 1,
         }}>
           {line.text}
         </div>
@@ -225,6 +263,7 @@ function OutputLines({ lines, done, exitCode, elapsedSecs, isRunning }: {
           process exited {exitCode ?? '0'} · {fmtSecs(elapsedSecs)}
         </p>
       )}
+      {done && tokens && (tokens.input > 0 || tokens.output > 0) && <TokenBar stats={tokens} />}
       <div ref={bottomRef} />
     </div>
   )
@@ -304,7 +343,8 @@ function TurnCard({ turn, isActive, elapsedSecs }: { turn: TurnData; isActive: b
             <div key={i} style={{
               fontFamily: 'var(--font-mono)', fontSize: 12.5, lineHeight: 1.85,
               whiteSpace: 'pre-wrap', wordBreak: 'break-word', marginTop: i === 0 ? 12 : 0,
-              color: line.kind === 'tool' ? 'var(--ember)' : line.kind === 'stderr' ? 'var(--muted)' : 'var(--ink-2)',
+              color: lineColor(line.kind),
+              opacity: line.kind === 'tool-result' || line.kind === 'thinking' ? 0.7 : 1,
             }}>
               {line.text}
             </div>
@@ -339,6 +379,10 @@ export default function SessionPage() {
   // Turn-based state
   const [turns, setTurns]               = useState<TurnData[]>([])
   const activeTurnRef                   = useRef<string | null>(null)
+
+  // Token stats (accumulated from stream-json)
+  const [tokens, setTokens]             = useState<TokenStats>({ input: 0, output: 0, cacheRead: 0, costUsd: null })
+  const tokensRef                       = useRef<TokenStats>({ input: 0, output: 0, cacheRead: 0, costUsd: null })
 
   const [clarification, setClarification] = useState<{ id: string; question: string; options?: string[] } | null>(null)
   const [clarificationInput, setClarInput] = useState('')
@@ -377,6 +421,13 @@ export default function SessionPage() {
   const hasTurns  = turns.length > 0
   const activeRunning = isRunning || (hasTurns && turns[turns.length - 1]?.status === 'running')
 
+  // Seed token stats from server data when loading a completed session
+  const sessionTokens: TokenStats | undefined = session?.inputTokens != null ? {
+    input: session.inputTokens, output: session.outputTokens ?? 0,
+    cacheRead: session.cacheReadTokens ?? 0, costUsd: session.totalCostUsd ?? null,
+  } : undefined
+  const displayTokens = (tokens.input > 0 || tokens.output > 0) ? tokens : sessionTokens
+
   const elapsedSecs = useElapsed(task?.startedAt ?? session?.createdAt, activeRunning)
 
   const merge         = useMutation({ mutationFn: () => sessions.merge(id!),   onSuccess: () => { qc.invalidateQueries({ queryKey: ['sessions'] }); refetchSession() } })
@@ -414,6 +465,8 @@ export default function SessionPage() {
       ws = new WebSocket(`${proto}://${location.host}/ws?token=${token}`)
       ws.onopen = () => {
         delay = 1000
+        const fresh = { input: 0, output: 0, cacheRead: 0, costUsd: null }
+        tokensRef.current = fresh; setTokens(fresh)
         setLegacyLines([]); setDone(false); setExitCode(null); setTurns([]); activeTurnRef.current = null; bufferRef.current = ''
         ws!.send(JSON.stringify({ type: 'subscribe', sessionId: id }))
         ws!.send(JSON.stringify({ type: 'subscribe-global' }))
@@ -422,32 +475,49 @@ export default function SessionPage() {
         try {
           const msg = JSON.parse(e.data)
 
-          // Global events — clarification lifecycle
+          // Global events
           if (msg.type === 'global-event') {
             if (msg.eventType === 'session.clarification_requested' && msg.sessionId === id) {
-              const token = localStorage.getItem('token')
-              fetch(`/sessions/${id}/clarifications`, { headers: { Authorization: `Bearer ${token}` } })
-                .then(r => r.json())
-                .then((items: { id: string; question: string; options?: string[]; respondedAt?: string }[]) => {
-                  const pending = items.find(c => !c.respondedAt)
-                  if (pending) { setClarification({ id: pending.id, question: pending.question, options: pending.options }); setClarInput('') }
-                })
-                .catch(() => {})
+              // Fallback: fetch from server if we missed the inline stream event
+              if (!clarification) {
+                const token = localStorage.getItem('token')
+                fetch(`/sessions/${id}/clarifications`, { headers: { Authorization: `Bearer ${token}` } })
+                  .then(r => r.json())
+                  .then((items: { id: string; question: string; options?: string[]; respondedAt?: string }[]) => {
+                    const pending = items.find(c => !c.respondedAt)
+                    if (pending) { setClarification({ id: pending.id, question: pending.question, options: pending.options }); setClarInput('') }
+                  })
+                  .catch(() => {})
+              }
               refetchSession()
             }
             if (msg.eventType === 'session.clarification_responded' && msg.sessionId === id) {
               setClarification(null); setClarInput(''); refetchSession()
             }
+            if (msg.eventType === 'session.review_completed' && (msg.sessionId === id || msg.sessionId === session?.parentSessionId)) {
+              refetchSession()
+            }
+            return
+          }
+
+          // Inline clarification — sent directly on session stream
+          if (msg.type === 'clarification' && msg.sessionId === id) {
+            try {
+              const c = JSON.parse(msg.data)
+              setClarification({ id: c.id, question: c.question, options: c.options ?? undefined })
+              setClarInput('')
+            } catch {}
             return
           }
 
           if (msg.type === 'done') {
-            setDone(true); setExitCode(String(msg.data ?? '0')); refetchSession(); return
+            setDone(true); setExitCode(String(msg.data ?? '0'))
+            setTokens({ ...tokensRef.current }); refetchSession(); return
           }
           if (msg.type === 'turn_start') {
-            const { turnId, turnNumber, prompt } = JSON.parse(msg.data)
+            const { turnId, turnNumber, prompt: p } = JSON.parse(msg.data)
             activeTurnRef.current = turnId
-            setTurns(prev => [...prev, { id: turnId, number: turnNumber, prompt, lines: [], status: 'running' }])
+            setTurns(prev => [...prev, { id: turnId, number: turnNumber, prompt: p, lines: [], status: 'running' }])
             setDone(false); setExitCode(null)
             return
           }
@@ -455,7 +525,7 @@ export default function SessionPage() {
             const { turnId, exitCode: ec } = JSON.parse(msg.data)
             activeTurnRef.current = null
             setTurns(prev => prev.map(t => t.id === turnId ? { ...t, status: ec === '0' ? 'done' : 'error', exitCode: ec } : t))
-            setDone(true); setExitCode(ec); refetchSession()
+            setDone(true); setExitCode(ec); setTokens({ ...tokensRef.current }); refetchSession()
             return
           }
           if (msg.type === 'stdout') processChunk(msg.data)
@@ -497,13 +567,41 @@ export default function SessionPage() {
     if (!line) return
     try {
       const obj = JSON.parse(line)
+
       if (obj.type === 'assistant') {
         for (const block of (obj.message?.content ?? [])) {
-          if (block.type === 'text' && block.text?.trim())  dispatchLine(block.text.trim(), 'text')
-          else if (block.type === 'tool_use')               dispatchLine(formatToolCall(block.name, block.input ?? {}), 'tool')
+          if (block.type === 'text' && block.text?.trim()) {
+            dispatchLine(block.text.trim(), 'text')
+          } else if (block.type === 'tool_use') {
+            dispatchLine(formatToolCall(block.name, block.input ?? {}), 'tool')
+          } else if (block.type === 'thinking' && block.thinking?.trim()) {
+            const preview = block.thinking.trim().replace(/\n/g, ' ').slice(0, 140)
+            dispatchLine(`  💭 ${preview}${block.thinking.length > 140 ? '…' : ''}`, 'thinking')
+          }
         }
-      } else if (obj.type === 'result' && obj.result?.trim()) {
-        dispatchLine(obj.result.trim(), 'text')
+        // Accumulate token counts
+        const usage = obj.message?.usage
+        if (usage) {
+          tokensRef.current = {
+            input:     tokensRef.current.input     + (usage.input_tokens     ?? 0),
+            output:    tokensRef.current.output    + (usage.output_tokens    ?? 0),
+            cacheRead: tokensRef.current.cacheRead + (usage.cache_read_input_tokens ?? 0),
+            costUsd:   tokensRef.current.costUsd,
+          }
+        }
+      } else if (obj.type === 'user') {
+        // Tool results come back as user messages
+        for (const block of (obj.message?.content ?? [])) {
+          if (block.type === 'tool_result') {
+            const preview = formatToolResult(block.content)
+            if (preview) dispatchLine(preview, 'tool-result')
+          }
+        }
+      } else if (obj.type === 'result') {
+        if (obj.result?.trim()) dispatchLine(obj.result.trim(), 'text')
+        if (typeof obj.total_cost_usd === 'number') {
+          tokensRef.current = { ...tokensRef.current, costUsd: obj.total_cost_usd }
+        }
       }
     } catch { if (line) dispatchLine(line, 'text') }
   }
@@ -542,7 +640,7 @@ export default function SessionPage() {
         </button>
 
         <div className="flex items-start gap-3 mb-4 flex-wrap">
-          <AgentAvatar agent={agent} size={34} running={activeRunning} />
+          <AgentAvatar agent={agent} size={44} running={activeRunning} />
           <div className="flex-1 min-w-0">
             <h1 className="text-lg font-semibold tracking-tight text-foreground leading-snug">
               {task?.title ?? session?.branch ?? 'Session'}
@@ -638,7 +736,7 @@ export default function SessionPage() {
               {legacyLines.length > 0 && (
                 <div style={{ marginBottom: 24, paddingBottom: 20, borderBottom: '1px solid var(--rule)' }}>
                   <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Initial run</p>
-                  <OutputLines lines={legacyLines} done={done && turns.length === 0} exitCode={exitCode} elapsedSecs={elapsedSecs} isRunning={isRunning && turns.length === 0} />
+                  <OutputLines lines={legacyLines} done={done && turns.length === 0} exitCode={exitCode} elapsedSecs={elapsedSecs} isRunning={isRunning && turns.length === 0} tokens={displayTokens} />
                 </div>
               )}
               {/* Turn cards */}
@@ -654,7 +752,7 @@ export default function SessionPage() {
           ) : (
             /* Legacy flat output */
             <div>
-              <OutputLines lines={legacyLines} done={done} exitCode={exitCode} elapsedSecs={elapsedSecs} isRunning={isRunning} />
+              <OutputLines lines={legacyLines} done={done} exitCode={exitCode} elapsedSecs={elapsedSecs} isRunning={isRunning} tokens={displayTokens} />
               <div ref={legacyBottomRef} />
             </div>
           )}

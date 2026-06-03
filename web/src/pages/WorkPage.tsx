@@ -80,7 +80,7 @@ function AgentPicker({ agentList, onAssign }: { agentList: Agent[]; onAssign: (i
           {agentList.map(e => (
             <button key={e.id} onClick={() => { onAssign(e.id); setOpen(false) }}
               className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors cursor-pointer bg-transparent border-none text-left">
-              <AgentAvatar agent={e} size={18} />
+              <AgentAvatar agent={e} size={26} />
               {e.name}
             </button>
           ))}
@@ -198,7 +198,7 @@ function WorkingCard({ session, agent, task, projectName, taskList, onClick }: {
       </div>
 
       <div className="flex items-center gap-2 px-3.5 pb-3 border-t border-border/30 pt-2.5">
-        <AgentAvatar agent={agent} size={18} />
+        <AgentAvatar agent={agent} size={26} />
         <span className="text-xs text-muted-foreground">{agent?.name ?? '—'}</span>
         {projectName && <span className="text-[11px] text-muted-foreground/40">· {projectName}</span>}
         <span className="font-mono text-[10px] text-muted-foreground/30">#{shortId}</span>
@@ -227,7 +227,7 @@ function ReviewerPicker({ agentList, onPick }: { agentList: Agent[]; onPick: (id
           {agentList.map(e => (
             <button key={e.id} onClick={() => { onPick(e.id); setOpen(false) }}
               className="w-full flex items-center gap-2 px-3 py-2 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors cursor-pointer bg-transparent border-none text-left">
-              <AgentAvatar agent={e} size={16} />
+              <AgentAvatar agent={e} size={24} />
               {e.name}
             </button>
           ))}
@@ -276,7 +276,7 @@ function ReviewCard({ session, agent, task, projectName, hasRemote, allAgents, o
       </div>
 
       <div className="flex items-center gap-2 px-3.5 pb-2.5">
-        <AgentAvatar agent={agent} size={18} />
+        <AgentAvatar agent={agent} size={26} />
         <span className="text-xs text-muted-foreground">{agent?.name ?? '—'}</span>
         {projectName && <span className="text-[11px] text-muted-foreground/40">· {projectName}</span>}
       </div>
@@ -641,7 +641,7 @@ function ShiftStrip({ shiftList, agentList, onViewReport }: {
                 : 'bg-card border-border/50 hover:border-border cursor-pointer'
             )}
           >
-            {emp && <AgentAvatar agent={emp} size={14} />}
+            {emp && <AgentAvatar agent={emp} size={22} />}
             <span className="font-medium text-foreground">{emp?.name ?? '—'}</span>
             <span className="text-muted-foreground font-mono">{shift.doneCount}/{shift.taskCount}</span>
             {isRunning ? (
@@ -674,7 +674,7 @@ function ShiftReportDialog({ shift, agentList, onClose }: {
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            {emp && <AgentAvatar agent={emp} size={20} />}
+            {emp && <AgentAvatar agent={emp} size={28} />}
             Shift Report — {emp?.name ?? 'Unknown'}
           </DialogTitle>
         </DialogHeader>

@@ -6,9 +6,12 @@ import { WebSocketServer } from 'ws';
 import app from './app';
 import { attachWebSocket } from './services/socket';
 import { failInterruptedWork } from './services/lifecycle';
+import { resumePendingTasks } from './services/agents';
 
-// On startup: mark any sessions that were mid-run when the server died as error.
+// Mark sessions that were mid-run as error, reset their tasks to pending for re-assignment.
 failInterruptedWork();
+// Re-assign any pending tasks that were left in queue (boot-time sweep).
+void resumePendingTasks();
 
 // Clean up MCP config files left over from a crashed or killed server.
 const DATA_DIR = path.resolve(process.env.DATA_DIR ?? './data');

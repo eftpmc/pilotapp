@@ -28,13 +28,14 @@ export interface Task {
   id: string; projectId: string; title: string; prompt: string;
   baseBranch: string; status: TaskStatus; priority: number;
   size: TaskSize; agentId?: string; sessionId?: string; shiftId?: string;
-  leadSessionId?: string;
+  leadSessionId?: string; dependsOn?: string[];
   createdAt: string; startedAt?: string; completedAt?: string;
 }
 export interface Session {
   id: string; agentId: string; projectId: string; workTaskId?: string; specId?: string;
   parentSessionId?: string; reviewVerdict?: string; shiftId?: string; journal?: string;
   runnerSessionId?: string;
+  inputTokens?: number; outputTokens?: number; cacheReadTokens?: number; totalCostUsd?: number;
   provider: AgentProvider; branch: string; worktreePath: string;
   status: SessionStatus; createdAt: string;
 }

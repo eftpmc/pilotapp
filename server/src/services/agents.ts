@@ -272,7 +272,9 @@ function captureReview(reviewSessionId: string, worktreePath: string): void {
 // Shift auto-advance
 // ---------------------------------------------------------------------------
 
-interface TaskRowMin { id: string; prompt: string; base_branch: string; project_id: string }
+const SYNTHESIS_TITLE = '[Synthesis] Review results';
+
+interface TaskRowMin { id: string; prompt: string; base_branch: string; project_id: string; depends_on?: string | null }
 interface ProjectRowMin { id: string; name: string; repo_path: string; role: string; created_at: string }
 interface AgentRowMin  { id: string; provider: string }
 
@@ -314,7 +316,7 @@ function generateShiftReport(shiftId: string): void {
 
 export async function advanceShift(shiftId: string, agentId: string, userId: string): Promise<void> {
   const nextTask = db.prepare(
-    "SELECT * FROM tasks WHERE shift_id = ? AND status = 'pending' ORDER BY created_at ASC LIMIT 1"
+    "SELECT id, prompt, base_branch, project_id, depends_on FROM tasks WHERE shift_id = ? AND status = 'pending' ORDER BY created_at ASC LIMIT 1"
   ).get(shiftId) as TaskRowMin | undefined;
 
   if (!nextTask) {
@@ -322,6 +324,19 @@ export async function advanceShift(shiftId: string, agentId: string, userId: str
     db.prepare("UPDATE shifts SET status = 'completed', completed_at = ? WHERE id = ?").run(completedAt, shiftId);
     generateShiftReport(shiftId);
     return;
+  }
+
+  // Respect depends_on — same logic as tryAssignPendingTasks
+  if (nextTask.depends_on) {
+    let deps: string[];
+    try { deps = JSON.parse(nextTask.depends_on); } catch { deps = []; }
+    if (deps.length > 0) {
+      const placeholders = deps.map(() => '?').join(',');
+      const blocking = db.prepare(
+        `SELECT COUNT(*) as count FROM tasks WHERE id IN (${placeholders}) AND status NOT IN ('done','failed')`
+      ).get(...deps) as { count: number };
+      if (blocking.count > 0) return;
+    }
   }
 
   const agent   = db.prepare('SELECT id, provider FROM agents WHERE id = ?').get(agentId) as AgentRowMin | undefined;
@@ -355,12 +370,146 @@ export async function advanceShift(shiftId: string, agentId: string, userId: str
 }
 
 // ---------------------------------------------------------------------------
+// Shared helper: create a session and run it for a task
+// ---------------------------------------------------------------------------
+
+interface AgentMin { id: string; provider: string }
+
+async function assignAndRunTask(
+  taskId: string, agent: AgentMin, projectId: string, baseBranch: string, userId: string,
+): Promise<void> {
+  const task    = db.prepare('SELECT prompt FROM tasks WHERE id = ?').get(taskId) as { prompt: string } | undefined;
+  const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(projectId) as ProjectRowMin | undefined;
+  if (!task || !project) return;
+
+  const sessionId  = uuid();
+  const branch     = `agent/${sessionId}`;
+  const now        = new Date().toISOString();
+  const projectObj = { id: project.id, name: project.name, repoPath: project.repo_path, role: project.role as any, createdAt: project.created_at };
+
+  let worktreePath: string | undefined;
+  try {
+    worktreePath = await createWorktree(projectObj, sessionId, baseBranch);
+    // Re-check task is still pending — concurrent callers may have claimed it during the async worktree create
+    const taskStatus = db.prepare("SELECT status FROM tasks WHERE id = ?").get(taskId) as { status: string } | undefined;
+    if (taskStatus?.status !== 'pending') {
+      void removeWorktree(projectObj, worktreePath);
+      return;
+    }
+    db.prepare(
+      'INSERT INTO sessions (id, user_id, agent_id, project_id, work_task_id, provider, branch, worktree_path, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(sessionId, userId, agent.id, projectId, taskId, agent.provider, branch, worktreePath, 'idle', now);
+    assignTaskToSession(taskId, agent.id, sessionId, now);
+    void runAgent(
+      { id: sessionId, agentId: agent.id, projectId, workTaskId: taskId,
+        provider: agent.provider as AgentProvider, branch, worktreePath, status: 'idle', createdAt: now },
+      task.prompt, userId, agent.id,
+    );
+  } catch (err) {
+    console.error('[auto-assign] Failed:', err);
+    if (worktreePath) void removeWorktree(projectObj, worktreePath);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Dependency-aware auto-assign sweep — called after any task completes
+// ---------------------------------------------------------------------------
+
+async function tryAssignPendingTasks(userId: string, projectId: string): Promise<void> {
+  const pending = db.prepare(`
+    SELECT id, prompt, base_branch, depends_on FROM tasks
+    WHERE project_id = ? AND status = 'pending'
+    ORDER BY priority DESC, created_at ASC LIMIT 10
+  `).all(projectId) as { id: string; prompt: string; base_branch: string; depends_on: string | null }[];
+
+  for (const task of pending) {
+    if (task.depends_on) {
+      let deps: string[];
+      try { deps = JSON.parse(task.depends_on); } catch { continue; }
+      if (deps.length > 0) {
+        const placeholders = deps.map(() => '?').join(',');
+        const blocking = db.prepare(
+          `SELECT COUNT(*) as count FROM tasks WHERE id IN (${placeholders}) AND status NOT IN ('done','failed')`
+        ).get(...deps) as { count: number };
+        if (blocking.count > 0) continue;
+      }
+    }
+
+    const agent = db.prepare(`
+      SELECT a.id, a.provider FROM agents a
+      WHERE a.user_id = ?
+        AND (a.role = 'worker' OR a.role = 'any')
+        AND a.id NOT IN (SELECT agent_id FROM sessions WHERE status IN ('running','idle','waiting'))
+      ORDER BY a.created_at ASC LIMIT 1
+    `).get(userId) as AgentMin | null;
+
+    if (!agent) break; // no free agents — stop looking
+    await assignAndRunTask(task.id, agent, projectId, task.base_branch, userId);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Lead continuation — fire a synthesis task when all subtasks finish
+// ---------------------------------------------------------------------------
+
+async function checkLeadContinuation(completedTaskId: string, userId: string): Promise<void> {
+  const task = db.prepare('SELECT lead_session_id, project_id FROM tasks WHERE id = ?').get(completedTaskId) as
+    { lead_session_id: string | null; project_id: string } | undefined;
+  if (!task?.lead_session_id) return;
+
+  // Are all subtasks terminal?
+  const stats = db.prepare(`
+    SELECT COUNT(*) as total,
+           SUM(CASE WHEN status IN ('done','failed') THEN 1 ELSE 0 END) as terminal
+    FROM tasks WHERE lead_session_id = ? AND title != ?
+  `).get(task.lead_session_id, SYNTHESIS_TITLE) as { total: number; terminal: number };
+  if (stats.total === 0 || stats.terminal < stats.total) return;
+
+  // Don't double-create
+  const already = db.prepare("SELECT id FROM tasks WHERE lead_session_id = ? AND title = ?").get(task.lead_session_id, SYNTHESIS_TITLE);
+  if (already) return;
+
+  // Build synthesis prompt from all subtask journals
+  const subtasks = db.prepare(`
+    SELECT t.title, t.status,
+      (SELECT s.journal FROM sessions s WHERE s.work_task_id = t.id AND s.journal IS NOT NULL ORDER BY s.created_at DESC LIMIT 1) as journal
+    FROM tasks t WHERE t.lead_session_id = ? AND title != ?
+    ORDER BY t.created_at ASC
+  `).all(task.lead_session_id, SYNTHESIS_TITLE) as { title: string; status: string; journal: string | null }[];
+
+  const summaries = subtasks.map((t, i) =>
+    `${i + 1}. **${t.title}** — ${t.status}\n${t.journal?.replace(/^/gm, '   ') ?? '   (no journal)'}`
+  ).join('\n\n');
+
+  const leadSession = db.prepare('SELECT agent_id FROM sessions WHERE id = ?').get(task.lead_session_id) as { agent_id: string } | undefined;
+  if (!leadSession) return;
+  const agent = db.prepare('SELECT id, provider FROM agents WHERE id = ?').get(leadSession.agent_id) as AgentMin | undefined;
+  if (!agent) return;
+
+  const synthTaskId = uuid();
+  const now = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO tasks (id, user_id, project_id, title, prompt, base_branch, status, priority, size, lead_session_id, created_at)
+    VALUES (?, ?, ?, ?, ?, 'main', 'pending', 10, 's', ?, ?)
+  `).run(
+    synthTaskId, userId, task.project_id, SYNTHESIS_TITLE,
+    `All delegated tasks have completed. Review the outcomes:\n\n${summaries}\n\nCall \`append_journal\` with your synthesis, then \`complete_task\` with a brief summary.`,
+    task.lead_session_id, now,
+  );
+  writeEvent(userId, 'task.created', { taskId: synthTaskId, projectId: task.project_id });
+
+  const busy = db.prepare("SELECT id FROM sessions WHERE agent_id = ? AND status IN ('running','idle','waiting') LIMIT 1").get(agent.id);
+  if (!busy) await assignAndRunTask(synthTaskId, agent, task.project_id, 'main', userId);
+}
+
+// ---------------------------------------------------------------------------
 // Lead task capture — MCP create_task is the only supported path
 // ---------------------------------------------------------------------------
 
-async function captureTasks(session: SessionRef): Promise<void> {
+async function captureTasks(session: SessionRef, exitCode: number): Promise<void> {
   const { count } = db.prepare('SELECT COUNT(*) as count FROM tasks WHERE lead_session_id = ?').get(session.id) as { count: number };
   if (count === 0) return; // lead created no tasks — leave session in done/error for inspection
+  if (exitCode !== 0) return; // lead crashed — leave as error so user can inspect; subtasks continue independently
 
   markSessionMerged(session.id);
   if (session.workTaskId) markTaskDone(session.workTaskId);
@@ -431,13 +580,17 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
     ? `\n\n---\n\nYou are a **Lead Agent**. Your only job is to coordinate — you must NOT write code or implement features yourself.\n\nYou have a \`pilot\` MCP server connected. These tools are available right now as direct MCP calls — do NOT search for them with ToolSearch or any other tool discovery mechanism:\n\n- \`list_agents\` — see available agents, their roles, and current status\n- \`create_task\` — create a subtask (title, prompt, baseBranch, role, priority)\n- \`get_task_status\` — check whether a subtask completed and read its journal\n- \`request_clarification\` — ask the user if the brief is ambiguous\n- \`append_journal\` — record your plan and decisions\n- \`skip_task\` — use this if the MCP tools are not responding\n\nRoles: "worker" (writes code), "reviewer" (reviews diffs), "planner" (writes specs)\n\n**Required first step**: Call \`list_agents\` immediately. If it fails or returns an error, call \`skip_task\` with reason "MCP connectivity failure" and stop — do NOT proceed without MCP tools.\n\nRules:\n- Never write, edit, or implement code\n- Keep each task focused — completable in one session\n- Use \`get_task_status\` to check subtask outcomes before creating dependent tasks`
     : `\n\n---\n\nYou have access to a \`pilot\` MCP server. Use these tools as you work:\n\n- \`append_journal\` — append progress notes at any point; call this often so partial work survives a crash\n- \`update_journal\` — replace the full journal; use this for your final summary when done\n- \`request_clarification\` — if you hit genuine ambiguity where guessing would waste significant effort, ask the user. They will respond in real time.\n- \`skip_task\` — if the task is blocked by something outside your control (missing dependency, broken environment), call this with a reason instead of failing silently.\n- \`get_quota_status\` — check if your API connection has rate limits before starting expensive operations.`;
 
-  const promptParts = [
-    knowledgeCtx,
-    personality,
-    prevJournal ? `# Handoff from Previous Session\n\n${prevJournal}` : '',
-    prompt + journalInstruction,
-  ].filter(Boolean);
-  const effectivePrompt = promptParts.join('\n\n---\n\n');
+  // Inject project README / CLAUDE.md if present — agents understand conventions better
+  let projectCtx = '';
+  for (const fname of ['CLAUDE.md', 'README.md']) {
+    try {
+      const content = fs.readFileSync(path.join(session.worktreePath, fname), 'utf-8');
+      if (content.trim()) { projectCtx = `# Project Guide (${fname})\n\n${content.slice(0, 8000)}`; break; }
+    } catch { /* not present */ }
+  }
+
+  const effectivePromptParts = [knowledgeCtx, projectCtx, personality, prevJournal ? `# Handoff from Previous Session\n\n${prevJournal}` : '', prompt + journalInstruction].filter(Boolean);
+  const effectivePrompt      = effectivePromptParts.join('\n\n---\n\n');
 
   const { cmd, args } = buildCommand(session.provider, effectivePrompt, model, mcpConfigPath);
   const env = resolvedKey
@@ -450,6 +603,7 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
   fs.writeFileSync(sessionLogPath(session.id), '');
 
   let stderrAccum = '';
+  let inputTokens = 0, outputTokens = 0, cacheReadTokens = 0, totalCostUsd: number | null = null;
 
   const broadcast = (type: string, data: string) => {
     const msg = JSON.stringify({ type, sessionId: session.id, data });
@@ -496,7 +650,6 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
   proc.stdout.on('data', (chunk: Buffer) => {
     const text = chunk.toString();
     broadcast('stdout', text);
-    if (runnerSidCaptured) return;
     stdoutLineBuf += text;
     const lines = stdoutLineBuf.split('\n');
     stdoutLineBuf = lines.pop() ?? '';
@@ -504,11 +657,24 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
       if (!line.trim()) continue;
       try {
         const obj = JSON.parse(line.trim());
-        const sid = obj.session_id ?? obj.sessionId;
-        if (sid && typeof sid === 'string' && sid.length > 4) {
-          db.prepare('UPDATE sessions SET runner_session_id = ? WHERE id = ?').run(sid, session.id);
-          runnerSidCaptured = true;
-          break;
+        // Capture runner session ID for turn continuation
+        if (!runnerSidCaptured) {
+          const sid = obj.session_id ?? obj.sessionId;
+          if (sid && typeof sid === 'string' && sid.length > 4) {
+            db.prepare('UPDATE sessions SET runner_session_id = ? WHERE id = ?').run(sid, session.id);
+            runnerSidCaptured = true;
+          }
+        }
+        // Capture token usage from assistant messages
+        const usage = obj.message?.usage;
+        if (usage) {
+          inputTokens     += usage.input_tokens     ?? 0;
+          outputTokens    += usage.output_tokens    ?? 0;
+          cacheReadTokens += usage.cache_read_input_tokens ?? 0;
+        }
+        // Capture final cost from result line
+        if (obj.type === 'result' && typeof obj.total_cost_usd === 'number') {
+          totalCostUsd = obj.total_cost_usd;
         }
       } catch { /* not JSON — skip */ }
     }
@@ -531,6 +697,13 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
     setTimeout(() => completed.delete(session.id), COMPLETED_TTL_MS);
     active.delete(session.id);
     markSessionFinished(session.id, exitCode);
+
+    // Persist token usage
+    if (inputTokens > 0 || outputTokens > 0 || totalCostUsd !== null) {
+      db.prepare('UPDATE sessions SET input_tokens = ?, output_tokens = ?, cache_read_tokens = ?, total_cost_usd = ? WHERE id = ?')
+        .run(inputTokens, outputTokens, cacheReadTokens, totalCostUsd, session.id);
+    }
+
     writeEvent(userId, exitCode === 0 ? 'session.completed' : 'session.failed', { sessionId: session.id, taskId: session.workTaskId, projectId: session.projectId, agentId: session.agentId });
     if (mcpConfigPath) { try { fs.unlinkSync(mcpConfigPath); } catch { /* already gone */ } }
     if (session.specId) captureSpec(session.specId, session.worktreePath);
@@ -538,11 +711,16 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
       captureReview(session.id, session.worktreePath);
     } else if (isLead) {
       captureJournal(session.id, session.worktreePath);
-      void captureTasks(session); // always run — count > 0 branch dismisses even on non-zero exit
+      void captureTasks(session, exitCode);
     } else {
       captureJournal(session.id, session.worktreePath);
       if (session.shiftId && exitCode === 0) {
         void advanceShift(session.shiftId, session.agentId, userId);
+      }
+      // Check if any pending tasks are now unblocked, and trigger lead synthesis if applicable
+      if (session.workTaskId) {
+        void tryAssignPendingTasks(userId, session.projectId);
+        void checkLeadContinuation(session.workTaskId, userId);
       }
     }
     // Detect quota/rate-limit errors and mark the connection
@@ -656,7 +834,7 @@ export async function continueAgent(
   broadcast('stderr', `[pilot] Continuing ${cmd} (turn ${turnNumber})`);
   db.prepare("UPDATE sessions SET status = 'running' WHERE id = ?").run(session.id);
 
-  let runnerSidCaptured = !!runnerSessionId; // already have one, update if new one emitted
+  let runnerSidCaptured = false; // always parse — resume may emit a new session ID
   let stdoutLineBuf     = '';
 
   const proc = spawn(bin, args, { cwd: session.worktreePath, env, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -727,6 +905,13 @@ export async function continueAgent(
 // ---------------------------------------------------------------------------
 // Subscription
 // ---------------------------------------------------------------------------
+
+export async function resumePendingTasks(): Promise<void> {
+  const rows = db.prepare("SELECT DISTINCT user_id, project_id FROM tasks WHERE status = 'pending'").all() as { user_id: string; project_id: string }[];
+  for (const { user_id, project_id } of rows) {
+    await tryAssignPendingTasks(user_id, project_id);
+  }
+}
 
 export function broadcastToSession(sessionId: string, type: string, data: string): void {
   const entry = active.get(sessionId);

@@ -7,6 +7,8 @@ export interface SessionRow {
   journal: string | null; parent_session_id: string | null;
   review_verdict: string | null; shift_id: string | null;
   runner_session_id: string | null;
+  input_tokens: number | null; output_tokens: number | null;
+  cache_read_tokens: number | null; total_cost_usd: number | null;
 }
 
 export function toSession(r: SessionRow) {
@@ -19,6 +21,10 @@ export function toSession(r: SessionRow) {
     shiftId:          r.shift_id           ?? undefined,
     journal:          r.journal            ?? undefined,
     runnerSessionId:  r.runner_session_id  ?? undefined,
+    inputTokens:      r.input_tokens       ?? undefined,
+    outputTokens:     r.output_tokens      ?? undefined,
+    cacheReadTokens:  r.cache_read_tokens  ?? undefined,
+    totalCostUsd:     r.total_cost_usd     ?? undefined,
     provider: r.provider as AgentProvider,
     branch: r.branch, worktreePath: r.worktree_path, status: r.status, createdAt: r.created_at,
   };

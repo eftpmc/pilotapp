@@ -48,9 +48,9 @@ function getSession(id: string): SessionMin | undefined {
 // ---------------------------------------------------------------------------
 
 router.post('/tasks', async (req: Request, res: Response) => {
-  const { sessionId, title, prompt, baseBranch = 'main', role = 'worker', priority = 5 } = req.body as {
+  const { sessionId, title, prompt, baseBranch = 'main', role = 'worker', priority = 5, dependsOn = [] } = req.body as {
     sessionId: string; title: string; prompt: string;
-    baseBranch?: string; role?: string; priority?: number;
+    baseBranch?: string; role?: string; priority?: number; dependsOn?: string[];
   };
 
   if (!sessionId || !title || !prompt) {
@@ -63,15 +63,24 @@ router.post('/tasks', async (req: Request, res: Response) => {
   const taskId = uuid();
   const now    = new Date().toISOString();
 
+  const dependsOnJson = dependsOn.length > 0 ? JSON.stringify(dependsOn) : null;
   db.prepare(`
-    INSERT INTO tasks (id, user_id, project_id, title, prompt, base_branch, status, priority, size, lead_session_id, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, 'm', ?, ?)
-  `).run(taskId, session.user_id, session.project_id, title.trim(), prompt.trim(), baseBranch, Math.min(10, Math.max(0, Math.round(priority))), sessionId, now);
+    INSERT INTO tasks (id, user_id, project_id, title, prompt, base_branch, status, priority, size, lead_session_id, depends_on, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, 'm', ?, ?, ?)
+  `).run(taskId, session.user_id, session.project_id, title.trim(), prompt.trim(), baseBranch, Math.min(10, Math.max(0, Math.round(priority))), sessionId, dependsOnJson, now);
 
   writeEvent(session.user_id, 'task.created', { taskId, projectId: session.project_id, agentId: session.agent_id });
 
-  // Auto-assign to idle agent of requested role if possible
-  if (role !== 'reviewer') {
+  // Auto-assign to idle agent of requested role if possible (skip if dependencies not met)
+  const depsBlocked = dependsOn.length > 0 && (() => {
+    const placeholders = dependsOn.map(() => '?').join(',');
+    const blocking = db.prepare(
+      `SELECT COUNT(*) as count FROM tasks WHERE id IN (${placeholders}) AND status NOT IN ('done','failed')`
+    ).get(...dependsOn) as { count: number };
+    return blocking.count > 0;
+  })();
+
+  if (role !== 'reviewer' && !depsBlocked) {
     const idleAgent = db.prepare(`
       SELECT a.id, a.provider FROM agents a
       WHERE a.user_id = ?

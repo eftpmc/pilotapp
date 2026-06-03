@@ -43,7 +43,7 @@ function SessionCard({ session, agent, task, onClick }: {
       onMouseOver={e => { e.currentTarget.style.background = 'var(--panel-2)' }}
       onMouseOut={e => { e.currentTarget.style.background = 'var(--panel)' }}
     >
-      <AgentAvatar agent={agent} size={32} running={session.status === 'running'} />
+      <AgentAvatar agent={agent} size={40} running={session.status === 'running'} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <p style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {title}

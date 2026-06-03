@@ -244,3 +244,10 @@ migrate('024_clarifications', `
   );
   CREATE INDEX IF NOT EXISTS idx_clarifications_session_id ON clarifications (session_id);
 `);
+migrate('025_tasks_depends_on',    'ALTER TABLE tasks ADD COLUMN depends_on TEXT');
+migrate('026_sessions_tokens', `
+  ALTER TABLE sessions ADD COLUMN input_tokens INTEGER;
+  ALTER TABLE sessions ADD COLUMN output_tokens INTEGER;
+  ALTER TABLE sessions ADD COLUMN cache_read_tokens INTEGER;
+  ALTER TABLE sessions ADD COLUMN total_cost_usd REAL;
+`);

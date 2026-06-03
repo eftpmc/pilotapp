@@ -1,14 +1,9 @@
 import type { Agent } from '../api/client'
+import { SpineAvatar } from './SpineAvatar'
 
 const PALETTE = [
-  { bg: '#4B7EC8', fg: '#fff' },
-  { bg: '#3EA87A', fg: '#fff' },
-  { bg: '#C8784B', fg: '#fff' },
-  { bg: '#8B5BC8', fg: '#fff' },
-  { bg: '#3AACAC', fg: '#fff' },
-  { bg: '#C85A5A', fg: '#fff' },
-  { bg: '#8B8340', fg: '#fff' },
-  { bg: '#5C5CC8', fg: '#fff' },
+  '#4B7EC8', '#3EA87A', '#C8784B', '#8B5BC8',
+  '#3AACAC', '#C85A5A', '#8B8340', '#5C5CC8',
 ]
 
 function hashIndex(str: string): number {
@@ -29,17 +24,17 @@ export function AgentAvatar({
   running?: boolean
 }) {
   const displayName = (nameProp ?? agent?.name ?? '').trim()
-  const initials = displayName.length > 0 ? displayName.slice(0, 2).toUpperCase() : '?'
-  const fontSize = Math.round(size * 0.38)
+  if (!displayName) return null
+
+  const bg = PALETTE[hashIndex(displayName)]
   const br = size <= 24 ? 6 : size <= 36 ? 8 : 10
-  const { bg, fg } = PALETTE[displayName.length > 0 ? hashIndex(displayName) : 0]
 
   return (
     <span
       className={running ? 'av ring-green' : 'av'}
-      style={{ width: size, height: size, fontSize, flexShrink: 0, background: bg, color: fg, borderRadius: br }}
+      style={{ width: size, height: size, flexShrink: 0, borderRadius: br, overflow: 'hidden', background: bg }}
     >
-      {initials}
+      <SpineAvatar name={displayName} width={size} height={size} mode="head" />
     </span>
   )
 }

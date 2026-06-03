@@ -13,3 +13,7 @@ server/node_modules/
 server/dist/
 server/data/
 server/.env
+
+2dart
+.playwright-mcp
+.codex

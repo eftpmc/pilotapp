@@ -73,6 +73,7 @@ const TOOLS = [
         baseBranch: { type: 'string',  description: 'Base branch to work from (default: main)' },
         role:       { type: 'string',  enum: ['worker', 'reviewer', 'planner'], description: 'Agent role for this task' },
         priority:   { type: 'number', description: 'Priority 1–10, higher = more urgent (default: 5)' },
+        dependsOn:  { type: 'array', items: { type: 'string' }, description: 'Task IDs that must complete before this task starts' },
       },
       required: ['title', 'prompt'],
     },
@@ -189,6 +190,18 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: {}, required: [] },
   },
   {
+    name: 'wait_for_task',
+    description: 'Block until a task reaches a terminal state (done or failed), then return its status and journal. Use this to chain tasks: create a task, then wait for it before creating dependent tasks.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        taskId:     { type: 'string', description: 'Task ID to wait for' },
+        maxMinutes: { type: 'number', description: 'Maximum minutes to wait (default: 30)' },
+      },
+      required: ['taskId'],
+    },
+  },
+  {
     name: 'send_to_agent',
     description: 'Queue a follow-up prompt for another session. The target session must be done or in error state.',
     inputSchema: {
@@ -221,6 +234,7 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<{ 
           baseBranch: args.baseBranch ?? 'main',
           role:       args.role ?? 'worker',
           priority:   args.priority ?? 5,
+          dependsOn:  args.dependsOn ?? [],
         });
         const r = result as { id?: string; title?: string; error?: string };
         if (r.error) return err(`Failed to create task: ${r.error}`);
@@ -314,6 +328,20 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<{ 
         const r = result as { quotaStatus?: string; quotaResetAt?: string };
         if (r.quotaStatus === 'ok') return text('Quota OK — no rate limits active.');
         return text(`Quota status: ${r.quotaStatus}. Resets at: ${r.quotaResetAt ?? 'unknown'}`);
+      }
+
+      case 'wait_for_task': {
+        const taskId    = args.taskId as string;
+        const maxMs     = ((args.maxMinutes as number) ?? 30) * 60 * 1000;
+        const deadline  = Date.now() + maxMs;
+        while (Date.now() < deadline) {
+          const result = await callInternal('GET', `/internal/tasks/${taskId}`);
+          const r = result as { status?: string; error?: string };
+          if (r.error) return err(`Task not found: ${taskId}`);
+          if (r.status === 'done' || r.status === 'failed') return text(JSON.stringify(result, null, 2));
+          await new Promise(resolve => setTimeout(resolve, 10_000));
+        }
+        return err(`Timed out waiting for task ${taskId} after ${(args.maxMinutes as number) ?? 30} minutes`);
       }
 
       case 'send_to_agent': {

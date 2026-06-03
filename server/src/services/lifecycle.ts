@@ -63,7 +63,12 @@ export function resetTaskAfterSessionDiscard(taskId: string): void {
   ).run(taskId);
 }
 
-export function failInterruptedWork(completedAt = new Date().toISOString()): void {
+export function failInterruptedWork(): void {
   db.prepare("UPDATE sessions SET status = 'error' WHERE status IN ('running', 'idle', 'waiting')").run();
-  db.prepare("UPDATE tasks SET status = 'failed', completed_at = ? WHERE status = 'running'").run(completedAt);
+  // Reset interrupted running tasks back to pending so they are auto-assigned on next boot.
+  // Skip-task / complete-task set completed_at before exiting, so those are already 'done'/'failed'.
+  db.prepare(`
+    UPDATE tasks SET status = 'pending', agent_id = NULL, session_id = NULL, started_at = NULL, completed_at = NULL
+    WHERE status = 'running'
+  `).run();
 }

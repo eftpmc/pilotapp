@@ -143,7 +143,7 @@ export default function OverviewPage() {
                         isError ? 'border-destructive/25' : 'border-amber-500/25'
                       )}
                     >
-                      <AgentAvatar agent={agent} size={28} />
+                      <AgentAvatar agent={agent} size={36} />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-foreground truncate">{title ?? s.id.slice(0, 8)}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">{agent?.name ?? '—'} · {projectName(s.projectId)}</p>
@@ -184,7 +184,7 @@ export default function OverviewPage() {
                       className="flex items-center gap-3 px-4 py-3 bg-card border border-border rounded-xl hover:bg-muted/50 transition-colors text-left w-full"
                     >
                       <span className="dot green pulse shrink-0" />
-                      <AgentAvatar agent={agent} size={26} running />
+                      <AgentAvatar agent={agent} size={34} running />
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-foreground truncate">{title ?? s.id.slice(0, 8)}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">{agent?.name ?? '—'} · {projectName(s.projectId)}</p>
@@ -212,7 +212,7 @@ export default function OverviewPage() {
                     disabled={!ev.sessionId}
                     className="flex items-center gap-3 px-4 py-2.5 bg-card border border-border rounded-lg hover:bg-muted/50 transition-colors text-left w-full disabled:cursor-default"
                   >
-                    <AgentAvatar name={ev.data.employeeName ?? ''} size={22} />
+                    <AgentAvatar name={ev.data.employeeName ?? ''} size={30} />
                     <span className="w-[56px] shrink-0 text-xs font-semibold text-foreground truncate">{ev.data.employeeName ?? '—'}</span>
                     <span className={cn('w-[72px] shrink-0 text-xs font-medium max-sm:hidden', colorClass)}>{verb}</span>
                     <span className="flex-1 min-w-0 text-xs text-muted-foreground truncate">
