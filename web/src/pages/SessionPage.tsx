@@ -617,7 +617,7 @@ export default function SessionPage() {
 
   const branchShort = shortBranchName(session?.branch)
   const canContinue = isDone && !!session?.runnerSessionId && !isMerged && !session?.parentSessionId
-  const isWaiting   = session?.status === 'waiting'
+  const isWaiting   = (session?.status as string) === 'waiting'
 
   function submitClarification(clarificationId: string, response: string) {
     if (!response.trim()) return

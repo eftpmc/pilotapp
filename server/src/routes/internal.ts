@@ -80,15 +80,15 @@ router.post('/tasks', async (req: Request, res: Response) => {
     return blocking.count > 0;
   })();
 
-  if (role !== 'reviewer' && !depsBlocked) {
+  if (!depsBlocked) {
     const idleAgent = db.prepare(`
       SELECT a.id, a.provider FROM agents a
       WHERE a.user_id = ?
-        AND (a.role = ? OR a.role = 'any')
+        AND a.role = 'worker'
         AND a.id NOT IN (SELECT agent_id FROM sessions WHERE status IN ('running', 'idle', 'waiting'))
-      ORDER BY CASE WHEN a.role = ? THEN 0 ELSE 1 END, a.created_at ASC
+      ORDER BY a.created_at ASC
       LIMIT 1
-    `).get(session.user_id, role, role) as { id: string; provider: string } | undefined;
+    `).get(session.user_id) as { id: string; provider: string } | undefined;
 
     if (idleAgent) {
       const { createWorktree } = await import('../services/git');

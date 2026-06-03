@@ -4,17 +4,8 @@ import { useNavigate } from 'react-router-dom'
 import { sessions, tasks, agents, projects, events } from '../api/client'
 import type { CompanyEvent } from '../api/client'
 import { AgentAvatar } from '@/components/AgentAvatar'
-import { useElapsed, fmtSecs } from '@/lib/time'
+import { useElapsed, fmtSecs, timeAgo } from '@/lib/time'
 import { cn } from '@/lib/utils'
-
-function timeAgo(iso: string) {
-  const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000)
-  if (m < 1)  return 'just now'
-  if (m < 60) return `${m}m ago`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h ago`
-  return `${Math.floor(h / 24)}d ago`
-}
 
 const EVENT_VERB: Record<string, [string, string]> = {
   'session.started':   ['started',   'text-muted-foreground'],
@@ -25,7 +16,7 @@ const EVENT_VERB: Record<string, [string, string]> = {
 
 function ElapsedTimer({ createdAt }: { createdAt: string }) {
   const secs = useElapsed(createdAt, true)
-  return <span className="text-xs font-mono text-muted-foreground tabular-nums shrink-0">{fmtSecs(secs)}</span>
+  return <span className="text-xs font-mono text-[var(--green)] tabular-nums shrink-0">{fmtSecs(secs)}</span>
 }
 
 export default function OverviewPage() {
@@ -140,7 +131,7 @@ export default function OverviewPage() {
                       onClick={() => navigate(`/sessions/${s.id}`)}
                       className={cn(
                         'flex items-center gap-3 px-4 py-3.5 bg-card border rounded-xl hover:bg-muted/50 transition-colors text-left w-full [box-shadow:var(--shadow-sm)]',
-                        isError ? 'border-destructive/25' : 'border-amber-500/25'
+                        isError ? 'border-destructive/25' : 'border-[color-mix(in_srgb,var(--amber)_25%,transparent)]'
                       )}
                     >
                       <AgentAvatar agent={agent} size={36} />
@@ -148,10 +139,18 @@ export default function OverviewPage() {
                         <p className="text-sm font-semibold text-foreground truncate">{title ?? s.id.slice(0, 8)}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">{agent?.name ?? '—'} · {projectName(s.projectId)}</p>
                       </div>
-                      <span className={cn(
-                        'inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-semibold shrink-0',
-                        isError ? 'border-destructive/25 bg-destructive/5 text-destructive' : 'border-amber-500/25 bg-amber-500/10 text-amber-500'
-                      )}>
+                      <span
+                        className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-semibold shrink-0"
+                        style={isError ? {
+                          borderColor: 'color-mix(in srgb, var(--red) 25%, transparent)',
+                          background:  'color-mix(in srgb, var(--red) 7%, transparent)',
+                          color: 'var(--red)',
+                        } : {
+                          borderColor: 'color-mix(in srgb, var(--amber) 25%, transparent)',
+                          background:  'color-mix(in srgb, var(--amber) 10%, transparent)',
+                          color: 'var(--amber)',
+                        }}
+                      >
                         <span className={cn('dot', isError ? 'red' : 'amber')} />
                         {isError ? 'Error' : 'Ready'}
                       </span>

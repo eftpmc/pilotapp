@@ -1,62 +1,12 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { knowledge, agents, departments } from '../api/client'
-import type { KnowledgeDoc, Agent, Department } from '../api/client'
+import type { KnowledgeDoc, KnowledgeScope, Agent, Department } from '../api/client'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Textarea } from '@/components/ui/textarea'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AgentAvatar } from '@/components/AgentAvatar'
+import { KnowledgeDocDialog } from '@/components/KnowledgeDocDialog'
 import { cn } from '@/lib/utils'
-
-// ---------------------------------------------------------------------------
-// Knowledge doc dialog
-// ---------------------------------------------------------------------------
-
-function KnowledgeDocDialog({ open, doc, scopeLabel, onClose, onSave, loading, error }: {
-  open: boolean; doc?: KnowledgeDoc; scopeLabel: string; onClose: () => void
-  onSave: (body: { title: string; content: string }) => void
-  loading: boolean; error?: string
-}) {
-  const [title,   setTitle]   = useState(doc?.title   ?? '')
-  const [content, setContent] = useState(doc?.content ?? '')
-  return (
-    <Dialog open={open} onOpenChange={o => !o && onClose()}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader><DialogTitle>{doc ? 'Edit document' : `Add to ${scopeLabel}`}</DialogTitle></DialogHeader>
-        <div className="flex flex-col gap-4">
-          {!doc && (
-            <p className="text-xs text-muted-foreground -mt-1">
-              {scopeLabel === 'Company Library'
-                ? "Injected into every agent's prompt."
-                : `Injected only when this agent works.`}
-            </p>
-          )}
-          <div className="flex flex-col gap-1.5">
-            <Label>Title</Label>
-            <Input autoFocus value={title} onChange={e => setTitle(e.target.value)}
-              placeholder="e.g. Coding Standards, Architecture Overview" />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Content</Label>
-            <Textarea value={content} onChange={e => setContent(e.target.value)} rows={10}
-              placeholder="Markdown — included verbatim in the agent's prompt context."
-              className="font-mono text-xs resize-y" />
-          </div>
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button className="flex-1" disabled={!title.trim() || loading} onClick={() => onSave({ title: title.trim(), content })}>
-              {loading ? '…' : doc ? 'Save' : 'Add'}
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  )
-}
 
 // ---------------------------------------------------------------------------
 // Doc row
@@ -93,7 +43,7 @@ function DocRow({ doc, onEdit, onDelete }: {
 }
 
 // ---------------------------------------------------------------------------
-// Agent section
+// Department section
 // ---------------------------------------------------------------------------
 
 function DeptSection({ dept, docs, onAdd, onEdit, onDelete }: {
@@ -132,6 +82,10 @@ function DeptSection({ dept, docs, onAdd, onEdit, onDelete }: {
     </div>
   )
 }
+
+// ---------------------------------------------------------------------------
+// Agent section
+// ---------------------------------------------------------------------------
 
 function EmployeeSection({ employee, docs, onAdd, onEdit, onDelete }: {
   employee: Agent; docs: KnowledgeDoc[]
@@ -181,16 +135,16 @@ function EmployeeSection({ employee, docs, onAdd, onEdit, onDelete }: {
 export default function KnowledgePage() {
   const qc = useQueryClient()
   const [dialog, setDialog] = useState<{
-    open: boolean; doc?: KnowledgeDoc; scope: 'company' | 'department' | 'employee'; scopeId?: string; scopeLabel: string
+    open: boolean; doc?: KnowledgeDoc; scope: KnowledgeScope; scopeId?: string; scopeLabel: string
   }>({ open: false, scope: 'company', scopeLabel: 'Company Library' })
 
-  const { data: allKnowledge  = [] } = useQuery({ queryKey: ['knowledge'],   queryFn: () => knowledge.list() })
-  const { data: agentList  = [] } = useQuery({ queryKey: ['agents'],   queryFn: () => agents.list() })
-  const { data: deptList      = [] } = useQuery({ queryKey: ['departments'], queryFn: () => departments.list() })
+  const { data: allKnowledge = [] } = useQuery({ queryKey: ['knowledge'],   queryFn: () => knowledge.list() })
+  const { data: agentList    = [] } = useQuery({ queryKey: ['agents'],      queryFn: () => agents.list() })
+  const { data: deptList     = [] } = useQuery({ queryKey: ['departments'], queryFn: () => departments.list() })
 
   const companyDocs  = allKnowledge.filter(d => d.scope === 'company')
   const deptDocs     = (id: string) => allKnowledge.filter(d => d.scope === 'department' && d.scopeId === id)
-  const employeeDocs = (id: string) => allKnowledge.filter(d => d.scope === 'employee'   && d.scopeId === id)
+  const employeeDocs = (id: string) => allKnowledge.filter(d => d.scope === 'agent' && d.scopeId === id)
 
   const createDoc = useMutation({
     mutationFn: (body: Parameters<typeof knowledge.create>[0]) => knowledge.create(body),
@@ -205,14 +159,14 @@ export default function KnowledgePage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['knowledge'] }),
   })
 
-  function openAdd(scope: 'company' | 'department' | 'employee', scopeId?: string, scopeLabel = 'Company Library') {
+  function openAdd(scope: KnowledgeScope, scopeId?: string, scopeLabel = 'Company Library') {
     setDialog({ open: true, doc: undefined, scope, scopeId, scopeLabel })
   }
   function openEdit(doc: KnowledgeDoc) {
     const emp  = doc.scopeId ? agentList.find(e => e.id === doc.scopeId) : undefined
     const dept = doc.scopeId ? deptList.find(d => d.id === doc.scopeId) : undefined
     const label = emp ? `${emp.name}'s Knowledge` : dept ? `${dept.name} Knowledge` : 'Company Library'
-    setDialog({ open: true, doc, scope: doc.scope as any, scopeId: doc.scopeId, scopeLabel: label })
+    setDialog({ open: true, doc, scope: doc.scope, scopeId: doc.scopeId, scopeLabel: label })
   }
 
   return (
@@ -278,7 +232,7 @@ export default function KnowledgePage() {
                   key={emp.id}
                   employee={emp}
                   docs={employeeDocs(emp.id)}
-                  onAdd={() => openAdd('employee', emp.id, `${emp.name}'s Knowledge`)}
+                  onAdd={() => openAdd('agent', emp.id, `${emp.name}'s Knowledge`)}
                   onEdit={doc => openEdit(doc)}
                   onDelete={id => deleteDoc.mutate(id)}
                 />
@@ -298,7 +252,7 @@ export default function KnowledgePage() {
           if (dialog.doc) {
             updateDoc.mutate({ id: dialog.doc.id, body })
           } else {
-            createDoc.mutate({ ...body, scope: dialog.scope, scopeId: dialog.scopeId })
+            createDoc.mutate({ ...body, scope: dialog.scope as KnowledgeScope, scopeId: dialog.scopeId })
           }
         }}
         loading={createDoc.isPending || updateDoc.isPending}

@@ -7,7 +7,7 @@ import { authMiddleware, userId } from '../middleware/auth';
 const router = Router();
 router.use(authMiddleware);
 
-const AGENT_ROLES = ['any', 'worker', 'reviewer', 'planner', 'lead'] as const;
+const AGENT_ROLES = ['worker', 'lead'] as const;
 export type AgentRole = typeof AGENT_ROLES[number];
 
 // ---------------------------------------------------------------------------
@@ -23,7 +23,7 @@ function toAgent(row: Row | Record<string, unknown>) {
     id:           row.id,
     name:         row.name,
     provider:     row.provider,
-    role:         (row.role as AgentRole | null) ?? 'any',
+    role:         (row.role as AgentRole | null) ?? 'worker',
     connectionId:   (row.connection_id   as string | null | undefined) ?? undefined,
     personality:    (row.personality     as string | null | undefined) ?? undefined,
     departmentId:   (row.department_id   as string | null | undefined) ?? undefined,
@@ -45,7 +45,7 @@ const CreateSchema = z.object({
   name:         z.string().min(1),
   connectionId: z.string().min(1),
   personality:  z.string().optional(),
-  role:         z.enum(AGENT_ROLES).default('any'),
+  role:         z.enum(AGENT_ROLES).default('worker'),
   departmentId: z.string().optional(),
   avatarSeed:   z.string().optional(),
 });
@@ -63,6 +63,17 @@ router.post('/', (req: Request, res: Response) => {
   if (parsed.data.role === 'lead' && connection.type !== 'claude') {
     res.status(400).json({ error: 'Lead agents must use a Claude connection (MCP requires Claude Code)' });
     return;
+  }
+
+  // One lead per department
+  if (parsed.data.role === 'lead' && parsed.data.departmentId) {
+    const existing = db.prepare(
+      "SELECT id FROM agents WHERE user_id = ? AND department_id = ? AND role = 'lead' LIMIT 1"
+    ).get(uid, parsed.data.departmentId);
+    if (existing) {
+      res.status(400).json({ error: 'This team already has a lead agent' });
+      return;
+    }
   }
 
   const agent = {
@@ -100,11 +111,24 @@ router.patch('/:id', (req: Request, res: Response) => {
   const row = db.prepare('SELECT * FROM agents WHERE id = ? AND user_id = ?').get(req.params.id, userId(req)) as Row | undefined;
   if (!row) { res.status(404).json({ error: 'Not found' }); return; }
 
-  // Validate lead role requires Claude
+  // Lead requires Claude
   const newRole = parsed.data.role;
   if (newRole === 'lead' && row.provider !== 'claude') {
     res.status(400).json({ error: 'Lead agents must use a Claude connection' });
     return;
+  }
+
+  // One lead per department (check when promoting to lead or moving to a new department)
+  const effectiveRole  = newRole ?? row.role;
+  const effectiveDept  = parsed.data.departmentId !== undefined ? parsed.data.departmentId : row.department_id;
+  if (effectiveRole === 'lead' && effectiveDept) {
+    const existing = db.prepare(
+      "SELECT id FROM agents WHERE user_id = ? AND department_id = ? AND role = 'lead' AND id != ? LIMIT 1"
+    ).get(userId(req), effectiveDept, row.id);
+    if (existing) {
+      res.status(400).json({ error: 'This team already has a lead agent' });
+      return;
+    }
   }
 
   const sets: string[] = []; const vals: unknown[] = [];

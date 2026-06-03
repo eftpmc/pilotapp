@@ -92,7 +92,7 @@ export default function ProjectSettingsPage() {
                 { label: 'Created',    value: project ? new Date(project.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined },
               ].filter(r => r.value).map((row, i) => (
                 <div key={row.label} className={`px-4 py-3 ${i > 0 ? 'border-t border-border/40' : ''}`}>
-                  <p className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground/50 mb-1">{row.label}</p>
+                  <p className="text-xs text-muted-foreground/50 mb-1">{row.label}</p>
                   <p className="text-sm text-foreground font-mono break-all">{row.value}</p>
                 </div>
               ))}

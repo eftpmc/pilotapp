@@ -1099,10 +1099,8 @@ html.light {
 .agent-wizard-kicker {
   color: var(--muted);
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: .04em;
+  font-weight: 500;
   margin: 0 0 4px;
-  text-transform: uppercase;
 }
 .agent-wizard-heading {
   color: var(--ink);
@@ -1115,28 +1113,26 @@ html.light {
 .agent-role-grid,
 .agent-personality-grid {
   display: grid;
-  gap: 8px;
-}
-.agent-role-grid {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-.agent-personality-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 .agent-choice-card {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  min-height: 74px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 80px;
   border: 1px solid var(--rule);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--panel);
   color: var(--muted);
   cursor: pointer;
   font-family: inherit;
-  padding: 12px;
-  text-align: left;
-  transition: background .12s, border-color .12s, color .12s, box-shadow .12s;
+  padding: 10px 6px;
+  text-align: center;
+  transition: background .12s, border-color .12s, color .12s, box-shadow .12s, opacity .12s;
 }
 .agent-choice-card:hover {
   background: var(--panel-2);
@@ -1148,18 +1144,74 @@ html.light {
   color: var(--ember);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ember) 12%, transparent);
 }
+.agent-choice-card.dimmed {
+  opacity: 0.38;
+  cursor: default;
+}
+.agent-choice-icon {
+  color: var(--muted);
+  transition: color .12s;
+  flex-shrink: 0;
+}
+.agent-choice-card:hover:not(.dimmed) .agent-choice-icon {
+  color: var(--ink);
+}
+.agent-choice-card.active .agent-choice-icon {
+  color: var(--ember);
+}
+.agent-choice-check {
+  position: absolute;
+  top: 6px;
+  right: 7px;
+  font-size: 8px;
+  font-weight: 700;
+  color: var(--ember);
+  line-height: 1;
+}
 .agent-choice-title {
   color: var(--ink);
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 600;
   line-height: 1.2;
 }
 .agent-choice-card.active .agent-choice-title {
   color: var(--ember);
 }
-.agent-choice-desc {
+.tooltip-content {
+  z-index: 100;
+  animation: tooltip-in .1s ease;
+}
+@keyframes tooltip-in {
+  from { opacity: 0; transform: translateY(2px); }
+}
+.agent-tooltip {
+  background: var(--panel-2);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  box-shadow: var(--shadow-dialog);
+  max-width: 220px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.agent-tooltip-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.2;
+}
+.agent-tooltip-tag {
   font-size: 11px;
-  line-height: 1.35;
+  font-weight: 500;
+  color: var(--ember);
+  line-height: 1.3;
+}
+.agent-tooltip-desc {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.45;
+  margin-top: 2px;
 }
 .agent-wizard-summary {
   display: flex;
@@ -1215,6 +1267,283 @@ html.light {
   color: var(--muted);
   margin: 2px 0 0;
   line-height: 1.2;
+}
+
+/* ── New Agent page ─────────────────────────────────────────────────────────── */
+.na-page {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.na-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 48px 0;
+  flex-shrink: 0;
+}
+.na-back {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  padding: 0;
+  transition: color .12s;
+}
+.na-back:hover { color: var(--ink); }
+.na-steps {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+.na-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  transition: color .12s;
+  position: relative;
+}
+.na-step + .na-step::before {
+  content: '/';
+  position: absolute;
+  left: 0;
+  color: var(--rule);
+  font-size: 11px;
+}
+.na-step:hover { color: var(--ink); }
+.na-step.active { color: var(--ink); font-weight: 600; }
+.na-step.done { color: var(--muted); }
+.na-step-n {
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: inherit;
+  opacity: .6;
+}
+.na-body {
+  flex: 1;
+  padding: 40px 48px 32px;
+  min-width: 0;
+  overflow-y: auto;
+}
+.na-step-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 560px;
+  max-width: 100%;
+}
+.na-heading-block { margin-bottom: 12px; }
+.na-kicker {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ember);
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.na-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -.02em;
+  line-height: 1.2;
+}
+.na-subtitle {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 4px;
+  line-height: 1.5;
+}
+.na-lead-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--panel);
+  border-radius: 10px;
+  border: 1px solid var(--rule);
+  cursor: pointer;
+  transition: background .12s;
+}
+.na-lead-toggle:hover { background: var(--panel-2); }
+.na-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 48px 20px;
+  border-top: 1px solid var(--rule);
+  background: var(--bg);
+  position: sticky;
+  bottom: 0;
+  flex-shrink: 0;
+}
+.na-roster-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(180px, 240px));
+  gap: 10px;
+}
+.na-roster-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--panel);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: background .12s, border-color .15s, box-shadow .15s, transform .12s;
+}
+.na-roster-card:hover {
+  background: var(--panel-2);
+  border-color: color-mix(in srgb, var(--ink) 22%, var(--rule));
+  box-shadow: 0 4px 14px oklch(0 0 0 / .07);
+  transform: translateY(-1px);
+}
+.na-roster-info { min-width: 0; flex: 1; }
+.na-roster-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+.na-roster-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.2;
+}
+.na-roster-bio {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+.na-roster-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.na-roster-tag {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 1px 6px;
+  line-height: 1.6;
+}
+.na-roster-custom {
+  border-style: dashed;
+  align-items: center;
+  justify-content: flex-start;
+}
+.na-custom-icon {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 10px;
+  border: 1px dashed var(--rule);
+  background: var(--bg);
+  font-size: 24px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+@media (max-width: 900px) {
+  .na-topbar, .na-body, .na-footer { padding-left: 28px; padding-right: 28px; }
+  .na-roster-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  .na-topbar, .na-body, .na-footer { padding-left: 16px; padding-right: 16px; }
+  .na-steps { display: none; }
+  .na-step-body { width: 100%; }
+}
+
+/* ── Roster gallery (dialog, legacy) ─────────────────────────────────────────── */
+.agent-roster-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.agent-roster-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--panel);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: center;
+  transition: background .12s, border-color .12s, box-shadow .12s;
+}
+.agent-roster-card:hover {
+  background: var(--panel-2);
+  border-color: color-mix(in srgb, var(--ink) 20%, var(--rule));
+  box-shadow: 0 2px 8px var(--shadow-sm, oklch(0 0 0 / .08));
+}
+.agent-roster-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.2;
+}
+.agent-roster-bio {
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.4;
+  margin-top: 1px;
+}
+.agent-roster-tag {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 1px 5px;
+  line-height: 1.5;
+}
+.agent-roster-custom {
+  border-style: dashed;
+  color: var(--muted);
+}
+.agent-roster-custom-icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  font-size: 22px;
+  color: var(--muted);
+  line-height: 1;
+}
+@media (max-width: 640px) {
+  .agent-roster-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* ── Project cards ─────────────────────────────────────────────────────────── */
@@ -1425,12 +1754,8 @@ html.light {
   .agent-wizard-body {
     min-height: 0;
   }
-  .agent-role-grid,
   .agent-personality-grid {
-    grid-template-columns: 1fr;
-  }
-  .agent-choice-card {
-    min-height: 0;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
   .agent-wizard-footer {
     grid-template-columns: 1fr;
@@ -1675,6 +2000,25 @@ html.light {
 
 /* ── Label ─────────────────────────────────────────────────────────────────── */
 .label { font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
+
+/* ── Checkbox ──────────────────────────────────────────────────────────────── */
+.checkbox-root {
+  width: 16px; height: 16px; flex-shrink: 0;
+  border: 1.5px solid var(--rule);
+  border-radius: 5px;
+  background: var(--panel);
+  display: grid; place-items: center;
+  cursor: pointer;
+  transition: background .1s, border-color .1s;
+}
+.checkbox-root:hover { border-color: var(--ember); }
+.checkbox-root[data-state="checked"] {
+  background: var(--ember);
+  border-color: var(--ember);
+  color: var(--on-ember);
+}
+.checkbox-root:disabled { opacity: 0.45; cursor: not-allowed; }
+.checkbox-indicator { display: flex; align-items: center; color: inherit; }
 
 /* ── Chips / badges ────────────────────────────────────────────────────────── */
 .chip {

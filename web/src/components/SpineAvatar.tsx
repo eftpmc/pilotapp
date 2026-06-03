@@ -106,9 +106,15 @@ function buildSlotColors(name: string): Map<string, [number, number, number]> {
 function buildSkin(name: string, skeletonData: SkeletonData): Skin {
   const n = name.toLowerCase()
   const combo = new Skin('agent')
+  const LONG_HAIR_SKINS = ['hair_long/hair_long_20', 'hair_long/hair_long_21', 'hair_long/hair_long_28', 'hair_long/hair_long_29']
+  const useLongHair = djb2(n + 'hl') % 3 === 0
+  const hairSkin = useLongHair
+    ? pickFrom(n, 'hlv', LONG_HAIR_SKINS)
+    : `hair_short/hair_short_c_${pick(n, 'h', 30)}`
+
   const parts = [
     `eyes/eyes_c_${pick(n, 'e', 20)}`,
-    `hair_short/hair_short_c_${pick(n, 'h', 30)}`,
+    hairSkin,
     `mouth/mouth_c_${pick(n, 'm', 10)}`,
     `brow/brow_c_${pick(n, 'b', 10)}`,
     `top/top_c_${pick(n, 't', 60)}`,
@@ -225,7 +231,7 @@ export function SpineAvatar({
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-    const ctx = canvas.getContext('2d')
+    const ctx = canvas.getContext('2d')!
     if (!ctx) return
 
     let rafId = 0

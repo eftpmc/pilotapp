@@ -71,7 +71,7 @@ const TOOLS = [
         title:      { type: 'string',  description: 'Short task title' },
         prompt:     { type: 'string',  description: 'Detailed instructions for the agent' },
         baseBranch: { type: 'string',  description: 'Base branch to work from (default: main)' },
-        role:       { type: 'string',  enum: ['worker', 'reviewer', 'planner'], description: 'Agent role for this task' },
+        role:       { type: 'string',  enum: ['worker'], description: 'Agent role for this task (worker only — leads do not pick up subtasks)' },
         priority:   { type: 'number', description: 'Priority 1–10, higher = more urgent (default: 5)' },
         dependsOn:  { type: 'array', items: { type: 'string' }, description: 'Task IDs that must complete before this task starts' },
       },

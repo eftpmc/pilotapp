@@ -1,11 +1,13 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import LoginPage from './pages/LoginPage'
 import Layout from './components/Layout'
 import ProjectLayout from './components/ProjectLayout'
 import OverviewPage from './pages/OverviewPage'
 import AgentsPage from './pages/AgentsPage'
 import AgentPage from './pages/AgentPage'
+import NewAgentPage from './pages/NewAgentPage'
 import KnowledgePage from './pages/KnowledgePage'
 import ProjectsPage from './pages/ProjectsPage'
 import ProjectDetailPage from './pages/ProjectDetailPage'
@@ -26,6 +28,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <QueryClientProvider client={qc}>
+      <TooltipProvider delayDuration={300}>
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
@@ -33,6 +36,7 @@ export default function App() {
             <Route index                element={<OverviewPage />} />
             <Route path="work"          element={<Navigate to="/" replace />} />
             <Route path="agents"        element={<AgentsPage />} />
+            <Route path="agents/new"    element={<NewAgentPage />} />
             <Route path="agents/:id"    element={<AgentPage />} />
             <Route path="projects"      element={<ProjectsPage />} />
             <Route path="knowledge"     element={<KnowledgePage />} />
@@ -49,6 +53,7 @@ export default function App() {
           </Route>
         </Routes>
       </BrowserRouter>
+      </TooltipProvider>
     </QueryClientProvider>
   )
 }
