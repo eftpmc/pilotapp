@@ -15,7 +15,6 @@ const AGENT_ID    = process.env.PILOT_AGENT_ID    ?? '';
 const PROJECT_ID  = process.env.PILOT_PROJECT_ID  ?? '';
 const INTERNAL    = process.env.PILOT_INTERNAL_URL ?? 'http://localhost:3000';
 const SPEC_ID     = process.env.PILOT_SPEC_ID     || null;
-const SHIFT_ID    = process.env.PILOT_SHIFT_ID    || null;
 const PARENT_SID  = process.env.PILOT_PARENT_SESSION_ID || null;
 
 // ---------------------------------------------------------------------------

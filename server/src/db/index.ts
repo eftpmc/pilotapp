@@ -111,15 +111,6 @@ db.exec(`
     created_at TEXT NOT NULL
   );
 
-  CREATE TABLE IF NOT EXISTS shifts (
-    id           TEXT PRIMARY KEY,
-    user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    agent_id     TEXT NOT NULL REFERENCES agents(id),
-    status       TEXT NOT NULL DEFAULT 'running',
-    created_at   TEXT NOT NULL,
-    completed_at TEXT
-  );
-
   CREATE TABLE IF NOT EXISTS events (
     id         TEXT PRIMARY KEY,
     user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -180,7 +171,7 @@ function migrate(id: string, sql: string): void {
     db.exec(sql);
   } catch (err: any) {
     // Column/table already exists from the old try/catch migration approach — mark as applied.
-    if (/duplicate column|already exists/i.test(String(err?.message))) {
+    if (/duplicate column|already exists|no such column|no such table/i.test(String(err?.message))) {
       db.prepare('INSERT INTO schema_migrations (id, applied_at) VALUES (?, ?)').run(id, new Date().toISOString());
       return;
     }
@@ -206,9 +197,6 @@ migrate('013_agents_department_id',        'ALTER TABLE agents ADD COLUMN depart
 migrate('014_sessions_journal',            'ALTER TABLE sessions ADD COLUMN journal TEXT');
 migrate('015_sessions_parent_session_id',  'ALTER TABLE sessions ADD COLUMN parent_session_id TEXT REFERENCES sessions(id)');
 migrate('016_sessions_review_verdict',     'ALTER TABLE sessions ADD COLUMN review_verdict TEXT');
-migrate('017_sessions_shift_id',           'ALTER TABLE sessions ADD COLUMN shift_id TEXT REFERENCES shifts(id)');
-migrate('018_tasks_shift_id',              'ALTER TABLE tasks ADD COLUMN shift_id TEXT REFERENCES shifts(id)');
-migrate('019_shifts_report',               'ALTER TABLE shifts ADD COLUMN report TEXT');
 migrate('020_tasks_lead_session_id',       'ALTER TABLE tasks ADD COLUMN lead_session_id TEXT REFERENCES sessions(id)');
 migrate('021_department_tools', `
   CREATE TABLE IF NOT EXISTS department_tools (
@@ -275,4 +263,9 @@ migrate('026_sessions_tokens', `
   ALTER TABLE sessions ADD COLUMN output_tokens INTEGER;
   ALTER TABLE sessions ADD COLUMN cache_read_tokens INTEGER;
   ALTER TABLE sessions ADD COLUMN total_cost_usd REAL;
+`);
+migrate('036_drop_shifts', `
+  ALTER TABLE sessions DROP COLUMN shift_id;
+  ALTER TABLE tasks DROP COLUMN shift_id;
+  DROP TABLE IF EXISTS shifts;
 `);

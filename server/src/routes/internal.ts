@@ -31,7 +31,7 @@ router.use((req: Request, res: Response, next) => {
 interface SessionMin {
   id: string; user_id: string; agent_id: string; project_id: string;
   work_task_id: string | null; spec_id: string | null;
-  shift_id: string | null; parent_session_id: string | null;
+  parent_session_id: string | null;
   runner_session_id: string | null; status: string; journal: string | null;
   provider: string; branch: string; worktree_path: string; created_at: string;
 }
@@ -144,7 +144,6 @@ router.get('/sessions/:id', (req: Request, res: Response) => {
     agentId:         session.agent_id,
     projectId:       session.project_id,
     workTaskId:      session.work_task_id,
-    shiftId:         session.shift_id,
     parentSessionId: session.parent_session_id,
   });
 });
@@ -555,9 +554,9 @@ router.post('/knowledge', (req: Request, res: Response) => {
   if (!session) { res.status(404).json({ error: 'Session not found' }); return; }
 
   const now = new Date().toISOString();
-  // Upsert by (user_id, scope='employee', scope_id=agent_id, title)
+  // Upsert by (user_id, scope='agent', scope_id=agent_id, title)
   const existing = db.prepare(
-    "SELECT id FROM knowledge WHERE user_id = ? AND scope = 'employee' AND scope_id = ? AND title = ?"
+    "SELECT id FROM knowledge WHERE user_id = ? AND scope = 'agent' AND scope_id = ? AND title = ?"
   ).get(session.user_id, session.agent_id, title) as { id: string } | undefined;
 
   if (existing) {
@@ -566,7 +565,7 @@ router.post('/knowledge', (req: Request, res: Response) => {
   } else {
     const id = uuid();
     db.prepare(
-      "INSERT INTO knowledge (id, user_id, scope, scope_id, title, content, created_at, updated_at) VALUES (?, ?, 'employee', ?, ?, ?, ?, ?)"
+      "INSERT INTO knowledge (id, user_id, scope, scope_id, title, content, created_at, updated_at) VALUES (?, ?, 'agent', ?, ?, ?, ?, ?)"
     ).run(id, session.user_id, session.agent_id, title, content, now, now);
     res.status(201).json({ id });
   }

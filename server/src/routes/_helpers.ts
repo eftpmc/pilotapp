@@ -5,8 +5,7 @@ export interface SessionRow {
   work_task_id: string | null; spec_id: string | null; provider: string; branch: string;
   worktree_path: string; status: string; created_at: string;
   journal: string | null; parent_session_id: string | null;
-  review_verdict: string | null; shift_id: string | null;
-  runner_session_id: string | null;
+  review_verdict: string | null; runner_session_id: string | null;
   input_tokens: number | null; output_tokens: number | null;
   cache_read_tokens: number | null; total_cost_usd: number | null;
 }
@@ -18,7 +17,6 @@ export function toSession(r: SessionRow) {
     specId:           r.spec_id            ?? undefined,
     parentSessionId:  r.parent_session_id  ?? undefined,
     reviewVerdict:    r.review_verdict     ?? undefined,
-    shiftId:          r.shift_id           ?? undefined,
     journal:          r.journal            ?? undefined,
     runnerSessionId:  r.runner_session_id  ?? undefined,
     inputTokens:      r.input_tokens       ?? undefined,

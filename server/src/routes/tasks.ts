@@ -22,8 +22,7 @@ let dispatchLock = false;
 interface TaskRow {
   id: string; user_id: string; project_id: string; title: string; prompt: string;
   base_branch: string; status: string; priority: number; size: string;
-  agent_id: string | null; session_id: string | null; shift_id: string | null;
-  lead_session_id: string | null;
+  agent_id: string | null; session_id: string | null; lead_session_id: string | null;
   created_at: string; started_at: string | null; completed_at: string | null;
 }
 
@@ -37,7 +36,6 @@ function toTask(r: TaskRow) {
     size: (r.size ?? 'm') as 'xs' | 's' | 'm' | 'l' | 'xl',
     agentId:       r.agent_id        ?? undefined,
     sessionId:     r.session_id      ?? undefined,
-    shiftId:       r.shift_id        ?? undefined,
     leadSessionId: r.lead_session_id ?? undefined,
     createdAt: r.created_at,
     startedAt: r.started_at ?? undefined, completedAt: r.completed_at ?? undefined,
@@ -85,7 +83,7 @@ router.post('/', (req: Request, res: Response) => {
     title: parsed.data.title, prompt: parsed.data.prompt,
     base_branch: parsed.data.baseBranch, status: 'pending', priority: 0,
     size: parsed.data.size,
-    agent_id: null, session_id: null, shift_id: null, lead_session_id: null,
+    agent_id: null, session_id: null, lead_session_id: null,
     created_at: new Date().toISOString(), started_at: null, completed_at: null,
   };
 

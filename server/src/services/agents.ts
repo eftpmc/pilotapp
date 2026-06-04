@@ -35,7 +35,6 @@ export interface SessionRef {
   workTaskId?: string;
   specId?: string;
   parentSessionId?: string;
-  shiftId?: string;
   provider: AgentProvider;
   branch: string;
   worktreePath: string;
@@ -147,7 +146,6 @@ interface McpConfigCtx {
   userId: string;
   projectId: string;
   specId?: string;
-  shiftId?: string;
   parentSessionId?: string;
 }
 
@@ -179,7 +177,6 @@ function pilotMcpEntry(sessionId: string, agentId: string, ctx: McpConfigCtx): R
       PILOT_PROJECT_ID:          ctx.projectId,
       PILOT_INTERNAL_URL:        `http://localhost:${process.env.PORT ?? '3000'}`,
       PILOT_SPEC_ID:             ctx.specId             ?? '',
-      PILOT_SHIFT_ID:            ctx.shiftId            ?? '',
       PILOT_PARENT_SESSION_ID:   ctx.parentSessionId    ?? '',
     },
   };
@@ -586,7 +583,7 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
   const connectionId = meta.connection_id ?? undefined;
   const isLead       = meta.role === 'lead';
   const knowledgeCtx  = buildKnowledgeContext(userId, session.agentId);
-  const mcpCtx = { userId, projectId: session.projectId, specId: session.specId, shiftId: session.shiftId, parentSessionId: session.parentSessionId };
+  const mcpCtx = { userId, projectId: session.projectId, specId: session.specId, parentSessionId: session.parentSessionId };
   const mcpConfigPath = buildMcpConfig(session.agentId, session.id, mcpCtx);
   // Codex reads MCP from .codex/config.toml in the worktree (no CLI flag needed)
   let codexConfigDir: string | undefined;
@@ -821,7 +818,7 @@ export async function continueAgent(
   const meta          = resolveAgentMeta(session.agentId);
   const model         = meta.model ?? undefined;
   const connectionId  = meta.connection_id ?? undefined;
-  const mcpCtx2 = { userId, projectId: session.projectId, shiftId: session.shiftId, parentSessionId: session.parentSessionId };
+  const mcpCtx2 = { userId, projectId: session.projectId, parentSessionId: session.parentSessionId };
   const mcpConfigPath = buildMcpConfig(session.agentId, session.id, mcpCtx2, `${session.id}-t${turnNumber}`);
   let codexConfigDir2: string | undefined;
   if (session.provider === 'codex') codexConfigDir2 = buildCodexMcpConfig(session.agentId, session.id, mcpCtx2, session.worktreePath);
