@@ -10,7 +10,7 @@ import { db } from '../db';
 import { broadcastGlobal } from '../services/broadcast';
 import { writeEvent } from '../services/events';
 import { markSessionWaiting, markSessionRunning, assignTaskToSession } from '../services/lifecycle';
-import { continueAgent, advanceShift, broadcastToSession } from '../services/agents';
+import { continueAgent, broadcastToSession } from '../services/agents';
 
 const router = Router();
 
@@ -477,6 +477,99 @@ router.post('/sessions/:id/send-to-agent', async (req: Request, res: Response) =
   );
 
   res.status(201).json({ turnId, turnNumber });
+});
+
+// ---------------------------------------------------------------------------
+// POST /internal/sessions/:id/signal-lead
+// Worker signals its lead mid-task. Queues a turn on the lead's done session.
+// ---------------------------------------------------------------------------
+
+router.post('/sessions/:id/signal-lead', async (req: Request, res: Response) => {
+  const { message } = req.body as { message: string };
+  if (!message) { res.status(400).json({ error: 'message required' }); return; }
+
+  const session = getSession(param(req.params.id));
+  if (!session) { res.status(404).json({ error: 'Session not found' }); return; }
+
+  // Walk up: session → task → lead_session_id
+  if (!session.work_task_id) {
+    res.json({ ok: true, note: 'no task associated — signal ignored' }); return;
+  }
+  const task = db.prepare('SELECT lead_session_id, title FROM tasks WHERE id = ?').get(session.work_task_id) as
+    { lead_session_id: string | null; title: string } | undefined;
+  if (!task?.lead_session_id) {
+    res.json({ ok: true, note: 'task has no lead — signal ignored' }); return;
+  }
+
+  const lead = getSession(task.lead_session_id);
+  if (!lead) { res.json({ ok: true, note: 'lead session not found — signal ignored' }); return; }
+  if (!['done', 'error'].includes(lead.status)) {
+    // Lead is still running — append to journal instead of queuing a turn
+    const note = `[signal from worker on "${task.title}"]: ${message}`;
+    const row  = db.prepare('SELECT journal FROM sessions WHERE id = ?').get(lead.id) as { journal: string | null } | undefined;
+    const updated = row?.journal ? `${row.journal}\n\n${note}` : note;
+    db.prepare('UPDATE sessions SET journal = ? WHERE id = ?').run(updated, lead.id);
+    res.json({ ok: true, queued: false, note: 'lead is running — appended to journal' }); return;
+  }
+  if (!lead.runner_session_id) {
+    res.json({ ok: true, note: 'lead has no runner session ID — cannot queue turn' }); return;
+  }
+
+  const agentRow = db.prepare('SELECT id, provider FROM agents WHERE id = ?').get(lead.agent_id) as { id: string; provider: string } | undefined;
+  if (!agentRow) { res.json({ ok: true, note: 'lead agent not found' }); return; }
+
+  interface CountRow { count: number }
+  const { count } = db.prepare('SELECT COUNT(*) as count FROM turns WHERE session_id = ?').get(lead.id) as CountRow;
+  const turnNumber = count + 1;
+  const turnId     = uuid();
+  const now        = new Date().toISOString();
+  const turnPrompt = `[Mid-task signal from worker on subtask "${task.title}"]\n\n${message}\n\nYou can respond by queuing a \`send_to_agent\` turn, or note this in your synthesis when all tasks complete.`;
+
+  db.prepare('INSERT INTO turns (id, session_id, turn_number, prompt, status, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(turnId, lead.id, turnNumber, turnPrompt, 'running', now);
+
+  void continueAgent(
+    {
+      id: lead.id, agentId: lead.agent_id, projectId: lead.project_id,
+      workTaskId: lead.work_task_id ?? undefined, provider: lead.provider as any,
+      branch: lead.branch, worktreePath: lead.worktree_path,
+      status: lead.status, createdAt: lead.created_at,
+    },
+    turnId, turnNumber, turnPrompt, lead.user_id,
+  );
+
+  res.status(201).json({ ok: true, queued: true, turnId });
+});
+
+// ---------------------------------------------------------------------------
+// POST /internal/knowledge
+// Agent creates or updates a knowledge doc scoped to itself.
+// ---------------------------------------------------------------------------
+
+router.post('/knowledge', (req: Request, res: Response) => {
+  const { sessionId, title, content } = req.body as { sessionId: string; title: string; content: string };
+  if (!sessionId || !title || content === undefined) {
+    res.status(400).json({ error: 'sessionId, title, and content are required' }); return;
+  }
+  const session = getSession(sessionId);
+  if (!session) { res.status(404).json({ error: 'Session not found' }); return; }
+
+  const now = new Date().toISOString();
+  // Upsert by (user_id, scope='employee', scope_id=agent_id, title)
+  const existing = db.prepare(
+    "SELECT id FROM knowledge WHERE user_id = ? AND scope = 'employee' AND scope_id = ? AND title = ?"
+  ).get(session.user_id, session.agent_id, title) as { id: string } | undefined;
+
+  if (existing) {
+    db.prepare("UPDATE knowledge SET content = ?, updated_at = ? WHERE id = ?").run(content, now, existing.id);
+    res.json({ id: existing.id });
+  } else {
+    const id = uuid();
+    db.prepare(
+      "INSERT INTO knowledge (id, user_id, scope, scope_id, title, content, created_at, updated_at) VALUES (?, ?, 'employee', ?, ?, ?, ?, ?)"
+    ).run(id, session.user_id, session.agent_id, title, content, now, now);
+    res.status(201).json({ id });
+  }
 });
 
 export default router;

@@ -103,6 +103,8 @@ export default function AgentPage() {
   const modelLabel = connection?.model
     || (connection?.hasKey ? 'API key' : connection?.type === 'claude' ? 'subscription' : 'machine auth')
 
+  const totalCost = sessionList.reduce((sum, s) => sum + (s.totalCostUsd ?? 0), 0)
+
   const recentSessions = [...sessionList]
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, 10)
@@ -140,6 +142,12 @@ export default function AgentPage() {
                     <span className="w-2 h-2 rounded-full" style={{ background: dept.color }} />
                     {dept.name}
                   </span>
+                </>
+              )}
+              {totalCost > 0 && (
+                <>
+                  <span className="text-muted-foreground/30 text-xs">·</span>
+                  <span className="text-xs text-muted-foreground font-mono">${totalCost.toFixed(2)} total</span>
                 </>
               )}
             </div>

@@ -46,11 +46,6 @@ export interface Turn {
   createdAt: string; completedAt?: string;
 }
 
-export interface Shift {
-  id: string; agentId: string; status: string;
-  taskCount: number; doneCount: number; report?: string;
-  createdAt: string; completedAt?: string;
-}
 export type SpecStatus = 'planning' | 'draft'
 export interface Spec {
   id: string; projectId: string; title: string; brief: string;
@@ -282,18 +277,6 @@ export const sessions = {
   turns:         (id: string) => req<Turn[]>(`/sessions/${id}/turns`),
   addTurn:       (id: string, prompt: string) =>
     req<Turn>(`/sessions/${id}/turns`, { method: 'POST', body: JSON.stringify({ prompt }) }),
-};
-
-// ---------------------------------------------------------------------------
-// Shifts
-// ---------------------------------------------------------------------------
-
-export const shifts = {
-  list:   () => req<Shift[]>('/shifts'),
-  get:    (id: string) => req<Shift>(`/shifts/${id}`),
-  create: (body: { agentId: string; taskIds: string[] }) =>
-    req<{ shift: Shift; session: Session }>('/shifts', { method: 'POST', body: JSON.stringify(body) }),
-  cancel: (id: string) => req<void>(`/shifts/${id}`, { method: 'DELETE' }),
 };
 
 // ---------------------------------------------------------------------------

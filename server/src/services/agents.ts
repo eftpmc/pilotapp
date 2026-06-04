@@ -115,15 +115,11 @@ function buildCommand(provider: AgentProvider, prompt: string, opts: CommandOpts
     if (disallowedTools?.length)  args.push('--disallowed-tools', disallowedTools.join(','));
     return { cmd: 'claude', args };
   }
-  // Codex — resume uses --session flag (not exec resume)
-  if (resumeId) {
-    const args = ['--session', resumeId, '--approval-policy', 'auto', '-q', prompt];
-    if (model) args.push('--model', model);
-    return { cmd: 'codex', args };
-  }
-  const args = ['--approval-policy', 'auto', '-q', prompt];
-  if (model) args.push('--model', model);
-  return { cmd: 'codex', args };
+  // Codex exec subcommand — non-interactive with JSON output
+  const base = ['exec', '--dangerously-bypass-approvals-and-sandbox', '--json'];
+  if (model) base.push('--model', model);
+  if (resumeId) return { cmd: 'codex', args: [...base, 'resume', resumeId, prompt] };
+  return { cmd: 'codex', args: [...base, prompt] };
 }
 
 function apiKeyEnv(provider: AgentProvider, apiKey: string): Record<string, string> {
@@ -276,6 +272,42 @@ function buildCodexMcpConfig(agentId: string, sessionId: string, ctx: McpConfigC
 }
 
 // ---------------------------------------------------------------------------
+// Provider-aware stdout line parser
+// ---------------------------------------------------------------------------
+
+interface ParsedLine {
+  runnerId?: string;
+  usage?: { inputTokens: number; outputTokens: number; cacheReadTokens: number };
+  costUsd?: number;
+}
+
+function parseOutputLine(provider: AgentProvider, line: string): ParsedLine {
+  const obj = JSON.parse(line.trim());
+  if (provider === 'claude') {
+    const sid = (obj.session_id ?? obj.sessionId) as string | undefined;
+    const usage = obj.message?.usage;
+    return {
+      runnerId: sid && sid.length > 4 ? sid : undefined,
+      usage: usage ? {
+        inputTokens:    usage.input_tokens            ?? 0,
+        outputTokens:   usage.output_tokens           ?? 0,
+        cacheReadTokens: usage.cache_read_input_tokens ?? 0,
+      } : undefined,
+      costUsd: obj.type === 'result' && typeof obj.total_cost_usd === 'number' ? obj.total_cost_usd : undefined,
+    };
+  }
+  // codex: thread.started carries thread_id; turn.completed carries usage
+  return {
+    runnerId: obj.type === 'thread.started' && typeof obj.thread_id === 'string' ? obj.thread_id : undefined,
+    usage: obj.type === 'turn.completed' && obj.usage ? {
+      inputTokens:    obj.usage.input_tokens        ?? 0,
+      outputTokens:   obj.usage.output_tokens       ?? 0,
+      cacheReadTokens: obj.usage.cached_input_tokens ?? 0,
+    } : undefined,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Knowledge context builder
 // ---------------------------------------------------------------------------
 
@@ -350,96 +382,6 @@ interface TaskRowMin { id: string; prompt: string; base_branch: string; project_
 interface ProjectRowMin { id: string; name: string; repo_path: string; role: string; created_at: string }
 interface AgentRowMin  { id: string; provider: string }
 
-function generateShiftReport(shiftId: string): void {
-  try {
-    interface ShiftTaskRow {
-      title: string; status: string;
-      started_at: string | null; completed_at: string | null;
-      journal: string | null;
-    }
-    const shiftTasks = db.prepare(`
-      SELECT t.title, t.status, t.started_at, t.completed_at,
-        (SELECT s.journal FROM sessions s
-         WHERE s.work_task_id = t.id AND s.journal IS NOT NULL
-         ORDER BY s.created_at DESC LIMIT 1) as journal
-      FROM tasks t
-      WHERE t.shift_id = ?
-      ORDER BY t.started_at ASC
-    `).all(shiftId) as ShiftTaskRow[];
-
-    const done   = shiftTasks.filter(t => t.status === 'done').length;
-    const failed = shiftTasks.filter(t => t.status === 'failed').length;
-    const lines  = [`Shift complete — ${done} done, ${failed} failed.\n`];
-
-    for (const t of shiftTasks) {
-      const icon = t.status === 'done' ? '✓' : '✗';
-      let suffix = '';
-      if (t.started_at && t.completed_at) {
-        const secs = Math.round((new Date(t.completed_at).getTime() - new Date(t.started_at).getTime()) / 1000);
-        suffix = ` (${secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${secs % 60}s`})`;
-      }
-      lines.push(`${icon} ${t.title}${suffix}`);
-      if (t.journal) lines.push(`   ${t.journal.replace(/\n/g, '\n   ')}`);
-    }
-
-    db.prepare("UPDATE shifts SET report = ? WHERE id = ?").run(lines.join('\n'), shiftId);
-  } catch { /* non-critical */ }
-}
-
-export async function advanceShift(shiftId: string, agentId: string, userId: string): Promise<void> {
-  const nextTask = db.prepare(
-    "SELECT id, prompt, base_branch, project_id, depends_on FROM tasks WHERE shift_id = ? AND status = 'pending' ORDER BY created_at ASC LIMIT 1"
-  ).get(shiftId) as TaskRowMin | undefined;
-
-  if (!nextTask) {
-    const completedAt = new Date().toISOString();
-    db.prepare("UPDATE shifts SET status = 'completed', completed_at = ? WHERE id = ?").run(completedAt, shiftId);
-    generateShiftReport(shiftId);
-    return;
-  }
-
-  // Respect depends_on — same logic as tryAssignPendingTasks
-  if (nextTask.depends_on) {
-    let deps: string[];
-    try { deps = JSON.parse(nextTask.depends_on); } catch { deps = []; }
-    if (deps.length > 0) {
-      const placeholders = deps.map(() => '?').join(',');
-      const blocking = db.prepare(
-        `SELECT COUNT(*) as count FROM tasks WHERE id IN (${placeholders}) AND status NOT IN ('done','failed')`
-      ).get(...deps) as { count: number };
-      if (blocking.count > 0) return;
-    }
-  }
-
-  const agent   = db.prepare('SELECT id, provider FROM agents WHERE id = ?').get(agentId) as AgentRowMin | undefined;
-  const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(nextTask.project_id) as ProjectRowMin | undefined;
-  if (!agent || !project) return;
-
-  const sessionId = uuid();
-  const branch    = `agent/${sessionId}`;
-  const projectObj = { id: project.id, name: project.name, repoPath: project.repo_path, role: project.role as any, createdAt: project.created_at };
-
-  try {
-    const worktreePath = await createWorktree(projectObj, sessionId, nextTask.base_branch);
-    const now = new Date().toISOString();
-    db.prepare(
-      'INSERT INTO sessions (id, user_id, agent_id, project_id, work_task_id, provider, branch, worktree_path, status, shift_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(sessionId, userId, agentId, project.id, nextTask.id, agent.provider, branch, worktreePath, 'idle', shiftId, now);
-    assignTaskToSession(nextTask.id, agentId, sessionId, now);
-
-    const session = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId) as any;
-    // Import toSession inline to avoid circular deps with _helpers
-    const sessionRef: SessionRef = {
-      id: session.id, agentId: session.agent_id, projectId: session.project_id,
-      workTaskId: session.work_task_id ?? undefined, shiftId: session.shift_id ?? undefined,
-      provider: session.provider as AgentProvider, branch: session.branch,
-      worktreePath: session.worktree_path, status: session.status, createdAt: session.created_at,
-    };
-    void runAgent(sessionRef, nextTask.prompt, userId, agentId);
-  } catch (err) {
-    console.error('[shift] Failed to advance:', err);
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Shared helper: create a session and run it for a task
@@ -549,9 +491,22 @@ async function checkLeadContinuation(completedTaskId: string, userId: string): P
     ORDER BY t.created_at ASC
   `).all(task.lead_session_id, SYNTHESIS_TITLE) as { title: string; status: string; journal: string | null }[];
 
-  const summaries = subtasks.map((t, i) =>
-    `${i + 1}. **${t.title}** — ${t.status}\n${t.journal?.replace(/^/gm, '   ') ?? '   (no journal)'}`
-  ).join('\n\n');
+  const done   = subtasks.filter(t => t.status === 'done');
+  const failed = subtasks.filter(t => t.status === 'failed');
+
+  const fmtSubtask = (t: { title: string; status: string; journal: string | null }, i: number) => {
+    const icon    = t.status === 'done' ? '✓' : '✗';
+    const journal = t.journal ? `\n${t.journal.slice(0, 800).replace(/^/gm, '   ')}${t.journal.length > 800 ? '\n   …(truncated)' : ''}` : '\n   (no journal)';
+    return `${i + 1}. ${icon} **${t.title}**${journal}`;
+  };
+
+  const doneBlock   = done.length   > 0 ? `## Completed (${done.length})\n\n${done.map(fmtSubtask).join('\n\n')}`   : '';
+  const failedBlock = failed.length > 0 ? `## Failed (${failed.length})\n\n${failed.map(fmtSubtask).join('\n\n')}` : '';
+  const summaries   = [doneBlock, failedBlock].filter(Boolean).join('\n\n');
+
+  const failureGuidance = failed.length > 0
+    ? `\n\n**There are ${failed.length} failed task(s).** For each failure, decide:\n- Retry with a corrected prompt using \`create_task\`\n- Accept the failure and note it in your synthesis\n- Use \`request_clarification\` if you need user input before deciding`
+    : '';
 
   const leadSession = db.prepare('SELECT agent_id FROM sessions WHERE id = ?').get(task.lead_session_id) as { agent_id: string } | undefined;
   if (!leadSession) return;
@@ -565,7 +520,7 @@ async function checkLeadContinuation(completedTaskId: string, userId: string): P
     VALUES (?, ?, ?, ?, ?, 'main', 'pending', 10, 's', ?, ?)
   `).run(
     synthTaskId, userId, task.project_id, SYNTHESIS_TITLE,
-    `All delegated tasks have completed. Review the outcomes:\n\n${summaries}\n\nCall \`append_journal\` with your synthesis, then \`complete_task\` with a brief summary.`,
+    `All delegated subtasks have reached a terminal state. Review the outcomes below and synthesize the results.${failureGuidance}\n\n${summaries}\n\nWhen done: call \`append_journal\` with your synthesis and decisions, then \`complete_task\` with a one-line summary.`,
     task.lead_session_id, now,
   );
   writeEvent(userId, 'task.created', { taskId: synthTaskId, projectId: task.project_id });
@@ -641,14 +596,23 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
   let prevJournal: string | undefined;
   if (session.workTaskId && !session.parentSessionId) {
     const prevRows = db.prepare(
-      "SELECT journal FROM sessions WHERE work_task_id = ? AND id != ? AND journal IS NOT NULL AND status IN ('done','error','merged') ORDER BY created_at DESC LIMIT 4"
+      "SELECT journal FROM sessions WHERE work_task_id = ? AND id != ? AND journal IS NOT NULL AND status IN ('done','error','merged') ORDER BY created_at DESC LIMIT 2"
     ).all(session.workTaskId, session.id) as { journal: string }[];
-    if (prevRows.length > 0) prevJournal = prevRows.map(r => r.journal).join('\n\n---\n\n');
+    if (prevRows.length > 0) {
+      // Truncate each prior journal to avoid blowing the context window on long handoffs
+      const MAX_JOURNAL = 1500;
+      const truncated = prevRows.map(r =>
+        r.journal.length > MAX_JOURNAL
+          ? r.journal.slice(0, MAX_JOURNAL) + '\n…(truncated)'
+          : r.journal
+      );
+      prevJournal = truncated.join('\n\n---\n\n');
+    }
   }
 
   const journalInstruction = session.parentSessionId ? '' : isLead
     ? `\n\n---\n\nYou are a **Lead Agent**. Your only job is to coordinate — you must NOT write code or implement features yourself.\n\nYou have a \`pilot\` MCP server connected. These tools are available right now as direct MCP calls:\n\n- \`list_agents\` — see available agents, their roles, and current status\n- \`list_tasks\` — see tasks in this project (filter by status: pending, running, done, failed)\n- \`create_task\` — create a subtask (title, prompt, baseBranch, role, priority, dependsOn)\n- \`wait_for_task\` — block until a specific task completes; use this to chain dependent work\n- \`get_task_status\` — check the status and journal of a specific task by ID\n- \`request_clarification\` — ask the user if the brief is ambiguous\n- \`append_journal\` — record your plan and decisions (call after creating tasks)\n- \`skip_task\` — use this if MCP tools are not responding\n\nRoles: "worker" (writes code — the only valid role for subtasks)\n\n**Required first step**: Call \`list_agents\` immediately. If it fails or returns an error, call \`skip_task\` with reason "MCP connectivity failure" and stop.\n\nWorkflow:\n1. Call \`list_agents\` to see who is available\n2. Call \`list_tasks\` to check if relevant work is already pending or done\n3. Create subtasks with \`create_task\` — use \`dependsOn\` to express ordering instead of waiting yourself\n4. Call \`append_journal\` with your plan and the task IDs you created\n5. Exit — the system will auto-assign tasks and call you back with a synthesis prompt when all subtasks finish\n\nRules:\n- Never write, edit, or implement code yourself\n- Prefer \`dependsOn\` over \`wait_for_task\` — it lets tasks run as soon as dependencies clear without occupying a session\n- Use \`wait_for_task\` only when you need a subtask's output before you can decide what to create next\n- Keep each task focused and completable in one session`
-    : `\n\n---\n\nYou have access to a \`pilot\` MCP server. Use these tools as you work:\n\n- \`append_journal\` — append progress notes at any point; call this often so partial work survives a crash\n- \`update_journal\` — replace the full journal; use this for your final summary when done\n- \`list_tasks\` — see other pending or running tasks in this project if you need context\n- \`request_clarification\` — if you hit genuine ambiguity where guessing would waste significant effort, ask the user. They will respond in real time.\n- \`skip_task\` — if the task is blocked by something outside your control (missing dependency, broken environment), call this with a reason instead of failing silently.\n- \`get_quota_status\` — check if your API connection has rate limits before starting expensive operations.`;
+    : `\n\n---\n\nYou have access to a \`pilot\` MCP server. Use these tools as you work:\n\n- \`append_journal\` — append progress notes at any point; call this often so partial work survives a crash\n- \`update_journal\` — replace the full journal; use this for your final summary when done\n- \`list_tasks\` — see other pending or running tasks in this project if you need context\n- \`signal_lead\` — if you are a subtask and need to inform your lead of something mid-task (a blocker, a decision point, a scope question), call this with a message. The lead will receive it as a follow-up prompt.\n- \`update_knowledge\` — write a knowledge document back to your profile (learnings, conventions, reusable context)\n- \`request_clarification\` — if you hit genuine ambiguity where guessing would waste significant effort, ask the user. They will respond in real time.\n- \`skip_task\` — if the task is blocked by something outside your control (missing dependency, broken environment), call this with a reason instead of failing silently.\n- \`get_quota_status\` — check if your API connection has rate limits before starting expensive operations.`;
 
   // Inject project README / CLAUDE.md if present — agents understand conventions better
   let projectCtx = '';
@@ -744,26 +708,17 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
     for (const line of lines) {
       if (!line.trim()) continue;
       try {
-        const obj = JSON.parse(line.trim());
-        // Capture runner session ID for turn continuation
-        if (!runnerSidCaptured) {
-          const sid = obj.session_id ?? obj.sessionId;
-          if (sid && typeof sid === 'string' && sid.length > 4) {
-            db.prepare('UPDATE sessions SET runner_session_id = ? WHERE id = ?').run(sid, session.id);
-            runnerSidCaptured = true;
-          }
+        const parsed = parseOutputLine(session.provider, line);
+        if (!runnerSidCaptured && parsed.runnerId) {
+          db.prepare('UPDATE sessions SET runner_session_id = ? WHERE id = ?').run(parsed.runnerId, session.id);
+          runnerSidCaptured = true;
         }
-        // Capture token usage from assistant messages
-        const usage = obj.message?.usage;
-        if (usage) {
-          inputTokens     += usage.input_tokens     ?? 0;
-          outputTokens    += usage.output_tokens    ?? 0;
-          cacheReadTokens += usage.cache_read_input_tokens ?? 0;
+        if (parsed.usage) {
+          inputTokens     += parsed.usage.inputTokens;
+          outputTokens    += parsed.usage.outputTokens;
+          cacheReadTokens += parsed.usage.cacheReadTokens;
         }
-        // Capture final cost from result line
-        if (obj.type === 'result' && typeof obj.total_cost_usd === 'number') {
-          totalCostUsd = obj.total_cost_usd;
-        }
+        if (parsed.costUsd != null) totalCostUsd = parsed.costUsd;
       } catch { /* not JSON — skip */ }
     }
   });
@@ -803,10 +758,6 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
       void captureTasks(session, exitCode);
     } else {
       captureJournal(session.id, session.worktreePath);
-      if (session.shiftId && exitCode === 0) {
-        void advanceShift(session.shiftId, session.agentId, userId);
-      }
-      // Check if any pending tasks are now unblocked, and trigger lead synthesis if applicable
       if (session.workTaskId) {
         void tryAssignPendingTasks(userId, session.projectId);
         void checkLeadContinuation(session.workTaskId, userId);
@@ -952,10 +903,9 @@ export async function continueAgent(
     for (const line of lines) {
       if (!line.trim()) continue;
       try {
-        const obj = JSON.parse(line.trim());
-        const sid = obj.session_id ?? obj.sessionId;
-        if (sid && typeof sid === 'string' && sid.length > 4) {
-          db.prepare('UPDATE sessions SET runner_session_id = ? WHERE id = ?').run(sid, session.id);
+        const parsed = parseOutputLine(session.provider, line);
+        if (parsed.runnerId) {
+          db.prepare('UPDATE sessions SET runner_session_id = ? WHERE id = ?').run(parsed.runnerId, session.id);
           runnerSidCaptured = true;
           break;
         }

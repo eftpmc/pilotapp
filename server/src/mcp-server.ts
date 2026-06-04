@@ -216,6 +216,29 @@ const TOOLS = [
     },
   },
   {
+    name: 'signal_lead',
+    description: 'Send a message to the lead agent that delegated this task. Use when you hit a blocker, need a decision, or want to surface important information before the synthesis turn. The lead will receive your message as a follow-up prompt.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', description: 'What you want to tell the lead — blocker details, a decision needed, or key findings' },
+      },
+      required: ['message'],
+    },
+  },
+  {
+    name: 'update_knowledge',
+    description: 'Write a knowledge document to your agent profile. Use this to record learnings, conventions, or reusable context that should persist across sessions.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        title:   { type: 'string', description: 'Short document title (used as the key — updating with the same title replaces the existing doc)' },
+        content: { type: 'string', description: 'Document content in Markdown' },
+      },
+      required: ['title', 'content'],
+    },
+  },
+  {
     name: 'send_to_agent',
     description: 'Queue a follow-up prompt for another session. The target session must be done or in error state.',
     inputSchema: {
@@ -362,6 +385,27 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<{ 
           await new Promise(resolve => setTimeout(resolve, 10_000));
         }
         return err(`Timed out waiting for task ${taskId} after ${(args.maxMinutes as number) ?? 30} minutes`);
+      }
+
+      case 'signal_lead': {
+        const result = await callInternal('POST', `/internal/sessions/${SESSION_ID}/signal-lead`, {
+          message: args.message,
+        });
+        const r = result as { ok?: boolean; queued?: boolean; error?: string; note?: string };
+        if (r.error) return err(`signal_lead failed: ${r.error}`);
+        const note = r.note ? ` (${r.note})` : '';
+        return text(r.queued ? `Message queued for lead.${note}` : `Lead notified.${note}`);
+      }
+
+      case 'update_knowledge': {
+        const result = await callInternal('POST', `/internal/knowledge`, {
+          sessionId: SESSION_ID,
+          title:     args.title,
+          content:   args.content,
+        });
+        const r = result as { id?: string; error?: string };
+        if (r.error) return err(`update_knowledge failed: ${r.error}`);
+        return text(`Knowledge doc "${args.title}" saved (id: ${r.id}).`);
       }
 
       case 'send_to_agent': {

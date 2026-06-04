@@ -66,10 +66,17 @@ export default function OverviewPage() {
   function projectName(id: string) { return projectList.find(p => p.id === id)?.name ?? 'Unknown' }
   function taskTitle(wid?: string) { return wid ? taskList.find(t => t.id === wid)?.title : undefined }
 
+  const todayCost = sessionList.reduce((sum, s) => {
+    if (!s.totalCostUsd) return sum
+    const age = Date.now() - new Date(s.createdAt).getTime()
+    return age < 86_400_000 ? sum + s.totalCostUsd : sum
+  }, 0)
+
   const parts: string[] = []
   if (running.length) parts.push(`${running.length} agent${running.length !== 1 ? 's' : ''} working`)
   if (review.length)  parts.push(`${review.length} to review`)
   if (queued.length)  parts.push(`${queued.length} queued`)
+  if (todayCost > 0)  parts.push(`$${todayCost.toFixed(2)} today`)
   const subtitle = parts.length ? parts.join(' · ') : 'Nothing running yet.'
 
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
