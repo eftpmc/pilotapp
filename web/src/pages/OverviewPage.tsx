@@ -61,6 +61,10 @@ export default function OverviewPage() {
   const running      = codeSessions.filter(s => s.status === 'running')
   const review       = codeSessions.filter(s => s.status === 'done' || s.status === 'error')
   const queued       = taskList.filter(t => t.status === 'pending')
+  const recentWork   = codeSessions
+    .filter(s => s.status === 'merged' || s.status === 'done' || s.status === 'error')
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, 5)
 
   function agentFor(id: string)    { return agentList.find(e => e.id === id) }
   function projectName(id: string) { return projectList.find(p => p.id === id)?.name ?? 'Unknown' }
@@ -77,6 +81,7 @@ export default function OverviewPage() {
   if (review.length)  parts.push(`${review.length} to review`)
   if (queued.length)  parts.push(`${queued.length} queued`)
   if (todayCost > 0)  parts.push(`$${todayCost.toFixed(2)} today`)
+  if (!parts.length && recentWork.length > 0) parts.push(`${recentWork.length} recent session${recentWork.length !== 1 ? 's' : ''}`)
   const subtitle = parts.length ? parts.join(' · ') : 'Nothing running yet.'
 
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
@@ -188,6 +193,38 @@ export default function OverviewPage() {
                 })}
               </div>
             )}
+          </section>
+        )}
+
+        {/* Recent work */}
+        {running.length === 0 && review.length === 0 && recentWork.length > 0 && (
+          <section>
+            <p className="text-xs font-medium text-muted-foreground/60 mb-3">Recent work</p>
+            <div className="flex flex-col gap-2">
+              {recentWork.map(s => {
+                const agent = agentFor(s.agentId)
+                const title = taskTitle(s.workTaskId)
+                const isError = s.status === 'error'
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => navigate(`/sessions/${s.id}`)}
+                    className={cn(
+                      'flex items-center gap-3 px-4 py-3.5 bg-card border border-border rounded-xl hover:bg-muted/50 transition-colors text-left w-full',
+                      isError && 'border-destructive/25'
+                    )}
+                  >
+                    <AgentAvatar agent={agent} size={34} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-foreground truncate">{title ?? s.branch.replace(/^agent\/([0-9a-f]{8}).*/i, 'agent/$1')}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{agent?.name ?? '—'} · {projectName(s.projectId)}</p>
+                    </div>
+                    <span className="text-xs text-muted-foreground/40 shrink-0 tabular-nums">{timeAgo(s.createdAt)}</span>
+                    <StatusBadge status={s.status} />
+                  </button>
+                )
+              })}
+            </div>
           </section>
         )}
 

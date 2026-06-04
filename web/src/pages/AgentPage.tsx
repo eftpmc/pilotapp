@@ -47,6 +47,7 @@ export default function AgentPage() {
 
   const [name,   setName]   = useState('')
   const [deptId, setDeptId] = useState('')
+  const [connectionId, setConnectionId] = useState('')
   const [role,   setRole]   = useState<AgentRole>('worker')
   const [identityDirty, setIdentityDirty] = useState(false)
 
@@ -57,6 +58,7 @@ export default function AgentPage() {
   if (agent && seeded !== agent.id) {
     setName(agent.name)
     setDeptId(agent.departmentId ?? '')
+    setConnectionId(agent.connectionId ?? '')
     setRole(agent.role ?? 'worker')
     setPersonality(agent.personality ?? '')
     setIdentityDirty(false)
@@ -172,6 +174,19 @@ export default function AgentPage() {
                   <Input value={name} onChange={e => { setName(e.target.value); setIdentityDirty(true) }} />
                 </div>
                 <div className="flex flex-col gap-1.5">
+                  <Label>Connection</Label>
+                  <Select value={connectionId || agent.connectionId || ''} onValueChange={v => { setConnectionId(v); setIdentityDirty(true) }}>
+                    <SelectTrigger><SelectValue placeholder="Select connection" /></SelectTrigger>
+                    <SelectContent>
+                      {connList.map(c => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}{c.model ? ` · ${c.model}` : ''}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex flex-col gap-1.5">
                   <Label>Team</Label>
                   <Select value={deptId || '__none'} onValueChange={v => { setDeptId(v === '__none' ? '' : v); setIdentityDirty(true) }}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
@@ -195,13 +210,16 @@ export default function AgentPage() {
               {identityDirty && (
                 <div className="flex gap-2 justify-end">
                   <Button size="sm" variant="outline" onClick={() => {
-                    setName(agent.name); setDeptId(agent.departmentId ?? ''); setRole(agent.role ?? 'worker'); setIdentityDirty(false)
+                    setName(agent.name); setDeptId(agent.departmentId ?? ''); setConnectionId(agent.connectionId ?? ''); setRole(agent.role ?? 'worker'); setIdentityDirty(false)
                   }}>Cancel</Button>
-                  <Button size="sm" disabled={updateAgent.isPending} onClick={() => {
-                    updateAgent.mutate({ name: name.trim(), role, departmentId: deptId || null })
+                  <Button size="sm" disabled={updateAgent.isPending || !connectionId} onClick={() => {
+                    updateAgent.mutate({ name: name.trim(), connectionId, role, departmentId: deptId || null })
                     setIdentityDirty(false)
                   }}>Save</Button>
                 </div>
+              )}
+              {updateAgent.isError && (
+                <p className="text-xs text-destructive">{updateAgent.error.message}</p>
               )}
             </div>
           </section>

@@ -82,15 +82,15 @@ function findBinary(name: string): string | null {
 // Command builders
 // ---------------------------------------------------------------------------
 
-interface AgentMeta { model: string | null; personality: string | null; connection_id: string | null; role: string | null }
+interface AgentMeta { model: string | null; personality: string | null; connection_id: string | null; provider: string | null; role: string | null }
 
 function resolveAgentMeta(agentId: string): AgentMeta {
   return (db.prepare(`
-    SELECT a.personality, a.connection_id, a.role, c.model
+    SELECT a.personality, a.connection_id, a.role, c.model, COALESCE(c.type, a.provider) as provider
     FROM agents a
     LEFT JOIN connections c ON c.id = a.connection_id
     WHERE a.id = ?
-  `).get(agentId) as AgentMeta | undefined) ?? { model: null, personality: null, connection_id: null, role: null };
+  `).get(agentId) as AgentMeta | undefined) ?? { model: null, personality: null, connection_id: null, provider: null, role: null };
 }
 
 interface CommandOpts {
@@ -447,7 +447,8 @@ async function tryAssignPendingTasks(userId: string, projectId: string): Promise
     }
 
     const agent = db.prepare(`
-      SELECT a.id, a.provider FROM agents a
+      SELECT a.id, COALESCE(c.type, a.provider) as provider FROM agents a
+      LEFT JOIN connections c ON c.id = a.connection_id
       WHERE a.user_id = ?
         AND a.role = 'worker'
         AND a.id NOT IN (SELECT agent_id FROM sessions WHERE status IN ('running','idle','waiting'))
@@ -507,7 +508,12 @@ async function checkLeadContinuation(completedTaskId: string, userId: string): P
 
   const leadSession = db.prepare('SELECT agent_id FROM sessions WHERE id = ?').get(task.lead_session_id) as { agent_id: string } | undefined;
   if (!leadSession) return;
-  const agent = db.prepare('SELECT id, provider FROM agents WHERE id = ?').get(leadSession.agent_id) as AgentMin | undefined;
+  const agent = db.prepare(`
+    SELECT a.id, COALESCE(c.type, a.provider) as provider
+    FROM agents a
+    LEFT JOIN connections c ON c.id = a.connection_id
+    WHERE a.id = ?
+  `).get(leadSession.agent_id) as AgentMin | undefined;
   if (!agent) return;
 
   const synthTaskId = uuid();
@@ -576,8 +582,12 @@ function captureSpec(specId: string, worktreePath: string): void {
 export async function runAgent(session: SessionRef, prompt: string, userId: string, agentId?: string, explicitKey?: string): Promise<void> {
   if (active.has(session.id)) return;
 
-  const resolvedKey  = resolveApiKey(userId, session.provider, agentId, explicitKey);
   const meta         = resolveAgentMeta(session.agentId);
+  const provider     = (meta.provider ?? session.provider) as AgentProvider;
+  if (provider !== session.provider) {
+    db.prepare('UPDATE sessions SET provider = ? WHERE id = ?').run(provider, session.id);
+  }
+  const resolvedKey  = resolveApiKey(userId, provider, agentId, explicitKey);
   const model        = meta.model ?? undefined;
   const personality  = meta.personality ?? undefined;
   const connectionId = meta.connection_id ?? undefined;
@@ -587,7 +597,7 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
   const mcpConfigPath = buildMcpConfig(session.agentId, session.id, mcpCtx);
   // Codex reads MCP from .codex/config.toml in the worktree (no CLI flag needed)
   let codexConfigDir: string | undefined;
-  if (session.provider === 'codex') codexConfigDir = buildCodexMcpConfig(session.agentId, session.id, mcpCtx, session.worktreePath);
+  if (provider === 'codex') codexConfigDir = buildCodexMcpConfig(session.agentId, session.id, mcpCtx, session.worktreePath);
 
   // Inject previous session journals if this task has been worked on before (up to 4, newest-first)
   let prevJournal: string | undefined;
@@ -623,11 +633,11 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
   // System prompt: stable context that doesn't change turn-to-turn (goes via --system-prompt flag for claude)
   // Task prompt: the actual work + handoff notes (goes via -p)
   const systemPromptParts = [knowledgeCtx, projectCtx, personality, journalInstruction].filter(Boolean);
-  const systemPrompt      = session.provider === 'claude' && systemPromptParts.length > 0
+  const systemPrompt      = provider === 'claude' && systemPromptParts.length > 0
     ? systemPromptParts.join('\n\n---\n\n')
     : undefined;
 
-  const taskPromptParts = session.provider === 'claude'
+  const taskPromptParts = provider === 'claude'
     ? [prevJournal ? `# Handoff from Previous Session\n\n${prevJournal}` : '', prompt].filter(Boolean)
     : [knowledgeCtx, projectCtx, personality, prevJournal ? `# Handoff from Previous Session\n\n${prevJournal}` : '', prompt + journalInstruction].filter(Boolean);
   const taskPrompt = taskPromptParts.join('\n\n---\n\n');
@@ -641,9 +651,9 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
     ? ['Edit', 'Write', 'MultiEdit', 'NotebookEdit']
     : undefined;
 
-  const { cmd, args } = buildCommand(session.provider, taskPrompt, { model, mcpConfigPath, systemPrompt, maxTurns, disallowedTools });
+  const { cmd, args } = buildCommand(provider, taskPrompt, { model, mcpConfigPath, systemPrompt, maxTurns, disallowedTools });
   const env = resolvedKey
-    ? { ...resolvedEnv(process.env as Record<string, string | undefined>), ...apiKeyEnv(session.provider, resolvedKey) }
+    ? { ...resolvedEnv(process.env as Record<string, string | undefined>), ...apiKeyEnv(provider, resolvedKey) }
     : resolvedEnv(process.env as Record<string, string | undefined>);
 
   const entry: ActiveSession = { proc: null as any, buffer: [], subs: new Set() };
@@ -667,12 +677,12 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
   // No API key is fine — the CLI will use machine auth (OAuth subscription).
   // Only warn; don't abort.
   if (!resolvedKey) {
-    broadcast('stderr', `[pilot] No API key set — using machine auth (OAuth subscription) for ${session.provider}.`);
+    broadcast('stderr', `[pilot] No API key set — using machine auth (OAuth subscription) for ${provider}.`);
   }
 
   const bin = findBinary(cmd);
   if (!bin) {
-    const tip = session.provider === 'claude'
+    const tip = provider === 'claude'
       ? 'Install with: npm install -g @anthropic-ai/claude-code'
       : 'Install with: npm install -g @openai/codex';
     broadcast('stderr', `[pilot] Command not found: '${cmd}'\n${tip}`);
@@ -705,7 +715,7 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
     for (const line of lines) {
       if (!line.trim()) continue;
       try {
-        const parsed = parseOutputLine(session.provider, line);
+        const parsed = parseOutputLine(provider, line);
         if (!runnerSidCaptured && parsed.runnerId) {
           db.prepare('UPDATE sessions SET runner_session_id = ? WHERE id = ?').run(parsed.runnerId, session.id);
           runnerSidCaptured = true;
@@ -814,21 +824,25 @@ export async function continueAgent(
     return;
   }
 
-  const resolvedKey   = resolveApiKey(userId, session.provider, agentId, explicitKey);
   const meta          = resolveAgentMeta(session.agentId);
+  const provider      = (meta.provider ?? session.provider) as AgentProvider;
+  if (provider !== session.provider) {
+    db.prepare('UPDATE sessions SET provider = ? WHERE id = ?').run(provider, session.id);
+  }
+  const resolvedKey   = resolveApiKey(userId, provider, agentId, explicitKey);
   const model         = meta.model ?? undefined;
   const connectionId  = meta.connection_id ?? undefined;
   const mcpCtx2 = { userId, projectId: session.projectId, parentSessionId: session.parentSessionId };
   const mcpConfigPath = buildMcpConfig(session.agentId, session.id, mcpCtx2, `${session.id}-t${turnNumber}`);
   let codexConfigDir2: string | undefined;
-  if (session.provider === 'codex') codexConfigDir2 = buildCodexMcpConfig(session.agentId, session.id, mcpCtx2, session.worktreePath);
+  if (provider === 'codex') codexConfigDir2 = buildCodexMcpConfig(session.agentId, session.id, mcpCtx2, session.worktreePath);
 
   // For claude --resume: system prompt is already embedded in the session; just pass the turn prompt.
   // For codex --session: re-inject context since codex resume behaviour is less defined.
   const isLead   = meta.role === 'lead';
   const isReview = !!session.parentSessionId;
   let effectivePrompt: string;
-  if (session.provider === 'claude') {
+  if (provider === 'claude') {
     effectivePrompt = prompt;
   } else {
     const personality  = meta.personality ?? undefined;
@@ -843,9 +857,9 @@ export async function continueAgent(
     ? ['Edit', 'Write', 'MultiEdit', 'NotebookEdit']
     : undefined;
 
-  const { cmd, args } = buildCommand(session.provider, effectivePrompt, { model, mcpConfigPath, resumeId: runnerSessionId, maxTurns, disallowedTools });
+  const { cmd, args } = buildCommand(provider, effectivePrompt, { model, mcpConfigPath, resumeId: runnerSessionId, maxTurns, disallowedTools });
   const env = resolvedKey
-    ? { ...resolvedEnv(process.env as Record<string, string | undefined>), ...apiKeyEnv(session.provider, resolvedKey) }
+    ? { ...resolvedEnv(process.env as Record<string, string | undefined>), ...apiKeyEnv(provider, resolvedKey) }
     : resolvedEnv(process.env as Record<string, string | undefined>);
 
   const entry: ActiveSession = { proc: null as any, buffer: [], subs: new Set() };
@@ -867,7 +881,7 @@ export async function continueAgent(
   broadcast('turn_start', JSON.stringify({ turnId, turnNumber, prompt })); // shows original prompt, not expanded
 
   if (!resolvedKey) {
-    broadcast('stderr', `[pilot] No API key set — using machine auth for ${session.provider}.`);
+    broadcast('stderr', `[pilot] No API key set — using machine auth for ${provider}.`);
   }
 
   const bin = findBinary(cmd);
@@ -900,7 +914,7 @@ export async function continueAgent(
     for (const line of lines) {
       if (!line.trim()) continue;
       try {
-        const parsed = parseOutputLine(session.provider, line);
+        const parsed = parseOutputLine(provider, line);
         if (parsed.runnerId) {
           db.prepare('UPDATE sessions SET runner_session_id = ? WHERE id = ?').run(parsed.runnerId, session.id);
           runnerSidCaptured = true;

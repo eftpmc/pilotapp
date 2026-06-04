@@ -264,6 +264,7 @@ migrate('026_sessions_tokens', `
   ALTER TABLE sessions ADD COLUMN cache_read_tokens INTEGER;
   ALTER TABLE sessions ADD COLUMN total_cost_usd REAL;
 `);
+migrate('037_sessions_diff_snapshot', 'ALTER TABLE sessions ADD COLUMN diff_snapshot TEXT');
 migrate('036_drop_shifts', `
   ALTER TABLE sessions DROP COLUMN shift_id;
   ALTER TABLE tasks DROP COLUMN shift_id;

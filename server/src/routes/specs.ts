@@ -98,7 +98,12 @@ router.post('/', async (req: Request, res: Response) => {
   let status = 'draft';
 
   if (agentId) {
-    const agent = db.prepare('SELECT * FROM agents WHERE id = ? AND user_id = ?').get(agentId, uid) as AgentRow | undefined;
+    const agent = db.prepare(`
+      SELECT a.*, COALESCE(c.type, a.provider) as provider
+      FROM agents a
+      LEFT JOIN connections c ON c.id = a.connection_id
+      WHERE a.id = ? AND a.user_id = ?
+    `).get(agentId, uid) as AgentRow | undefined;
     if (!agent) { res.status(404).json({ error: 'Agent not found' }); return; }
     status = 'planning';
   }
@@ -109,7 +114,12 @@ router.post('/', async (req: Request, res: Response) => {
   ).run(specId, uid, projectId, title, brief, '', null, status, now, now);
 
   if (agentId) {
-    const agent = db.prepare('SELECT * FROM agents WHERE id = ? AND user_id = ?').get(agentId, uid) as AgentRow;
+    const agent = db.prepare(`
+      SELECT a.*, COALESCE(c.type, a.provider) as provider
+      FROM agents a
+      LEFT JOIN connections c ON c.id = a.connection_id
+      WHERE a.id = ? AND a.user_id = ?
+    `).get(agentId, uid) as AgentRow;
     try {
       const sId          = uuid();
       const worktreePath = await createWorktree(

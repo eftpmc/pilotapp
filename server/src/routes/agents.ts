@@ -35,7 +35,13 @@ function toAgent(row: Row | Record<string, unknown>) {
 // ---------------------------------------------------------------------------
 
 router.get('/', (req: Request, res: Response) => {
-  const rows = db.prepare('SELECT * FROM agents WHERE user_id = ? ORDER BY created_at DESC').all(userId(req)) as Row[];
+  const rows = db.prepare(`
+    SELECT a.*, COALESCE(c.type, a.provider) as provider
+    FROM agents a
+    LEFT JOIN connections c ON c.id = a.connection_id
+    WHERE a.user_id = ?
+    ORDER BY a.created_at DESC
+  `).all(userId(req)) as Row[];
   res.json(rows.map(toAgent));
 });
 
@@ -98,6 +104,7 @@ router.post('/', (req: Request, res: Response) => {
 
 const PatchSchema = z.object({
   name:         z.string().min(1).optional(),
+  connectionId: z.string().min(1).optional(),
   personality:  z.string().optional(),
   role:         z.enum(AGENT_ROLES).optional(),
   departmentId: z.string().nullable().optional(),
@@ -108,12 +115,24 @@ router.patch('/:id', (req: Request, res: Response) => {
   const parsed = PatchSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
 
-  const row = db.prepare('SELECT * FROM agents WHERE id = ? AND user_id = ?').get(req.params.id, userId(req)) as Row | undefined;
+  const row = db.prepare(`
+    SELECT a.*, COALESCE(c.type, a.provider) as provider
+    FROM agents a
+    LEFT JOIN connections c ON c.id = a.connection_id
+    WHERE a.id = ? AND a.user_id = ?
+  `).get(req.params.id, userId(req)) as Row | undefined;
   if (!row) { res.status(404).json({ error: 'Not found' }); return; }
+
+  const connection = parsed.data.connectionId
+    ? db.prepare('SELECT * FROM connections WHERE id = ? AND user_id = ?').get(parsed.data.connectionId, userId(req)) as
+      | { id: string; type: string } | undefined
+    : undefined;
+  if (parsed.data.connectionId && !connection) { res.status(404).json({ error: 'Connection not found' }); return; }
 
   // Lead requires Claude
   const newRole = parsed.data.role;
-  if (newRole === 'lead' && row.provider !== 'claude') {
+  const effectiveProvider = connection?.type ?? row.provider;
+  if ((newRole ?? row.role) === 'lead' && effectiveProvider !== 'claude') {
     res.status(400).json({ error: 'Lead agents must use a Claude connection' });
     return;
   }
@@ -133,13 +152,19 @@ router.patch('/:id', (req: Request, res: Response) => {
 
   const sets: string[] = []; const vals: unknown[] = [];
   if (parsed.data.name         !== undefined) { sets.push('name = ?');          vals.push(parsed.data.name) }
+  if (connection)                           { sets.push('connection_id = ?'); vals.push(connection.id); sets.push('provider = ?'); vals.push(connection.type) }
   if (parsed.data.personality  !== undefined) { sets.push('personality = ?');   vals.push(parsed.data.personality || null) }
   if (parsed.data.role         !== undefined) { sets.push('role = ?');          vals.push(parsed.data.role) }
   if (parsed.data.departmentId !== undefined) { sets.push('department_id = ?'); vals.push(parsed.data.departmentId) }
   if (parsed.data.avatarSeed   !== undefined) { sets.push('avatar_seed = ?');   vals.push(parsed.data.avatarSeed) }
   if (sets.length > 0) { vals.push(row.id); db.prepare(`UPDATE agents SET ${sets.join(', ')} WHERE id = ?`).run(...vals); }
 
-  const updated = db.prepare('SELECT * FROM agents WHERE id = ?').get(row.id) as Row;
+  const updated = db.prepare(`
+    SELECT a.*, COALESCE(c.type, a.provider) as provider
+    FROM agents a
+    LEFT JOIN connections c ON c.id = a.connection_id
+    WHERE a.id = ?
+  `).get(row.id) as Row;
   res.json(toAgent(updated));
 });
 

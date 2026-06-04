@@ -73,7 +73,6 @@ afterEach(async () => {
     DELETE FROM events;
     DELETE FROM sessions;
     DELETE FROM tasks;
-    DELETE FROM shifts;
     DELETE FROM knowledge;
     DELETE FROM specs;
     DELETE FROM tools;

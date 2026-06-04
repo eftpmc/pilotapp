@@ -417,10 +417,15 @@ function ToolCard({ tool, deptList, deptToolIds, employeeToolIds, onEdit, onDele
 // Preset shop row
 // ---------------------------------------------------------------------------
 
-function PresetRow({ preset, onAdd }: { preset: Preset; onAdd: () => void }) {
+function PresetRow({ preset, installedTool, onAdd }: { preset: Preset; installedTool?: Tool; onAdd: () => void }) {
   const Icon = preset.icon
+  const installed = !!installedTool
+  const serverCount = installedTool ? Object.keys(installedTool.mcpConfig).length : 0
   return (
-    <div className="flex items-center gap-4 px-4 py-3.5 rounded-xl border border-transparent hover:border-border/60 hover:bg-muted/30 transition-colors group">
+    <div className={cn(
+      'flex items-center gap-4 px-4 py-3.5 rounded-xl border transition-colors group',
+      installed ? 'border-border/40 bg-muted/20 opacity-75' : 'border-transparent hover:border-border/60 hover:bg-muted/30'
+    )}>
       <div className="w-8 h-8 rounded-lg bg-muted/70 flex items-center justify-center shrink-0">
         <Icon className="h-4 w-4 text-foreground/70" />
       </div>
@@ -429,13 +434,22 @@ function PresetRow({ preset, onAdd }: { preset: Preset; onAdd: () => void }) {
           <span className="text-sm font-medium text-foreground">{preset.name}</span>
           <span className="text-xs text-muted-foreground">{preset.tagline}</span>
         </div>
-        <p className="text-xs text-muted-foreground/70 mt-0.5 leading-snug">{preset.description}</p>
+        <p className="text-xs text-muted-foreground/70 mt-0.5 leading-snug">
+          {installed ? `Installed · ${serverCount} server${serverCount !== 1 ? 's' : ''}` : preset.description}
+        </p>
       </div>
       <button
         onClick={onAdd}
-        className="shrink-0 h-7 px-3 rounded-lg text-xs text-muted-foreground border border-border/60 hover:border-border hover:text-foreground bg-background transition-colors cursor-pointer"
+        disabled={installed}
+        title={installed ? `${preset.name} is already installed.` : `Add ${preset.name}`}
+        className={cn(
+          'shrink-0 h-7 px-3 rounded-lg text-xs border transition-colors',
+          installed
+            ? 'text-muted-foreground/60 border-border/40 bg-muted/30 cursor-default'
+            : 'text-muted-foreground border-border/60 hover:border-border hover:text-foreground bg-background cursor-pointer'
+        )}
       >
-        Add
+        {installed ? 'Installed' : 'Add'}
       </button>
     </div>
   )
@@ -494,9 +508,7 @@ export default function ToolsPage() {
     agentToolMap.get(toolId)!.add(agentId)
   }
 
-  // Presets not yet installed (matched by name)
-  const installedNames = new Set(toolList.map(t => t.name.toLowerCase()))
-  const uninstalledPresets = PRESETS.filter(p => !installedNames.has(p.name.toLowerCase()))
+  const installedByName = new Map(toolList.map(t => [t.name.toLowerCase(), t]))
 
   return (
     <div className="flex-1 overflow-y-auto bg-background">
@@ -538,18 +550,23 @@ export default function ToolsPage() {
         )}
 
         {/* Shop */}
-        {uninstalledPresets.length > 0 && (
+        {PRESETS.length > 0 && (
           <section>
             <p className="text-xs text-muted-foreground/50 mb-1">Available</p>
             <div className="flex flex-col">
-              {uninstalledPresets.map(preset => (
-                <PresetRow key={preset.id} preset={preset} onAdd={() => setAddPreset(preset)} />
+              {PRESETS.map(preset => (
+                <PresetRow
+                  key={preset.id}
+                  preset={preset}
+                  installedTool={installedByName.get(preset.name.toLowerCase())}
+                  onAdd={() => setAddPreset(preset)}
+                />
               ))}
             </div>
           </section>
         )}
 
-        {toolList.length === 0 && uninstalledPresets.length === 0 && (
+        {toolList.length === 0 && PRESETS.length === 0 && (
           <p className="text-sm text-muted-foreground">All preset tools installed.</p>
         )}
 

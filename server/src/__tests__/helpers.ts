@@ -46,19 +46,18 @@ export function seedProject(userId: string, overrides: Partial<{ name: string; r
   return { id, repoPath };
 }
 
-export function seedTask(userId: string, projectId: string, overrides: Partial<{ title: string; prompt: string; status: string; priority: number; agentId: string; sessionId: string; shiftId: string; leadSessionId: string }> = {}) {
+export function seedTask(userId: string, projectId: string, overrides: Partial<{ title: string; prompt: string; status: string; priority: number; agentId: string; sessionId: string; leadSessionId: string }> = {}) {
   const id  = uuid();
   const now = new Date().toISOString();
   db.prepare('INSERT INTO tasks (id, user_id, project_id, title, prompt, base_branch, status, priority, size, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
     .run(id, userId, projectId, overrides.title ?? 'Test Task', overrides.prompt ?? 'do the thing', 'main', overrides.status ?? 'pending', overrides.priority ?? 0, 'm', now);
   if (overrides.agentId)        db.prepare('UPDATE tasks SET agent_id = ? WHERE id = ?').run(overrides.agentId, id);
   if (overrides.sessionId)      db.prepare('UPDATE tasks SET session_id = ? WHERE id = ?').run(overrides.sessionId, id);
-  if (overrides.shiftId)        db.prepare('UPDATE tasks SET shift_id = ? WHERE id = ?').run(overrides.shiftId, id);
   if (overrides.leadSessionId)  db.prepare('UPDATE tasks SET lead_session_id = ? WHERE id = ?').run(overrides.leadSessionId, id);
   return { id };
 }
 
-export function seedSession(userId: string, agentId: string, projectId: string, overrides: Partial<{ status: string; workTaskId: string; parentSessionId: string; shiftId: string; reviewVerdict: string; branch: string; worktreePath: string }> = {}) {
+export function seedSession(userId: string, agentId: string, projectId: string, overrides: Partial<{ status: string; workTaskId: string; parentSessionId: string; reviewVerdict: string; branch: string; worktreePath: string }> = {}) {
   const id           = uuid();
   const now          = new Date().toISOString();
   const branch       = overrides.branch       ?? `agent/${id}`;
@@ -67,7 +66,6 @@ export function seedSession(userId: string, agentId: string, projectId: string, 
     .run(id, userId, agentId, projectId, 'claude', branch, worktreePath, overrides.status ?? 'idle', now);
   if (overrides.workTaskId)      db.prepare('UPDATE sessions SET work_task_id = ? WHERE id = ?').run(overrides.workTaskId, id);
   if (overrides.parentSessionId) db.prepare('UPDATE sessions SET parent_session_id = ? WHERE id = ?').run(overrides.parentSessionId, id);
-  if (overrides.shiftId)         db.prepare('UPDATE sessions SET shift_id = ? WHERE id = ?').run(overrides.shiftId, id);
   if (overrides.reviewVerdict)   db.prepare('UPDATE sessions SET review_verdict = ? WHERE id = ?').run(overrides.reviewVerdict, id);
   return { id, branch, worktreePath };
 }

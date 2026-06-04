@@ -115,7 +115,12 @@ router.post('/queue/run', async (req: Request, res: Response) => {
         .map((r) => r.agent_id)
     );
 
-    const idleAgents = (db.prepare('SELECT * FROM agents WHERE user_id = ?').all(uid) as AgentRow[])
+    const idleAgents = (db.prepare(`
+      SELECT a.*, COALESCE(c.type, a.provider) as provider
+      FROM agents a
+      LEFT JOIN connections c ON c.id = a.connection_id
+      WHERE a.user_id = ?
+    `).all(uid) as AgentRow[])
       .filter((a) => !busyAgentIds.has(a.id));
 
     const assignedTaskIds = new Set<string>();
@@ -213,7 +218,12 @@ router.post('/:id/assign', async (req: Request, res: Response) => {
 
   const uid     = userId(req);
   const task    = db.prepare('SELECT * FROM tasks WHERE id = ? AND user_id = ?').get(req.params.id, uid) as TaskRow | undefined;
-  const agent   = db.prepare('SELECT * FROM agents WHERE id = ? AND user_id = ?').get(parsed.data.agentId, uid) as AgentRow | undefined;
+  const agent   = db.prepare(`
+    SELECT a.*, COALESCE(c.type, a.provider) as provider
+    FROM agents a
+    LEFT JOIN connections c ON c.id = a.connection_id
+    WHERE a.id = ? AND a.user_id = ?
+  `).get(parsed.data.agentId, uid) as AgentRow | undefined;
 
   if (!task)  { res.status(404).json({ error: 'Task not found' }); return; }
   if (!agent) { res.status(404).json({ error: 'Agent not found' }); return; }

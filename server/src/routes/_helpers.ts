@@ -6,6 +6,7 @@ export interface SessionRow {
   worktree_path: string; status: string; created_at: string;
   journal: string | null; parent_session_id: string | null;
   review_verdict: string | null; runner_session_id: string | null;
+  diff_snapshot: string | null;
   input_tokens: number | null; output_tokens: number | null;
   cache_read_tokens: number | null; total_cost_usd: number | null;
 }

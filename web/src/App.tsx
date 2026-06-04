@@ -24,10 +24,6 @@ import AdminServerPage from './pages/AdminServerPage'
 
 const qc = new QueryClient({ defaultOptions: { queries: { staleTime: 10_000 } } })
 
-function RequireAuth({ children }: { children: React.ReactNode }) {
-  return localStorage.getItem('token') ? <>{children}</> : <Navigate to="/login" replace />
-}
-
 function RequireAdmin({ children }: { children: React.ReactNode }) {
   if (!localStorage.getItem('token')) return <Navigate to="/login" replace />
   if (localStorage.getItem('pilot.role') !== 'admin') return <Navigate to="/" replace />

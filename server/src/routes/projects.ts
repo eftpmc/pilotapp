@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express';
 import { v4 as uuid } from 'uuid';
 import path from 'path';
 import fs from 'fs/promises';
+import fsSync from 'fs';
+import { spawn, type ChildProcess } from 'child_process';
 import { z } from 'zod';
 import { db } from '../db';
 import { initRepo, cloneRepo, importLocalRepo, pushToRemote } from '../services/git';
@@ -12,6 +14,30 @@ const router = Router();
 router.use(authMiddleware);
 
 const DATA_DIR = path.resolve(process.env.DATA_DIR || './data');
+
+interface ProjectRun {
+  proc: ChildProcess;
+  projectId: string;
+  script: string;
+  cwd: string;
+  startedAt: string;
+  output: string[];
+  url?: string;
+}
+
+interface ProjectAppStatus {
+  running: boolean;
+  script?: string;
+  cwd?: string;
+  startedAt?: string;
+  output?: string;
+  url?: string;
+}
+
+const runningApps = new Map<string, ProjectRun>();
+const lastApps = new Map<string, ProjectAppStatus>();
+
+const URL_RE = /(https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0):\d+[^\s]*)/i;
 
 // ---------------------------------------------------------------------------
 
@@ -30,6 +56,61 @@ function toProject(row: Row | Record<string, unknown>) {
     remoteUrl:  row.remote_url  ?? undefined,
     localPath:  row.local_path  ?? undefined,
     createdAt:  row.created_at,
+  };
+}
+
+function projectWorktreePath(projectId: string) {
+  return path.join(DATA_DIR, 'projects', projectId, 'app');
+}
+
+async function ensureProjectWorktree(row: Pick<Row, 'id' | 'repo_path'>): Promise<string> {
+  const worktreePath = projectWorktreePath(row.id);
+  await fs.mkdir(path.dirname(worktreePath), { recursive: true });
+  if (fsSync.existsSync(worktreePath)) {
+    await simpleGit(worktreePath).raw(['reset', '--hard', 'main']).catch(() => undefined);
+    await simpleGit(worktreePath).raw(['clean', '-fd']).catch(() => undefined);
+    return worktreePath;
+  }
+  await simpleGit(row.repo_path).raw(['worktree', 'add', '--force', worktreePath, 'main']);
+  return worktreePath;
+}
+
+async function readMainFile(repoPath: string, filePath: string): Promise<string | null> {
+  try {
+    return await simpleGit(repoPath).raw(['show', `main:${filePath}`]);
+  } catch {
+    return null;
+  }
+}
+
+function parsePackageScripts(raw: string | null): Record<string, string> {
+  if (!raw) return {};
+  try {
+    const json = JSON.parse(raw) as { scripts?: Record<string, string> };
+    return json.scripts ?? {};
+  } catch {
+    return {};
+  }
+}
+
+function appendRunOutput(run: ProjectRun, chunk: Buffer | string) {
+  const text = chunk.toString();
+  run.output.push(text);
+  if (run.output.length > 400) run.output.splice(0, run.output.length - 400);
+  const found = text.match(URL_RE)?.[1];
+  if (found) run.url = found.replace('0.0.0.0', 'localhost');
+}
+
+function runStatus(projectId: string): ProjectAppStatus {
+  const run = runningApps.get(projectId);
+  if (!run) return lastApps.get(projectId) ?? { running: false as const };
+  return {
+    running: true as const,
+    script: run.script,
+    cwd: run.cwd,
+    startedAt: run.startedAt,
+    output: run.output.join('').slice(-20000),
+    url: run.url,
   };
 }
 
@@ -141,6 +222,108 @@ router.post('/:id/push', async (req: Request, res: Response) => {
   } catch (err: any) {
     res.status(500).json({ error: err.message ?? 'Push failed' });
   }
+});
+
+// ---------------------------------------------------------------------------
+// GET /projects/:id/app-info — scripts and browser-viewable files
+// ---------------------------------------------------------------------------
+
+router.get('/:id/app-info', async (req: Request, res: Response) => {
+  const row = db.prepare('SELECT * FROM projects WHERE id = ? AND user_id = ?').get(req.params.id, userId(req)) as Row | undefined;
+  if (!row) { res.status(404).json({ error: 'Not found' }); return; }
+
+  let files: string[] = [];
+  try {
+    const out = await simpleGit(row.repo_path).raw(['ls-tree', '-r', '--name-only', 'main']);
+    files = out.trim().split('\n').filter(Boolean);
+  } catch { /* empty repo */ }
+
+  const scripts = parsePackageScripts(await readMainFile(row.repo_path, 'package.json'));
+  const htmlEntries = files.filter(f => /\.html?$/i.test(f)).sort((a, b) => {
+    if (a === 'index.html') return -1;
+    if (b === 'index.html') return 1;
+    return a.localeCompare(b);
+  });
+
+  res.json({
+    scripts,
+    htmlEntries,
+    status: runStatus(row.id),
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST /projects/:id/app/start — start an npm script in a main-branch worktree
+// ---------------------------------------------------------------------------
+
+router.post('/:id/app/start', async (req: Request, res: Response) => {
+  const parsed = z.object({ script: z.string().min(1) }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+
+  const row = db.prepare('SELECT * FROM projects WHERE id = ? AND user_id = ?').get(req.params.id, userId(req)) as Row | undefined;
+  if (!row) { res.status(404).json({ error: 'Not found' }); return; }
+
+  const scripts = parsePackageScripts(await readMainFile(row.repo_path, 'package.json'));
+  if (!scripts[parsed.data.script]) {
+    res.status(400).json({ error: 'Unknown package script' });
+    return;
+  }
+
+  const existing = runningApps.get(row.id);
+  if (existing) {
+    existing.proc.kill();
+    runningApps.delete(row.id);
+  }
+  lastApps.delete(row.id);
+
+  const cwd = await ensureProjectWorktree(row);
+  const proc = spawn('npm', ['run', parsed.data.script], {
+    cwd,
+    env: { ...process.env, FORCE_COLOR: '0' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const run: ProjectRun = {
+    proc,
+    projectId: row.id,
+    script: parsed.data.script,
+    cwd,
+    startedAt: new Date().toISOString(),
+    output: [],
+  };
+  runningApps.set(row.id, run);
+
+  appendRunOutput(run, `$ npm run ${parsed.data.script}\n`);
+  proc.stdout?.on('data', chunk => appendRunOutput(run, chunk));
+  proc.stderr?.on('data', chunk => appendRunOutput(run, chunk));
+  proc.on('close', code => {
+    appendRunOutput(run, `\n[process exited ${code ?? 0}]\n`);
+    lastApps.set(row.id, {
+      running: false,
+      script: run.script,
+      cwd: run.cwd,
+      startedAt: run.startedAt,
+      output: run.output.join('').slice(-20000),
+      url: run.url,
+    });
+    if (runningApps.get(row.id) === run) runningApps.delete(row.id);
+  });
+
+  res.status(201).json(runStatus(row.id));
+});
+
+// ---------------------------------------------------------------------------
+// POST /projects/:id/app/stop
+// ---------------------------------------------------------------------------
+
+router.post('/:id/app/stop', (req: Request, res: Response) => {
+  const row = db.prepare('SELECT id FROM projects WHERE id = ? AND user_id = ?').get(req.params.id, userId(req)) as { id: string } | undefined;
+  if (!row) { res.status(404).json({ error: 'Not found' }); return; }
+  const run = runningApps.get(row.id);
+  if (run) {
+    run.proc.kill();
+    runningApps.delete(row.id);
+  }
+  res.json({ stopped: true });
 });
 
 // ---------------------------------------------------------------------------

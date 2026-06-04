@@ -9,7 +9,7 @@ import path from 'path';
 import fs from 'fs';
 import { spawn } from 'child_process';
 import { db } from '../db';
-import { scaffold, seedTask, seedSession, seedTool, seedDepartment, seedAgent } from './helpers';
+import { scaffold, seedConnection, seedTask, seedSession, seedTool, seedDepartment, seedAgent } from './helpers';
 import { makeFakeProcess } from './setup';
 
 const mockSpawn = spawn as unknown as ReturnType<typeof vi.fn>;
@@ -113,6 +113,25 @@ describe('session lifecycle', () => {
     expect(taskRow.status).toBe('done');
   });
 
+  test('runner self-heals stale session provider from agent connection', async () => {
+    const { user, agent, project } = scaffold();
+    const codex = seedConnection(user.id, { name: 'Codex', type: 'codex' });
+    db.prepare("UPDATE agents SET connection_id = ?, provider = 'claude' WHERE id = ?").run(codex.id, agent.id);
+    const task    = seedTask(user.id, project.id);
+    const session = seedSession(user.id, agent.id, project.id, { workTaskId: task.id });
+
+    mockSpawn.mockReturnValueOnce(makeFakeProcess([JSON.stringify({ type: 'thread.started', thread_id: 'codex-thread' })], 0));
+
+    const { runAgent } = await import('../services/agents');
+    await runAgent({ id: session.id, agentId: agent.id, projectId: project.id, workTaskId: task.id, provider: 'claude', branch: `agent/${session.id}`, worktreePath: `/tmp/worktrees/${session.id}`, status: 'idle', createdAt: new Date().toISOString() }, 'do the thing', user.id, agent.id);
+    await new Promise(r => setTimeout(r, 50));
+
+    const row = db.prepare('SELECT provider FROM sessions WHERE id = ?').get(session.id) as { provider: string };
+    expect(row.provider).toBe('codex');
+    const spawnArgs = mockSpawn.mock.calls[0]?.[1] as string[];
+    expect(spawnArgs[0]).toBe('exec');
+  });
+
   test('session goes to error on non-zero exit', async () => {
     const { user, agent, project } = scaffold();
     const task    = seedTask(user.id, project.id);
@@ -154,20 +173,16 @@ describe('session lifecycle', () => {
 describe('lead agent', () => {
   beforeEach(() => { mockSpawn.mockClear(); mockSpawn.mockImplementation(() => makeFakeProcess([], 0)); });
 
-  test('lead session is auto-merged after writing TASKS.json', async () => {
+  test('lead session is auto-merged after creating delegated tasks', async () => {
     const { user, project } = scaffold();
     const leadAgent = seedAgent(user.id, { name: 'Lead', role: 'lead' });
     const task      = seedTask(user.id, project.id, { prompt: 'build auth' });
     const wtPath    = `/tmp/worktrees/lead-test-${Date.now()}`;
     fs.mkdirSync(wtPath, { recursive: true });
 
-    // Write the TASKS.json the lead agent would produce
-    fs.writeFileSync(path.join(wtPath, 'TASKS.json'), JSON.stringify([
-      { title: 'Auth routes',   prompt: 'Implement POST /auth/login', baseBranch: 'main', priority: 8 },
-      { title: 'Auth frontend', prompt: 'Add login form',             baseBranch: 'main', priority: 6 },
-    ]));
-
     const session = seedSession(user.id, leadAgent.id, project.id, { workTaskId: task.id, worktreePath: wtPath });
+    seedTask(user.id, project.id, { title: 'Auth routes',   prompt: 'Implement POST /auth/login', leadSessionId: session.id });
+    seedTask(user.id, project.id, { title: 'Auth frontend', prompt: 'Add login form',             leadSessionId: session.id });
     mockSpawn.mockReturnValueOnce(makeFakeProcess([], 0));
 
     const { runAgent } = await import('../services/agents');
@@ -178,7 +193,7 @@ describe('lead agent', () => {
     const sessionRow = db.prepare('SELECT status FROM sessions WHERE id = ?').get(session.id) as { status: string };
     expect(sessionRow.status).toBe('merged');
 
-    // Tasks should be created in the DB
+    // Delegated tasks are linked in the DB
     const createdTasks = db.prepare('SELECT title, lead_session_id FROM tasks WHERE project_id = ? AND id != ?').all(project.id, task.id) as { title: string; lead_session_id: string }[];
     expect(createdTasks).toHaveLength(2);
     expect(createdTasks.every(t => t.lead_session_id === session.id)).toBe(true);
@@ -254,74 +269,5 @@ describe('review session', () => {
 
     const parentRow = db.prepare('SELECT review_verdict FROM sessions WHERE id = ?').get(parentSession.id) as { review_verdict: string };
     expect(parentRow.review_verdict).toBe('changes_requested');
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Shift sequencing
-// ---------------------------------------------------------------------------
-
-describe('shift sequencing', () => {
-  beforeEach(() => { mockSpawn.mockClear(); mockSpawn.mockImplementation(() => makeFakeProcess([], 0)); });
-
-  test('shift advances to next task after first completes', async () => {
-    const { user, agent, project } = scaffold();
-
-    // Create shift manually
-    const shiftId = require('uuid').v4();
-    const now     = new Date().toISOString();
-    db.prepare('INSERT INTO shifts (id, user_id, agent_id, status, created_at) VALUES (?, ?, ?, ?, ?)').run(shiftId, user.id, agent.id, 'running', now);
-
-    const task1 = seedTask(user.id, project.id, { title: 'Task 1', status: 'running', shiftId });
-    const task2 = seedTask(user.id, project.id, { title: 'Task 2', status: 'pending', shiftId });
-    db.prepare('UPDATE tasks SET shift_id = ? WHERE id IN (?, ?)').run(shiftId, task1.id, task2.id);
-
-    const wtPath = `/tmp/worktrees/shift-${Date.now()}`;
-    fs.mkdirSync(wtPath, { recursive: true });
-    const session = seedSession(user.id, agent.id, project.id, { workTaskId: task1.id, shiftId, worktreePath: wtPath });
-
-    // First spawn (task 1) exits cleanly; second spawn (task 2) queued
-    mockSpawn
-      .mockReturnValueOnce(makeFakeProcess([], 0))   // task 1
-      .mockReturnValueOnce(makeFakeProcess([], 0));   // task 2 auto-started
-
-    const { runAgent } = await import('../services/agents');
-    await runAgent({ id: session.id, agentId: agent.id, projectId: project.id, workTaskId: task1.id, shiftId, provider: 'claude', branch: `agent/${session.id}`, worktreePath: wtPath, status: 'idle', createdAt: now }, 'do task 1', user.id);
-    await new Promise(r => setTimeout(r, 150));
-
-    // task2 was picked up by the shift — it was at minimum started (running or done since mock exits fast)
-    const task2Row = db.prepare('SELECT status FROM tasks WHERE id = ?').get(task2.id) as { status: string };
-    expect(['running', 'done']).toContain(task2Row.status);
-
-    // A second session should have been created for task2
-    const sessions = db.prepare('SELECT id FROM sessions WHERE work_task_id = ?').all(task2.id);
-    expect(sessions.length).toBe(1);
-  });
-
-  test('shift generates report when all tasks done', async () => {
-    const { user, agent, project } = scaffold();
-
-    const shiftId = require('uuid').v4();
-    const now = new Date().toISOString();
-    db.prepare('INSERT INTO shifts (id, user_id, agent_id, status, created_at) VALUES (?, ?, ?, ?, ?)').run(shiftId, user.id, agent.id, 'running', now);
-
-    // Only one task — shift completes after it
-    const task = seedTask(user.id, project.id, { title: 'Solo Task', status: 'running', shiftId });
-    db.prepare('UPDATE tasks SET shift_id = ? WHERE id = ?').run(shiftId, task.id);
-
-    const wtPath = `/tmp/worktrees/shift-report-${Date.now()}`;
-    fs.mkdirSync(wtPath, { recursive: true });
-    const session = seedSession(user.id, agent.id, project.id, { workTaskId: task.id, shiftId, worktreePath: wtPath });
-
-    mockSpawn.mockReturnValueOnce(makeFakeProcess([], 0));
-
-    const { runAgent } = await import('../services/agents');
-    await runAgent({ id: session.id, agentId: agent.id, projectId: project.id, workTaskId: task.id, shiftId, provider: 'claude', branch: `agent/${session.id}`, worktreePath: wtPath, status: 'idle', createdAt: now }, 'do solo task', user.id);
-    await new Promise(r => setTimeout(r, 150));
-
-    const shiftRow = db.prepare('SELECT status, report FROM shifts WHERE id = ?').get(shiftId) as { status: string; report: string | null };
-    expect(shiftRow.status).toBe('completed');
-    expect(shiftRow.report).toBeTruthy();
-    expect(shiftRow.report).toContain('Solo Task');
   });
 });

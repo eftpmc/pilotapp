@@ -593,7 +593,11 @@ export default function SessionPage() {
     if (!id || diffLoading) return
     if (diff !== null) { setActiveTab('diff'); return }
     setDiffLoad(true); setDiffError(null); setActiveTab('diff')
-    try { const { diff: d } = await sessions.diff(id); setDiff(d) }
+    try {
+      const { diff: d, unavailableReason } = await sessions.diff(id)
+      setDiff(d)
+      if (unavailableReason) setDiffError(unavailableReason)
+    }
     catch (e) { setDiffError(e instanceof Error ? e.message : 'Could not load diff') }
     finally { setDiffLoad(false) }
   }
@@ -626,7 +630,7 @@ export default function SessionPage() {
           <AgentAvatar agent={agent} size={44} running={activeRunning} />
           <div className="flex-1 min-w-0">
             <h1 className="text-lg font-semibold tracking-tight text-foreground leading-snug">
-              {task?.title ?? session?.branch ?? 'Session'}
+              {task?.title ?? (session?.specId ? 'Planning session' : branchShort || session?.branch) ?? 'Session'}
             </h1>
             <div className="flex items-center gap-2.5 mt-1 flex-wrap">
               {agent && <span className="text-sm text-muted-foreground font-medium">{agent.name}</span>}
@@ -708,7 +712,12 @@ export default function SessionPage() {
             diffLoading
               ? <p className="text-xs font-mono text-muted-foreground">loading diff…</p>
               : diffError
-              ? <p className="text-sm text-muted-foreground/60">{diffError}</p>
+              ? (
+                <div className="rounded-lg border border-border/60 bg-card px-4 py-3">
+                  <p className="text-sm text-foreground">Diff unavailable</p>
+                  <p className="text-xs text-muted-foreground mt-1">{diffError}</p>
+                </div>
+              )
               : <ColoredDiff raw={diff ?? ''} />
           ) : hasTurns ? (
             /* Turn timeline */

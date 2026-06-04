@@ -82,7 +82,8 @@ router.post('/tasks', async (req: Request, res: Response) => {
 
   if (!depsBlocked) {
     const idleAgent = db.prepare(`
-      SELECT a.id, a.provider FROM agents a
+      SELECT a.id, COALESCE(c.type, a.provider) as provider FROM agents a
+      LEFT JOIN connections c ON c.id = a.connection_id
       WHERE a.user_id = ?
         AND a.role = 'worker'
         AND a.id NOT IN (SELECT agent_id FROM sessions WHERE status IN ('running', 'idle', 'waiting'))
@@ -514,7 +515,12 @@ router.post('/sessions/:id/signal-lead', async (req: Request, res: Response) => 
     res.json({ ok: true, note: 'lead has no runner session ID — cannot queue turn' }); return;
   }
 
-  const agentRow = db.prepare('SELECT id, provider FROM agents WHERE id = ?').get(lead.agent_id) as { id: string; provider: string } | undefined;
+  const agentRow = db.prepare(`
+    SELECT a.id, COALESCE(c.type, a.provider) as provider
+    FROM agents a
+    LEFT JOIN connections c ON c.id = a.connection_id
+    WHERE a.id = ?
+  `).get(lead.agent_id) as { id: string; provider: string } | undefined;
   if (!agentRow) { res.json({ ok: true, note: 'lead agent not found' }); return; }
 
   interface CountRow { count: number }

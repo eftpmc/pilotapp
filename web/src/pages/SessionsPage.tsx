@@ -12,7 +12,8 @@ function SessionCard({ session, agent, task, onClick }: {
   session: Session; agent?: Agent; task?: Task; onClick: () => void
 }) {
   const isSpec = !!session.specId
-  const title = task?.title ?? (isSpec ? 'Planning session' : session.branch)
+  const shortBranch = session.branch.replace(/^agent\/([0-9a-f]{8}).*/i, 'agent/$1')
+  const title = task?.title ?? (isSpec ? 'Planning session' : shortBranch)
 
   return (
     <button onClick={onClick} className="card-row">
@@ -20,7 +21,7 @@ function SessionCard({ session, agent, task, onClick }: {
       <div className="card-row-main">
         <p className="card-row-title">{title}</p>
         <p className="text-[11.5px] text-muted-foreground font-mono truncate mt-0.5">
-          {session.branch}{isSpec && ' · plan'}
+          {shortBranch}{isSpec && ' · plan'}
         </p>
       </div>
       <span className="text-[11px] text-muted-foreground/50 font-mono shrink-0">{timeAgo(session.createdAt)}</span>

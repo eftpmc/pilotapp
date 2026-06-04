@@ -125,7 +125,7 @@ function CommandPalette({ onClose }: { onClose: () => void }) {
       result.push({ type: 'section', label: 'Agents' })
       for (const e of agentList) {
         result.push({ type: 'item', label: e.name, sub: e.provider,
-          action: () => { navigate('/agents'); onClose() } })
+          action: () => { navigate(`/agents/${e.id}`); onClose() } })
       }
     }
 

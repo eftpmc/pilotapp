@@ -63,7 +63,12 @@ router.post('/', async (req: Request, res: Response) => {
   if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
 
   const uid = userId(req);
-  const agent   = db.prepare('SELECT * FROM agents WHERE id = ? AND user_id = ?').get(parsed.data.agentId, uid) as AgentRow | undefined;
+  const agent   = db.prepare(`
+    SELECT a.id, COALESCE(c.type, a.provider) as provider
+    FROM agents a
+    LEFT JOIN connections c ON c.id = a.connection_id
+    WHERE a.id = ? AND a.user_id = ?
+  `).get(parsed.data.agentId, uid) as AgentRow | undefined;
   const project = db.prepare('SELECT * FROM projects WHERE id = ? AND user_id = ?').get(parsed.data.projectId, uid) as ProjectRow | undefined;
 
   if (!agent)   { res.status(404).json({ error: 'Agent not found' }); return; }
@@ -92,10 +97,15 @@ router.post('/', async (req: Request, res: Response) => {
 router.get('/:id/diff', async (req: Request, res: Response) => {
   const row = db.prepare('SELECT * FROM sessions WHERE id = ? AND user_id = ?').get(req.params.id, userId(req)) as SessionRow | undefined;
   if (!row) { res.status(404).json({ error: 'Not found' }); return; }
+  if (row.diff_snapshot) { res.json({ diff: row.diff_snapshot }); return; }
+  if (row.status === 'merged') {
+    res.json({ diff: '', unavailableReason: 'Diff artifact unavailable for this merged session.' });
+    return;
+  }
   const task = row.work_task_id
     ? db.prepare('SELECT base_branch FROM tasks WHERE id = ?').get(row.work_task_id) as { base_branch: string } | undefined
     : undefined;
-  const diff = await getDiff(row.worktree_path, task?.base_branch ?? 'main');
+  const diff = await getDiff(row.worktree_path, task?.base_branch ?? 'main').catch(() => '');
   res.json({ diff });
 });
 
@@ -127,10 +137,13 @@ router.post('/:id/merge', async (req: Request, res: Response) => {
     ? db.prepare('SELECT base_branch FROM tasks WHERE id = ?').get(row.work_task_id) as { base_branch: string } | undefined
     : undefined;
   const targetBranch = task?.base_branch ?? 'main';
+  const diffSnapshot = await getDiff(row.worktree_path, targetBranch).catch(() => '');
 
   const projectObj = { id: project.id, name: project.name, repoPath: project.repo_path, role: project.role as any, createdAt: project.created_at };
   try {
     await commitWorktree(row.worktree_path).catch(() => {});
+    const finalDiff = diffSnapshot || await getDiff(row.worktree_path, targetBranch).catch(() => '');
+    db.prepare('UPDATE sessions SET diff_snapshot = ? WHERE id = ?').run(finalDiff, row.id);
     await mergeWorktree(projectObj, row.branch, targetBranch);
   } catch (err: any) {
     const message = String(err?.message ?? err ?? 'Merge failed');
@@ -162,7 +175,12 @@ router.post('/:id/request-review', async (req: Request, res: Response) => {
   const parsed = RequestReviewSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
 
-  const reviewer = db.prepare('SELECT id, provider FROM agents WHERE id = ? AND user_id = ?').get(parsed.data.agentId, uid) as AgentRow2 | undefined;
+  const reviewer = db.prepare(`
+    SELECT a.id, COALESCE(c.type, a.provider) as provider
+    FROM agents a
+    LEFT JOIN connections c ON c.id = a.connection_id
+    WHERE a.id = ? AND a.user_id = ?
+  `).get(parsed.data.agentId, uid) as AgentRow2 | undefined;
   if (!reviewer) { res.status(404).json({ error: 'Agent not found' }); return; }
 
   const task    = row.work_task_id ? db.prepare('SELECT base_branch, prompt FROM tasks WHERE id = ?').get(row.work_task_id) as { base_branch: string; prompt: string } | undefined : undefined;

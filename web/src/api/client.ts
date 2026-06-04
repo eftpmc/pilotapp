@@ -19,6 +19,15 @@ export interface Project {
   id: string; name: string; repoPath: string; role: ProjectRole;
   remoteUrl?: string; localPath?: string; createdAt: string;
 }
+export interface ProjectAppStatus {
+  running: boolean; script?: string; cwd?: string; startedAt?: string;
+  output?: string; url?: string;
+}
+export interface ProjectAppInfo {
+  scripts: Record<string, string>;
+  htmlEntries: string[];
+  status: ProjectAppStatus;
+}
 export interface Agent {
   id: string; name: string; provider: AgentProvider;
   role: AgentRole; connectionId?: string; personality?: string;
@@ -203,6 +212,10 @@ export const projects = {
   update: (id: string, body: { name?: string; remoteUrl?: string; githubToken?: string }) =>
     req<Project>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   push:   (id: string) => req<{ pushed: boolean }>(`/projects/${id}/push`, { method: 'POST' }),
+  appInfo: (id: string) => req<ProjectAppInfo>(`/projects/${id}/app-info`),
+  startApp: (id: string, script: string) =>
+    req<ProjectAppStatus>(`/projects/${id}/app/start`, { method: 'POST', body: JSON.stringify({ script }) }),
+  stopApp: (id: string) => req<{ stopped: boolean }>(`/projects/${id}/app/stop`, { method: 'POST' }),
   files:  (id: string) => req<{ files: string[] }>(`/projects/${id}/files`),
   file:   (id: string, path: string) => req<{ content: string }>(`/projects/${id}/file?path=${encodeURIComponent(path)}`),
   delete: (id: string) => req<void>(`/projects/${id}`, { method: 'DELETE' }),
@@ -230,7 +243,7 @@ export const agents = {
   list:   () => req<Agent[]>('/employees'),
   create: (body: { name: string; connectionId: string; personality?: string; role?: AgentRole; departmentId?: string; avatarSeed?: string }) =>
     req<Agent>('/employees', { method: 'POST', body: JSON.stringify(body) }),
-  update: (id: string, body: { name?: string; personality?: string; role?: AgentRole; departmentId?: string | null; avatarSeed?: string | null }) =>
+  update: (id: string, body: { name?: string; connectionId?: string; personality?: string; role?: AgentRole; departmentId?: string | null; avatarSeed?: string | null }) =>
     req<Agent>(`/employees/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   delete: (id: string) => req<void>(`/employees/${id}`, { method: 'DELETE' }),
 };
@@ -266,7 +279,7 @@ export const sessions = {
   get:    (id: string) => req<Session>(`/sessions/${id}`),
   create: (body: { agentId: string; projectId: string; baseBranch?: string }) =>
     req<Session>('/sessions', { method: 'POST', body: JSON.stringify(body) }),
-  diff:          (id: string) => req<{ diff: string }>(`/sessions/${id}/diff`),
+  diff:          (id: string) => req<{ diff: string; unavailableReason?: string }>(`/sessions/${id}/diff`),
   merge:         (id: string) => req<{ merged: boolean }>(`/sessions/${id}/merge`, { method: 'POST' }),
   stop:          (id: string) => req<{ stopped: boolean }>(`/sessions/${id}/stop`, { method: 'POST' }),
   run:           (id: string, prompt?: string) =>

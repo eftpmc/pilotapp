@@ -6,7 +6,7 @@ import { describe, test, expect } from 'vitest';
 import request from 'supertest';
 import app from '../app';
 import { db } from '../db';
-import { scaffold, seedSession, seedTask } from './helpers';
+import { scaffold, seedConnection, seedSession, seedTask } from './helpers';
 
 describe('GET /tasks', () => {
   test('returns pending tasks sorted by priority desc then createdAt asc', async () => {
@@ -108,6 +108,24 @@ describe('POST /tasks/:id/assign', () => {
 
     const sessionRow = db.prepare('SELECT work_task_id FROM sessions WHERE id = ?').get(res.body.session.id) as { work_task_id: string };
     expect(sessionRow.work_task_id).toBe(task.id);
+  });
+
+  test('uses the agent connection type when creating the session provider', async () => {
+    const { user, agent, project, token } = scaffold();
+    const codex = seedConnection(user.id, { name: 'Codex', type: 'codex' });
+    db.prepare("UPDATE agents SET connection_id = ?, provider = 'claude' WHERE id = ?").run(codex.id, agent.id);
+    const task = seedTask(user.id, project.id);
+
+    const res = await request(app)
+      .post(`/tasks/${task.id}/assign`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ agentId: agent.id });
+
+    expect(res.status).toBe(201);
+    expect(res.body.session.provider).toBe('codex');
+
+    const sessionRow = db.prepare('SELECT provider FROM sessions WHERE id = ?').get(res.body.session.id) as { provider: string };
+    expect(sessionRow.provider).toBe('codex');
   });
 
   test('rejects assigning to a non-pending task', async () => {
