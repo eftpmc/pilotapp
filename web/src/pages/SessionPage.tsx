@@ -9,6 +9,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { AgentAvatar } from '@/components/AgentAvatar'
 import { StatusBadge } from '@/components/StatusBadge'
 import { fmtSecs, useElapsed } from '@/lib/time'
+import { cn } from '@/lib/utils'
 import { ArrowLeft, ChevronDown, ChevronRight } from 'lucide-react'
 
 const MAX_LINES = 2000

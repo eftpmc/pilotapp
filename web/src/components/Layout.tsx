@@ -238,7 +238,6 @@ function CommandPalette({ onClose }: { onClose: () => void }) {
 
 function CompanyOnboarding({ onDone }: { onDone: (name: string) => void }) {
   const [name, setName] = useState('')
-  const [loading, setLoading] = useState(false)
   const qc = useQueryClient()
 
   const save = useMutation({
@@ -251,7 +250,7 @@ function CompanyOnboarding({ onDone }: { onDone: (name: string) => void }) {
 
   function submit() {
     const trimmed = name.trim()
-    if (!trimmed || loading) return
+    if (!trimmed || save.isPending) return
     save.mutate(trimmed)
   }
 

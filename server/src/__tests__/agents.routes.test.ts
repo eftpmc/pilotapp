@@ -8,13 +8,13 @@ import app from '../app';
 import { db } from '../db';
 import { scaffold, seedAgent, seedConnection } from './helpers';
 
-describe('PATCH /employees/:id', () => {
+describe('PATCH /agents/:id', () => {
   test('updates an agent connection and provider together', async () => {
     const { user, agent, token } = scaffold();
     const codex = seedConnection(user.id, { name: 'Codex', type: 'codex' });
 
     const res = await request(app)
-      .patch(`/employees/${agent.id}`)
+      .patch(`/agents/${agent.id}`)
       .set('Authorization', `Bearer ${token}`)
       .send({ connectionId: codex.id });
 
@@ -36,7 +36,7 @@ describe('PATCH /employees/:id', () => {
     const lead = seedAgent(user.id, { name: 'Lead', role: 'lead', connectionId: claude.id });
 
     const res = await request(app)
-      .patch(`/employees/${lead.id}`)
+      .patch(`/agents/${lead.id}`)
       .set('Authorization', `Bearer ${token}`)
       .send({ connectionId: codex.id });
 

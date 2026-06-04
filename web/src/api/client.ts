@@ -249,12 +249,12 @@ export const connections = {
 // ---------------------------------------------------------------------------
 
 export const agents = {
-  list:   () => req<Agent[]>('/employees'),
+  list:   () => req<Agent[]>('/agents'),
   create: (body: { name: string; connectionId: string; personality?: string; role?: AgentRole; departmentId?: string; avatarSeed?: string }) =>
-    req<Agent>('/employees', { method: 'POST', body: JSON.stringify(body) }),
+    req<Agent>('/agents', { method: 'POST', body: JSON.stringify(body) }),
   update: (id: string, body: { name?: string; connectionId?: string; personality?: string; role?: AgentRole; departmentId?: string | null; avatarSeed?: string | null }) =>
-    req<Agent>(`/employees/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
-  delete: (id: string) => req<void>(`/employees/${id}`, { method: 'DELETE' }),
+    req<Agent>(`/agents/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  delete: (id: string) => req<void>(`/agents/${id}`, { method: 'DELETE' }),
 };
 
 // ---------------------------------------------------------------------------

@@ -26,7 +26,7 @@ app.use(express.static(publicDir));
 
 app.use('/auth',        authRoutes);
 app.use('/projects',    projectRoutes);
-app.use('/employees',   agentRoutes);
+app.use('/agents',      agentRoutes);
 app.use('/brains',      connectionsRoutes);
 app.use('/specs',       specsRoutes);
 app.use('/tasks',       taskRoutes);

@@ -122,6 +122,7 @@ export default function AgentPage() {
   const isCustomPersonality = agent.personality && activePresets.length === 0
 
   function cancelEdit() {
+    if (!agent) return
     setName(agent.name)
     setDeptId(agent.departmentId ?? '')
     setConnectionId(agent.connectionId ?? '')

@@ -216,7 +216,7 @@ export default function OverviewPage() {
                   >
                     <AgentAvatar agent={agent} size={34} />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-foreground truncate">{title ?? s.branch.replace(/^agent\/([0-9a-f]{8}).*/i, 'agent/$1')}</p>
+                      <p className="text-sm font-semibold text-foreground truncate">{title ?? (s.branch ?? 'session').replace(/^agent\/([0-9a-f]{8}).*/i, 'agent/$1')}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">{agent?.name ?? '—'} · {projectName(s.projectId)}</p>
                     </div>
                     <span className="text-xs text-muted-foreground/40 shrink-0 tabular-nums">{timeAgo(s.createdAt)}</span>

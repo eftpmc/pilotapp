@@ -12,7 +12,7 @@ function SessionCard({ session, agent, task, onClick }: {
   session: Session; agent?: Agent; task?: Task; onClick: () => void
 }) {
   const isSpec = !!session.specId
-  const shortBranch = session.branch.replace(/^agent\/([0-9a-f]{8}).*/i, 'agent/$1')
+  const shortBranch = (session.branch ?? 'session').replace(/^agent\/([0-9a-f]{8}).*/i, 'agent/$1')
   const title = task?.title ?? (isSpec ? 'Planning session' : shortBranch)
 
   return (

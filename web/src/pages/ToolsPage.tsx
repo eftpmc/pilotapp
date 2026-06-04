@@ -337,13 +337,14 @@ function PresetInstallDialog({ preset, onClose, onInstall, loading, error }: {
   }
 
   const canSubmit = preset.envVars.every(v => envValues[v.key]?.trim()) || preset.envVars.length === 0
+  const Icon = preset.icon ?? Wrench
 
   return (
     <Dialog open onOpenChange={o => !o && onClose()}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <preset.icon className="h-4 w-4" />
+            <Icon className="h-4 w-4" />
             Add {preset.name}
           </DialogTitle>
         </DialogHeader>

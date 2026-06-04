@@ -186,54 +186,79 @@ function ConnectionRow({ connection, agentCount, onUpdate, onDelete, onClearQuot
 // ---------------------------------------------------------------------------
 
 function PairingDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const canvasRef    = useRef<HTMLCanvasElement>(null)
-  const [error, setError] = useState<string | null>(null)
+  const canvasRef   = useRef<HTMLCanvasElement>(null)
+  const [error, setError]         = useState<string | null>(null)
   const [expiresAt, setExpiresAt] = useState<string | null>(null)
+  const [pairToken, setPairToken] = useState<string | null>(null)
+  const [mobileUrl, setMobileUrl] = useState(window.location.origin)
 
+  const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/.test(mobileUrl)
+
+  // Fetch a new pair token each time the dialog opens
   useEffect(() => {
     if (!open) return
     setError(null)
     setExpiresAt(null)
+    setPairToken(null)
+    setMobileUrl(window.location.origin)
 
     me.pairToken()
       .then(({ token, expiresAt: exp }) => {
         setExpiresAt(exp)
-        const payload = JSON.stringify({
-          serverUrl:  window.location.origin,
-          pairToken:  token,
-        })
-        if (canvasRef.current) {
-          QRCode.toCanvas(canvasRef.current, payload, {
-            width: 240,
-            margin: 2,
-            color: { dark: '#ffffff', light: '#00000000' },
-          }).catch(e => setError(String(e)))
-        }
+        setPairToken(token)
       })
       .catch(e => setError(e.message ?? 'Failed to generate pairing token'))
   }, [open])
+
+  // Re-render QR whenever the token or the URL changes
+  useEffect(() => {
+    if (!pairToken || !canvasRef.current) return
+    const payload = JSON.stringify({ serverUrl: mobileUrl, pairToken })
+    QRCode.toCanvas(canvasRef.current, payload, {
+      width: 220,
+      margin: 2,
+      color: { dark: '#ffffff', light: '#00000000' },
+    }).catch(e => setError(String(e)))
+  }, [pairToken, mobileUrl])
 
   return (
     <Dialog open={open} onOpenChange={o => !o && onClose()}>
       <DialogContent>
         <DialogHeader><DialogTitle>Connect a device</DialogTitle></DialogHeader>
-        <div className="flex flex-col items-center gap-4 py-2">
-          <p className="text-xs text-muted-foreground text-center">
-            Scan this code with the Pilot mobile or desktop app to connect it to your server.
-            The code expires in 5 minutes and can only be used once.
-          </p>
+        <div className="flex flex-col gap-4 py-2">
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-xs">Server URL (reachable from phone)</Label>
+            <Input
+              value={mobileUrl}
+              onChange={e => setMobileUrl(e.target.value)}
+              placeholder="http://192.168.1.x:3000"
+              className="font-mono text-xs"
+            />
+            {isLocalhost && (
+              <p className="text-[11px] text-amber-500/80">
+                Localhost isn't reachable from a phone. Replace with your machine's IP address, e.g. <span className="font-mono">http://192.168.1.100:3000</span>
+              </p>
+            )}
+          </div>
+
           {error ? (
             <p className="text-sm text-destructive">{error}</p>
           ) : (
-            <div className="bg-card rounded-xl p-3 border border-border">
-              <canvas ref={canvasRef} />
+            <div className="flex flex-col items-center gap-3">
+              <div className="bg-card rounded-xl p-3 border border-border">
+                <canvas ref={canvasRef} />
+              </div>
+              {expiresAt && (
+                <p className="text-[11px] text-muted-foreground/50">
+                  Expires {new Date(expiresAt).toLocaleTimeString()}
+                </p>
+              )}
             </div>
           )}
-          {expiresAt && (
-            <p className="text-[11px] text-muted-foreground/50">
-              Expires {new Date(expiresAt).toLocaleTimeString()}
-            </p>
-          )}
+
+          <p className="text-xs text-muted-foreground text-center">
+            Scan with the Pilot app. One-time use, 5-minute window.
+          </p>
         </div>
       </DialogContent>
     </Dialog>

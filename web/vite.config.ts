@@ -39,7 +39,6 @@ export default defineConfig({
       '/shifts':      'http://localhost:3000',
       // These paths are both React routes and API prefixes — use bypass to
       // serve index.html for browser navigation, proxy for API calls.
-      '/employees':   { target: 'http://localhost:3000', bypass: spaBypass },
       '/knowledge':   { target: 'http://localhost:3000', bypass: spaBypass },
       '/settings':    { target: 'http://localhost:3000', bypass: spaBypass },
       '/tools':       { target: 'http://localhost:3000', bypass: spaBypass },

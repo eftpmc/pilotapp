@@ -22,12 +22,23 @@ targets:
         CFBundleDisplayName: Pilot
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
         CFBundleURLTypes:
           - CFBundleURLSchemes:
               - pilotapp
         UILaunchScreen:
           UIColorName: ""
           UIImageName: ""
+        NSCameraUsageDescription: "Used to scan QR codes for pairing with your Pilot server."
+        NSLocalNetworkUsageDescription: "Pilot connects to your self-hosted server on the local network."
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: YES
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.pilotapp.pilot
