@@ -94,16 +94,32 @@ function resolveAgentMeta(agentId: string): AgentMeta {
   `).get(agentId) as AgentMeta | undefined) ?? { model: null, personality: null, connection_id: null, role: null };
 }
 
-function buildCommand(provider: AgentProvider, prompt: string, model?: string, mcpConfigPath?: string, resumeId?: string): { cmd: string; args: string[] } {
+interface CommandOpts {
+  model?: string;
+  mcpConfigPath?: string;
+  resumeId?: string;
+  systemPrompt?: string;
+  maxTurns?: number;
+  disallowedTools?: string[];
+}
+
+function buildCommand(provider: AgentProvider, prompt: string, opts: CommandOpts = {}): { cmd: string; args: string[] } {
+  const { model, mcpConfigPath, resumeId, systemPrompt, maxTurns, disallowedTools } = opts;
   if (provider === 'claude') {
     const args = ['-p', prompt, '--dangerously-skip-permissions', '--verbose', '--output-format', 'stream-json'];
-    if (resumeId) args.push('--resume', resumeId);
-    if (model) args.push('--model', model);
-    if (mcpConfigPath) args.push('--mcp-config', mcpConfigPath);
+    if (resumeId)                 args.push('--resume', resumeId);
+    if (model)                    args.push('--model', model);
+    if (mcpConfigPath)            args.push('--mcp-config', mcpConfigPath);
+    if (systemPrompt)             args.push('--system-prompt', systemPrompt);
+    if (maxTurns)                 args.push('--max-turns', String(maxTurns));
+    if (disallowedTools?.length)  args.push('--disallowed-tools', disallowedTools.join(','));
     return { cmd: 'claude', args };
   }
+  // Codex — resume uses --session flag (not exec resume)
   if (resumeId) {
-    return { cmd: 'codex', args: ['exec', 'resume', resumeId, prompt] };
+    const args = ['--session', resumeId, '--approval-policy', 'auto', '-q', prompt];
+    if (model) args.push('--model', model);
+    return { cmd: 'codex', args };
   }
   const args = ['--approval-policy', 'auto', '-q', prompt];
   if (model) args.push('--model', model);
@@ -201,6 +217,62 @@ function buildMcpConfig(agentId: string, sessionId: string, ctx: McpConfigCtx, f
   const configPath = path.join(DATA_DIR, `${fileKey ?? sessionId}-mcp.json`);
   fs.writeFileSync(configPath, JSON.stringify({ mcpServers }, null, 2));
   return configPath;
+}
+
+// Codex reads MCP config from .codex/config.toml in the project (worktree) root.
+// Returns the .codex dir path so the caller can clean it up after the session ends.
+function buildCodexMcpConfig(agentId: string, sessionId: string, ctx: McpConfigCtx, worktreePath: string): string {
+  const pilot = pilotMcpEntry(sessionId, agentId, ctx);
+
+  interface TomlServer { command: string; args: string[]; env?: Record<string, string> }
+  const servers: Record<string, TomlServer> = {
+    pilot: {
+      command: String(pilot.command),
+      args:    (pilot.args as string[]) ?? [],
+      env:     (pilot.env as Record<string, string>) ?? {},
+    },
+  };
+
+  // User-configured tools (same precedence as claude config)
+  const deptToolRows = db.prepare(`
+    SELECT t.mcp_config FROM tools t
+    JOIN department_tools dt ON dt.tool_id = t.id
+    JOIN agents a ON a.department_id = dt.department_id
+    WHERE a.id = ?
+  `).all(agentId) as { mcp_config: string }[];
+
+  const toolRows = db.prepare(`
+    SELECT t.mcp_config FROM tools t
+    JOIN agent_tools agt ON agt.tool_id = t.id
+    WHERE agt.agent_id = ?
+  `).all(agentId) as { mcp_config: string }[];
+
+  for (const row of [...deptToolRows, ...toolRows]) {
+    try {
+      const parsed = JSON.parse(row.mcp_config) as Record<string, { command?: string; args?: string[]; env?: Record<string, string> }>;
+      for (const [name, cfg] of Object.entries(parsed)) {
+        if (cfg.command) servers[name] = { command: cfg.command, args: cfg.args ?? [], env: cfg.env };
+      }
+    } catch { /* skip invalid */ }
+  }
+
+  // Serialize to TOML inline-table style
+  const tomlLines: string[] = [];
+  for (const [name, cfg] of Object.entries(servers)) {
+    tomlLines.push(`[mcp_servers.${name}]`);
+    tomlLines.push(`command = ${JSON.stringify(cfg.command)}`);
+    if (cfg.args.length) tomlLines.push(`args = [${cfg.args.map(a => JSON.stringify(a)).join(', ')}]`);
+    if (cfg.env && Object.keys(cfg.env).length) {
+      const pairs = Object.entries(cfg.env).map(([k, v]) => `${k} = ${JSON.stringify(v)}`).join(', ');
+      tomlLines.push(`env = { ${pairs} }`);
+    }
+    tomlLines.push('');
+  }
+
+  const codexDir = path.join(worktreePath, '.codex');
+  fs.mkdirSync(codexDir, { recursive: true });
+  fs.writeFileSync(path.join(codexDir, 'config.toml'), tomlLines.join('\n'));
+  return codexDir;
 }
 
 // ---------------------------------------------------------------------------
@@ -559,13 +631,11 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
   const connectionId = meta.connection_id ?? undefined;
   const isLead       = meta.role === 'lead';
   const knowledgeCtx  = buildKnowledgeContext(userId, session.agentId);
-  const mcpConfigPath = buildMcpConfig(session.agentId, session.id, {
-    userId,
-    projectId:       session.projectId,
-    specId:          session.specId,
-    shiftId:         session.shiftId,
-    parentSessionId: session.parentSessionId,
-  });
+  const mcpCtx = { userId, projectId: session.projectId, specId: session.specId, shiftId: session.shiftId, parentSessionId: session.parentSessionId };
+  const mcpConfigPath = buildMcpConfig(session.agentId, session.id, mcpCtx);
+  // Codex reads MCP from .codex/config.toml in the worktree (no CLI flag needed)
+  let codexConfigDir: string | undefined;
+  if (session.provider === 'codex') codexConfigDir = buildCodexMcpConfig(session.agentId, session.id, mcpCtx, session.worktreePath);
 
   // Inject previous session journals if this task has been worked on before (up to 4, newest-first)
   let prevJournal: string | undefined;
@@ -577,8 +647,8 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
   }
 
   const journalInstruction = session.parentSessionId ? '' : isLead
-    ? `\n\n---\n\nYou are a **Lead Agent**. Your only job is to coordinate — you must NOT write code or implement features yourself.\n\nYou have a \`pilot\` MCP server connected. These tools are available right now as direct MCP calls — do NOT search for them with ToolSearch or any other tool discovery mechanism:\n\n- \`list_agents\` — see available agents, their roles, and current status\n- \`create_task\` — create a subtask (title, prompt, baseBranch, role, priority)\n- \`get_task_status\` — check whether a subtask completed and read its journal\n- \`request_clarification\` — ask the user if the brief is ambiguous\n- \`append_journal\` — record your plan and decisions\n- \`skip_task\` — use this if the MCP tools are not responding\n\nRoles: "worker" (writes code, the only role for subtasks)\n\n**Required first step**: Call \`list_agents\` immediately. If it fails or returns an error, call \`skip_task\` with reason "MCP connectivity failure" and stop — do NOT proceed without MCP tools.\n\nRules:\n- Never write, edit, or implement code\n- Keep each task focused — completable in one session\n- Use \`get_task_status\` to check subtask outcomes before creating dependent tasks`
-    : `\n\n---\n\nYou have access to a \`pilot\` MCP server. Use these tools as you work:\n\n- \`append_journal\` — append progress notes at any point; call this often so partial work survives a crash\n- \`update_journal\` — replace the full journal; use this for your final summary when done\n- \`request_clarification\` — if you hit genuine ambiguity where guessing would waste significant effort, ask the user. They will respond in real time.\n- \`skip_task\` — if the task is blocked by something outside your control (missing dependency, broken environment), call this with a reason instead of failing silently.\n- \`get_quota_status\` — check if your API connection has rate limits before starting expensive operations.`;
+    ? `\n\n---\n\nYou are a **Lead Agent**. Your only job is to coordinate — you must NOT write code or implement features yourself.\n\nYou have a \`pilot\` MCP server connected. These tools are available right now as direct MCP calls:\n\n- \`list_agents\` — see available agents, their roles, and current status\n- \`list_tasks\` — see tasks in this project (filter by status: pending, running, done, failed)\n- \`create_task\` — create a subtask (title, prompt, baseBranch, role, priority, dependsOn)\n- \`wait_for_task\` — block until a specific task completes; use this to chain dependent work\n- \`get_task_status\` — check the status and journal of a specific task by ID\n- \`request_clarification\` — ask the user if the brief is ambiguous\n- \`append_journal\` — record your plan and decisions (call after creating tasks)\n- \`skip_task\` — use this if MCP tools are not responding\n\nRoles: "worker" (writes code — the only valid role for subtasks)\n\n**Required first step**: Call \`list_agents\` immediately. If it fails or returns an error, call \`skip_task\` with reason "MCP connectivity failure" and stop.\n\nWorkflow:\n1. Call \`list_agents\` to see who is available\n2. Call \`list_tasks\` to check if relevant work is already pending or done\n3. Create subtasks with \`create_task\` — use \`dependsOn\` to express ordering instead of waiting yourself\n4. Call \`append_journal\` with your plan and the task IDs you created\n5. Exit — the system will auto-assign tasks and call you back with a synthesis prompt when all subtasks finish\n\nRules:\n- Never write, edit, or implement code yourself\n- Prefer \`dependsOn\` over \`wait_for_task\` — it lets tasks run as soon as dependencies clear without occupying a session\n- Use \`wait_for_task\` only when you need a subtask's output before you can decide what to create next\n- Keep each task focused and completable in one session`
+    : `\n\n---\n\nYou have access to a \`pilot\` MCP server. Use these tools as you work:\n\n- \`append_journal\` — append progress notes at any point; call this often so partial work survives a crash\n- \`update_journal\` — replace the full journal; use this for your final summary when done\n- \`list_tasks\` — see other pending or running tasks in this project if you need context\n- \`request_clarification\` — if you hit genuine ambiguity where guessing would waste significant effort, ask the user. They will respond in real time.\n- \`skip_task\` — if the task is blocked by something outside your control (missing dependency, broken environment), call this with a reason instead of failing silently.\n- \`get_quota_status\` — check if your API connection has rate limits before starting expensive operations.`;
 
   // Inject project README / CLAUDE.md if present — agents understand conventions better
   let projectCtx = '';
@@ -589,10 +659,28 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
     } catch { /* not present */ }
   }
 
-  const effectivePromptParts = [knowledgeCtx, projectCtx, personality, prevJournal ? `# Handoff from Previous Session\n\n${prevJournal}` : '', prompt + journalInstruction].filter(Boolean);
-  const effectivePrompt      = effectivePromptParts.join('\n\n---\n\n');
+  // System prompt: stable context that doesn't change turn-to-turn (goes via --system-prompt flag for claude)
+  // Task prompt: the actual work + handoff notes (goes via -p)
+  const systemPromptParts = [knowledgeCtx, projectCtx, personality, journalInstruction].filter(Boolean);
+  const systemPrompt      = session.provider === 'claude' && systemPromptParts.length > 0
+    ? systemPromptParts.join('\n\n---\n\n')
+    : undefined;
 
-  const { cmd, args } = buildCommand(session.provider, effectivePrompt, model, mcpConfigPath);
+  const taskPromptParts = session.provider === 'claude'
+    ? [prevJournal ? `# Handoff from Previous Session\n\n${prevJournal}` : '', prompt].filter(Boolean)
+    : [knowledgeCtx, projectCtx, personality, prevJournal ? `# Handoff from Previous Session\n\n${prevJournal}` : '', prompt + journalInstruction].filter(Boolean);
+  const taskPrompt = taskPromptParts.join('\n\n---\n\n');
+
+  // Turn limits and tool restrictions by role
+  const isReview      = !!session.parentSessionId;
+  const maxTurns      = isLead ? 20 : isReview ? 30 : 80;
+  const disallowedTools = isLead
+    ? ['Edit', 'Write', 'MultiEdit', 'Bash', 'NotebookEdit']
+    : isReview
+    ? ['Edit', 'Write', 'MultiEdit', 'NotebookEdit']
+    : undefined;
+
+  const { cmd, args } = buildCommand(session.provider, taskPrompt, { model, mcpConfigPath, systemPrompt, maxTurns, disallowedTools });
   const env = resolvedKey
     ? { ...resolvedEnv(process.env as Record<string, string | undefined>), ...apiKeyEnv(session.provider, resolvedKey) }
     : resolvedEnv(process.env as Record<string, string | undefined>);
@@ -706,6 +794,7 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
 
     writeEvent(userId, exitCode === 0 ? 'session.completed' : 'session.failed', { sessionId: session.id, taskId: session.workTaskId, projectId: session.projectId, agentId: session.agentId });
     if (mcpConfigPath) { try { fs.unlinkSync(mcpConfigPath); } catch { /* already gone */ } }
+    if (codexConfigDir) { try { fs.rmSync(codexConfigDir, { recursive: true, force: true }); } catch { /* ok */ } }
     if (session.specId) captureSpec(session.specId, session.worktreePath);
     if (session.parentSessionId) {
       captureReview(session.id, session.worktreePath);
@@ -781,19 +870,32 @@ export async function continueAgent(
   const meta          = resolveAgentMeta(session.agentId);
   const model         = meta.model ?? undefined;
   const connectionId  = meta.connection_id ?? undefined;
-  const mcpConfigPath = buildMcpConfig(
-    session.agentId, session.id,
-    { userId, projectId: session.projectId, shiftId: session.shiftId, parentSessionId: session.parentSessionId },
-    `${session.id}-t${turnNumber}`,
-  );
+  const mcpCtx2 = { userId, projectId: session.projectId, shiftId: session.shiftId, parentSessionId: session.parentSessionId };
+  const mcpConfigPath = buildMcpConfig(session.agentId, session.id, mcpCtx2, `${session.id}-t${turnNumber}`);
+  let codexConfigDir2: string | undefined;
+  if (session.provider === 'codex') codexConfigDir2 = buildCodexMcpConfig(session.agentId, session.id, mcpCtx2, session.worktreePath);
 
-  // Re-inject knowledge + personality so turns reflect any updates since the original session
-  const personality  = meta.personality ?? undefined;
-  const knowledgeCtx = buildKnowledgeContext(userId, session.agentId);
-  const turnParts    = [knowledgeCtx, personality, prompt].filter(Boolean);
-  const effectivePrompt = turnParts.join('\n\n---\n\n');
+  // For claude --resume: system prompt is already embedded in the session; just pass the turn prompt.
+  // For codex --session: re-inject context since codex resume behaviour is less defined.
+  const isLead   = meta.role === 'lead';
+  const isReview = !!session.parentSessionId;
+  let effectivePrompt: string;
+  if (session.provider === 'claude') {
+    effectivePrompt = prompt;
+  } else {
+    const personality  = meta.personality ?? undefined;
+    const knowledgeCtx = buildKnowledgeContext(userId, session.agentId);
+    effectivePrompt    = [knowledgeCtx, personality, prompt].filter(Boolean).join('\n\n---\n\n');
+  }
 
-  const { cmd, args } = buildCommand(session.provider, effectivePrompt, model, mcpConfigPath, runnerSessionId);
+  const maxTurns = isLead ? 20 : isReview ? 30 : 80;
+  const disallowedTools = isLead
+    ? ['Edit', 'Write', 'MultiEdit', 'Bash', 'NotebookEdit']
+    : isReview
+    ? ['Edit', 'Write', 'MultiEdit', 'NotebookEdit']
+    : undefined;
+
+  const { cmd, args } = buildCommand(session.provider, effectivePrompt, { model, mcpConfigPath, resumeId: runnerSessionId, maxTurns, disallowedTools });
   const env = resolvedKey
     ? { ...resolvedEnv(process.env as Record<string, string | undefined>), ...apiKeyEnv(session.provider, resolvedKey) }
     : resolvedEnv(process.env as Record<string, string | undefined>);
@@ -881,7 +983,8 @@ export async function continueAgent(
     db.prepare('UPDATE sessions SET status = ? WHERE id = ?').run(sessionStatus, session.id);
     db.prepare('UPDATE turns SET status = ?, completed_at = ? WHERE id = ?').run(sessionStatus, now, turnId);
 
-    if (mcpConfigPath) { try { fs.unlinkSync(mcpConfigPath); } catch { /* gone */ } }
+    if (mcpConfigPath)  { try { fs.unlinkSync(mcpConfigPath); } catch { /* gone */ } }
+    if (codexConfigDir2) { try { fs.rmSync(codexConfigDir2, { recursive: true, force: true }); } catch { /* ok */ } }
     captureJournal(session.id, session.worktreePath);
     writeEvent(userId, exitCode === 0 ? 'session.completed' : 'session.failed', {
       sessionId: session.id, taskId: session.workTaskId, projectId: session.projectId, agentId: session.agentId,

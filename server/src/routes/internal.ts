@@ -237,6 +237,45 @@ router.get('/agents', (req: Request, res: Response) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /internal/tasks?sessionId=&status=
+// List tasks in the calling session's project.
+// ---------------------------------------------------------------------------
+
+router.get('/tasks', (req: Request, res: Response) => {
+  const sessionId = req.query.sessionId as string | undefined;
+  const statusFilter = req.query.status as string | undefined; // comma-separated, e.g. "pending,running"
+  if (!sessionId) { res.status(400).json({ error: 'sessionId query param required' }); return; }
+
+  const session = getSession(sessionId);
+  if (!session) { res.status(404).json({ error: 'Session not found' }); return; }
+
+  const allowedStatuses = ['pending', 'running', 'done', 'failed'];
+  const statuses = statusFilter
+    ? statusFilter.split(',').map(s => s.trim()).filter(s => allowedStatuses.includes(s))
+    : allowedStatuses;
+
+  const placeholders = statuses.map(() => '?').join(',');
+  interface TaskRow { id: string; title: string; status: string; priority: number; base_branch: string; created_at: string; lead_session_id: string | null }
+  const tasks = db.prepare(`
+    SELECT id, title, status, priority, base_branch, created_at, lead_session_id
+    FROM tasks
+    WHERE project_id = ? AND status IN (${placeholders})
+    ORDER BY priority DESC, created_at ASC
+    LIMIT 50
+  `).all(session.project_id, ...statuses) as TaskRow[];
+
+  res.json(tasks.map(t => ({
+    id:            t.id,
+    title:         t.title,
+    status:        t.status,
+    priority:      t.priority,
+    baseBranch:    t.base_branch,
+    createdAt:     t.created_at,
+    isSubtask:     !!t.lead_session_id,
+  })));
+});
+
+// ---------------------------------------------------------------------------
 // PATCH /internal/specs/:id
 // ---------------------------------------------------------------------------
 

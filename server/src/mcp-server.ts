@@ -185,6 +185,20 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: {}, required: [] },
   },
   {
+    name: 'list_tasks',
+    description: 'List tasks in the current project. Useful for seeing what work is pending, running, or done. Defaults to pending+running tasks.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          description: 'Comma-separated status filter: pending, running, done, failed. Defaults to "pending,running".',
+        },
+      },
+      required: [],
+    },
+  },
+  {
     name: 'get_quota_status',
     description: 'Check the current API quota/rate-limit status for this connection.',
     inputSchema: { type: 'object', properties: {}, required: [] },
@@ -321,6 +335,12 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<{ 
           summary: args.summary,
         });
         return text('Task completion recorded.');
+      }
+
+      case 'list_tasks': {
+        const status = (args.status as string | undefined) ?? 'pending,running';
+        const result = await callInternal('GET', `/internal/tasks?sessionId=${SESSION_ID}&status=${encodeURIComponent(status)}`);
+        return text(JSON.stringify(result, null, 2));
       }
 
       case 'get_quota_status': {

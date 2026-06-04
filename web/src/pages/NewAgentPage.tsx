@@ -44,8 +44,7 @@ export default function NewAgentPage() {
 
   const effectiveConnId = connectionId || connList[0]?.id || ''
   const selectedBrain   = connList.find(c => c.id === effectiveConnId)
-const leadBlocker     = isLead && selectedBrain && selectedBrain.type !== 'claude'
-  const canCreate       = name.trim().length > 0 && !!effectiveConnId && !leadBlocker
+  const canCreate       = name.trim().length > 0 && !!effectiveConnId
 
   function pickRoster(r: RosterAgent) {
     setName(r.name)
@@ -180,7 +179,7 @@ const leadBlocker     = isLead && selectedBrain && selectedBrain.type !== 'claud
                   <Checkbox checked={isLead} onCheckedChange={v => setIsLead(!!v)} />
                   <div>
                     <p className="text-sm font-medium">Lead agent</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">Orchestrates the team — creates tasks and coordinates workers. Claude only.</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Orchestrates the team — breaks down briefs, creates subtasks, and coordinates workers. Cannot write or edit code.</p>
                   </div>
                 </label>
               </>
@@ -218,7 +217,6 @@ const leadBlocker     = isLead && selectedBrain && selectedBrain.type !== 'claud
                         )}
                       </div>
                     )}
-                    {leadBlocker && <p className="text-xs text-destructive">Lead agents require a Claude connection.</p>}
                   </>
                 )}
               </>

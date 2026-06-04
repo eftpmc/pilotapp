@@ -181,7 +181,7 @@ export default function AgentPage() {
                 />
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-foreground">Lead agent</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Orchestrates the team — creates tasks and coordinates workers. Claude only.</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Orchestrates the team — breaks down briefs, creates subtasks, and coordinates workers. Cannot write or edit code.</p>
                 </div>
               </label>
               {identityDirty && (
