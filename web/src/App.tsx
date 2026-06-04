@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import LoginPage from './pages/LoginPage'
@@ -14,7 +14,7 @@ import ProjectsPage from './pages/ProjectsPage'
 import ProjectDetailPage from './pages/ProjectDetailPage'
 import SessionsPage from './pages/SessionsPage'
 import PlansPage from './pages/PlansPage'
-import FilesPage from './pages/FilesPage'
+import WorkspacePage from './pages/FilesPage'
 import ProjectSettingsPage from './pages/ProjectSettingsPage'
 import SessionPage from './pages/SessionPage'
 import SettingsPage from './pages/SettingsPage'
@@ -34,6 +34,11 @@ function RequireUser({ children }: { children: React.ReactNode }) {
   if (!localStorage.getItem('token')) return <Navigate to="/login" replace />
   if (localStorage.getItem('pilot.role') === 'admin') return <Navigate to="/admin" replace />
   return <>{children}</>
+}
+
+function ProjectWorkspaceRedirect() {
+  const { id } = useParams<{ id: string }>()
+  return <Navigate to={id ? `/workspace/${id}` : '/workspace'} replace />
 }
 
 export default function App() {
@@ -60,13 +65,16 @@ export default function App() {
             <Route path="projects"      element={<ProjectsPage />} />
             <Route path="knowledge"     element={<KnowledgePage />} />
             <Route path="tools"         element={<ToolsPage />} />
+            <Route path="workspace"     element={<WorkspacePage />} />
+            <Route path="workspace/:id" element={<WorkspacePage />} />
             <Route path="settings"      element={<SettingsPage />} />
             <Route path="sessions/:id"  element={<SessionPage />} />
             <Route path="projects/:id"  element={<ProjectLayout />}>
               <Route index              element={<ProjectDetailPage />} />
               <Route path="sessions"    element={<SessionsPage />} />
               <Route path="plans"       element={<PlansPage />} />
-              <Route path="files"       element={<FilesPage />} />
+              <Route path="workspace"   element={<ProjectWorkspaceRedirect />} />
+              <Route path="files"       element={<ProjectWorkspaceRedirect />} />
               <Route path="settings"    element={<ProjectSettingsPage />} />
             </Route>
           </Route>

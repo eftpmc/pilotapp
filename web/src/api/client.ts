@@ -20,11 +20,15 @@ export interface Project {
   remoteUrl?: string; localPath?: string; createdAt: string;
 }
 export interface ProjectAppStatus {
-  running: boolean; script?: string; cwd?: string; startedAt?: string;
-  output?: string; url?: string;
+  running: boolean; script?: string; command?: string; source?: string;
+  cwd?: string; startedAt?: string; output?: string; url?: string;
+}
+export interface ProjectCommand {
+  id: string; label: string; command: string; source: string;
 }
 export interface ProjectAppInfo {
   scripts: Record<string, string>;
+  commands?: ProjectCommand[];
   htmlEntries: string[];
   status: ProjectAppStatus;
 }

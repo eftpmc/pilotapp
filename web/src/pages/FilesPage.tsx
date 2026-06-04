@@ -1,16 +1,17 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { Highlight, themes } from 'prism-react-renderer'
 import { projects } from '../api/client'
-import type { ProjectAppInfo } from '../api/client'
+import type { Project, ProjectAppInfo, ProjectCommand } from '../api/client'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import {
-  Braces, ChevronRight, ExternalLink, File, FileCode2, FileText, Folder,
-  Globe, Image, Monitor, Paintbrush, Play, Search, Square, X,
+  Archive, Braces, ChevronRight, ExternalLink, File, FileCode2, FileText, Folder,
+  Globe, Image, Monitor, Paintbrush, Play, Search, Server, Square, SquareTerminal, Terminal, X,
 } from 'lucide-react'
 
 const PRISM_LANG: Record<string, string> = {
@@ -111,41 +112,58 @@ function CodePreview({ content, filePath }: { content: string; filePath: string 
   )
 }
 
-function AppPanel({ info, selectedScript, setSelectedScript, onStart, onStop, starting, stopping }: {
+type WorkspaceTool = 'files' | 'commands' | 'artifacts' | 'environments'
+
+const WORKSPACE_TOOLS: { id: WorkspaceTool; label: string; icon: typeof File; description: string }[] = [
+  { id: 'files', label: 'Explorer', icon: FileCode2, description: 'Main branch files' },
+  { id: 'commands', label: 'Run', icon: Terminal, description: 'Project commands' },
+  { id: 'artifacts', label: 'Artifacts', icon: Archive, description: 'Generated outputs' },
+  { id: 'environments', label: 'Services', icon: Server, description: 'Runtime state' },
+]
+
+function AppPanel({ info, selectedCommand, setSelectedCommand, onStart, onStop, starting, stopping }: {
   info?: ProjectAppInfo
-  selectedScript: string
-  setSelectedScript: (script: string) => void
+  selectedCommand: string
+  setSelectedCommand: (command: string) => void
   onStart: () => void
   onStop: () => void
   starting: boolean
   stopping: boolean
 }) {
-  const scripts = Object.keys(info?.scripts ?? {})
+  const commands = info?.commands?.length
+    ? info.commands
+    : Object.keys(info?.scripts ?? {}).map<ProjectCommand>(script => ({
+        id: `npm:${script}`,
+        label: script,
+        command: `npm run ${script}`,
+        source: 'package.json',
+      }))
   const status = info?.status
-  const hasScripts = scripts.length > 0
+  const hasCommands = commands.length > 0
+  const activeCommand = commands.find(command => command.id === (selectedCommand || commands[0]?.id))
 
   return (
-    <section className="rounded-lg border border-border/60 bg-card px-4 py-3">
+    <section className="rounded-lg border border-border/60 bg-card px-4 py-4">
       <div className="flex items-start gap-3">
         <div className="h-8 w-8 rounded-lg bg-primary/10 text-primary grid place-items-center shrink-0">
-          <Monitor size={15} />
+          <Terminal size={15} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-sm font-semibold text-foreground">App runtime</p>
-            {status?.running && <span className="stat green"><span className="dot green pulse" />{status.script}</span>}
-            {!status?.running && status?.script && <span className="text-xs text-muted-foreground">last run: {status.script}</span>}
+            <p className="text-sm font-semibold text-foreground">Project commands</p>
+            {status?.running && <span className="stat green"><span className="dot green pulse" />{status.command ?? status.script}</span>}
+            {!status?.running && status?.command && <span className="text-xs text-muted-foreground">last run: {status.command}</span>}
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Start npm scripts from a main-branch worktree, or render static HTML files below.
+            Run discovered commands from package scripts, task files, make targets, and scripts folders.
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {hasScripts && (
-            <Select value={selectedScript || scripts[0]} onValueChange={setSelectedScript}>
+          {hasCommands && (
+            <Select value={selectedCommand || commands[0].id} onValueChange={setSelectedCommand}>
               <SelectTrigger className="w-[150px]"><SelectValue /></SelectTrigger>
               <SelectContent>
-                {scripts.map(script => <SelectItem key={script} value={script}>{script}</SelectItem>)}
+                {commands.map(command => <SelectItem key={command.id} value={command.id}>{command.label}</SelectItem>)}
               </SelectContent>
             </Select>
           )}
@@ -154,12 +172,20 @@ function AppPanel({ info, selectedScript, setSelectedScript, onStart, onStop, st
               <Square size={12} />{stopping ? '…' : 'Stop'}
             </Button>
           ) : (
-            <Button size="sm" onClick={onStart} disabled={!hasScripts || starting}>
+            <Button size="sm" onClick={onStart} disabled={!hasCommands || starting}>
               <Play size={12} />{starting ? '…' : 'Start'}
             </Button>
           )}
         </div>
       </div>
+      {activeCommand && (
+        <div className="mt-4 rounded-md border border-border/50 bg-background px-3 py-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Badge variant="outline">{activeCommand.source}</Badge>
+            <code className="text-xs text-foreground">{activeCommand.command}</code>
+          </div>
+        </div>
+      )}
       {status?.url && (
         <a className="mt-3 inline-flex items-center gap-1.5 text-xs text-primary hover:underline" href={status.url} target="_blank" rel="noreferrer">
           <ExternalLink size={12} />{status.url}
@@ -170,8 +196,8 @@ function AppPanel({ info, selectedScript, setSelectedScript, onStart, onStop, st
           {status.output}
         </pre>
       )}
-      {!hasScripts && (
-        <p className="mt-3 text-xs text-muted-foreground">No package scripts found in `package.json`.</p>
+      {!hasCommands && (
+        <p className="mt-3 text-xs text-muted-foreground">No project commands found yet.</p>
       )}
     </section>
   )
@@ -219,16 +245,110 @@ function TreeRow({ node, depth, selected, openDirs, setOpenDirs, onSelect }: {
   )
 }
 
-export default function FilesPage() {
+function ProjectPicker({ projects: projectList, onOpen }: { projects: Project[]; onOpen: (id: string) => void }) {
+  const [query, setQuery] = useState('')
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return projectList
+    return projectList.filter(project => {
+      const repo = project.remoteUrl ?? project.localPath ?? project.repoPath ?? ''
+      return project.name.toLowerCase().includes(q) || repo.toLowerCase().includes(q)
+    })
+  }, [projectList, query])
+
+  return (
+    <div className="flex-1 overflow-y-auto bg-background">
+      <div className="mx-auto flex min-h-full w-full max-w-[1040px] flex-col px-6 py-10">
+        <div className="mb-7 grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
+          <div className="rounded-lg border border-border/60 bg-card p-4">
+            <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-md border border-border/60 bg-background text-primary">
+              <SquareTerminal size={18} />
+            </div>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Workspace</h1>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              Open a project workbench for files, commands, artifacts, and runtime state.
+            </p>
+          </div>
+          <div className="flex min-w-0 flex-col justify-end">
+            <div className="relative max-w-xl">
+              <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
+              <Input
+                value={query}
+                onChange={event => setQuery(event.target.value)}
+                placeholder="Find a project"
+                className="h-9 text-sm"
+                style={{ paddingLeft: 32 }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {projectList.length === 0 ? (
+          <section className="grid min-h-[360px] place-items-center rounded-lg border border-border/60 bg-card px-8 text-center">
+            <div>
+              <Folder size={30} className="mx-auto mb-3 text-muted-foreground/40" />
+              <p className="text-sm font-semibold text-foreground">No projects yet</p>
+              <p className="mt-1 max-w-sm text-xs text-muted-foreground">
+                Add a project first, then open it here as a workspace.
+              </p>
+            </div>
+          </section>
+        ) : filtered.length === 0 ? (
+          <section className="grid min-h-[280px] place-items-center rounded-lg border border-border/60 bg-card px-8 text-center">
+            <div>
+              <Search size={28} className="mx-auto mb-3 text-muted-foreground/40" />
+              <p className="text-sm font-semibold text-foreground">No matching projects</p>
+              <p className="mt-1 text-xs text-muted-foreground">Try another project name or repository path.</p>
+            </div>
+          </section>
+        ) : (
+          <div className="overflow-hidden rounded-lg border border-border/60 bg-card">
+            {filtered.map(project => {
+              const repo = project.remoteUrl
+                ? project.remoteUrl.replace(/^https?:\/\/(www\.)?github\.com\//, '').replace(/\.git$/, '')
+                : project.localPath ?? project.repoPath ?? 'local'
+              return (
+                <button
+                  key={project.id}
+                  className="group flex w-full items-center gap-3 border-b border-border/50 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-muted/30"
+                  onClick={() => onOpen(project.id)}
+                >
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                    <Folder size={15} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-foreground">{project.name}</span>
+                    <span className="mt-0.5 block truncate font-mono text-[11px] text-muted-foreground">{repo}</span>
+                  </span>
+                  <Badge variant="outline" className="hidden md:inline-flex">Open</Badge>
+                  <ChevronRight size={15} className="shrink-0 text-muted-foreground/40 transition-transform group-hover:translate-x-0.5 group-hover:text-primary" />
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export default function WorkspacePage() {
   const { id: projectId } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const qc = useQueryClient()
+  const [tool, setTool] = useState<WorkspaceTool>('files')
   const [selectedFile, setSelected] = useState<string | null>(null)
   const [fileContent, setContent] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [openDirs, setOpenDirs] = useState<Set<string>>(new Set())
   const [query, setQuery] = useState('')
   const [view, setView] = useState<'code' | 'render'>('code')
-  const [selectedScript, setSelectedScript] = useState('')
+  const [selectedCommand, setSelectedCommand] = useState('')
+
+  const { data: projectList = [] } = useQuery({
+    queryKey: ['projects'],
+    queryFn: () => projects.list(),
+  })
 
   const { data: fileData, isLoading: filesLoading } = useQuery({
     queryKey: ['files', projectId],
@@ -243,7 +363,7 @@ export default function FilesPage() {
   })
 
   const startApp = useMutation({
-    mutationFn: () => projects.startApp(projectId!, selectedScript || Object.keys(appInfo?.scripts ?? {})[0]),
+    mutationFn: () => projects.startApp(projectId!, selectedCommand || appInfo?.commands?.[0]?.id || Object.keys(appInfo?.scripts ?? {})[0]),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['project-app', projectId] }),
   })
   const stopApp = useMutation({
@@ -278,112 +398,225 @@ export default function FilesPage() {
   }
 
   const htmlEntries = appInfo?.htmlEntries ?? []
-  const selectedName = selectedFile?.split('/').pop() ?? ''
+  const project = projectList.find(item => item.id === projectId)
   const canRender = isRenderableHtml(selectedFile) || /\.svg$/i.test(selectedFile ?? '')
+  const activeTool = WORKSPACE_TOOLS.find(item => item.id === tool)!
+
+  if (!projectId) {
+    return <ProjectPicker projects={projectList} onOpen={id => navigate(`/workspace/${id}`)} />
+  }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-background">
-      <div className="px-6 pt-6 pb-8 flex flex-col gap-4">
-        <AppPanel
-          info={appInfo}
-          selectedScript={selectedScript}
-          setSelectedScript={setSelectedScript}
-          onStart={() => startApp.mutate()}
-          onStop={() => stopApp.mutate()}
-          starting={startApp.isPending}
-          stopping={stopApp.isPending}
-        />
-
-        {htmlEntries.length > 0 && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-muted-foreground">HTML</span>
-            {htmlEntries.slice(0, 6).map(entry => (
-              <Button key={entry} size="sm" variant="outline" onClick={() => selectFile(entry)}>
-                <Globe size={12} />{entry}
-              </Button>
-            ))}
+    <div className="flex min-h-0 flex-1 flex-col bg-background">
+      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card/50 px-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-md border border-border/60 bg-background text-primary">
+            <SquareTerminal size={15} />
           </div>
-        )}
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-normal text-muted-foreground">Workspace</p>
+            <h1 className="truncate text-sm font-semibold text-foreground">{project?.name ?? 'Project workspace'}</h1>
+          </div>
+        </div>
+        <div className="hidden min-w-0 flex-1 items-center justify-center md:flex">
+          <div className="flex w-full max-w-xl items-center gap-2 rounded-md border border-border/60 bg-background px-3 py-1.5 text-xs text-muted-foreground">
+            <Search size={13} />
+            <span className="truncate">{project?.repoPath ?? project?.localPath ?? 'Select files, commands, artifacts, or services'}</span>
+          </div>
+        </div>
+        <Button size="sm" variant="outline" onClick={() => navigate('/workspace')}>
+          Change project
+        </Button>
+      </header>
 
-        <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)] items-start">
-          <aside className="rounded-lg border border-border/60 bg-card overflow-hidden">
-            <div className="p-3 border-b border-border/50">
-              <div className="relative">
-                <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
-                <Input
-                  value={query}
-                  onChange={e => setQuery(e.target.value)}
-                  placeholder="Find files"
-                  className="h-8 text-xs"
-                  style={{ paddingLeft: 32 }}
-                />
-              </div>
-              <p className="text-[11px] text-muted-foreground/60 mt-2">
-                {filesLoading ? 'Loading…' : `${filteredFiles.length} of ${fileList.length} files`}
-              </p>
+      <div className="grid min-h-0 flex-1 grid-cols-[52px_minmax(240px,300px)_minmax(0,1fr)] max-lg:grid-cols-[52px_minmax(0,1fr)]">
+        <aside className="flex flex-col items-center gap-1 border-r border-border bg-card/40 px-2 py-3">
+          {WORKSPACE_TOOLS.map(item => {
+            const Icon = item.icon
+            return (
+              <Button
+                key={item.id}
+                size="icon"
+                variant={tool === item.id ? 'secondary' : 'ghost'}
+                className="h-9 w-9"
+                title={item.label}
+                onClick={() => setTool(item.id)}
+              >
+                <Icon size={17} />
+              </Button>
+            )
+          })}
+        </aside>
+
+        <aside className="min-h-0 border-r border-border bg-card/30 max-lg:hidden">
+          <div className="flex h-11 items-center justify-between border-b border-border px-3">
+            <div className="min-w-0">
+              <p className="truncate text-xs font-semibold uppercase tracking-normal text-muted-foreground">{activeTool.label}</p>
             </div>
-            <div className="max-h-[62vh] overflow-auto p-2">
-              {filteredFiles.length === 0 ? (
-                <p className="text-sm text-muted-foreground/60 px-2 py-8 text-center">
-                  {fileList.length === 0 ? 'Files appear here after something is committed to main.' : 'No files match your search.'}
+            <Badge variant="outline">{activeTool.description}</Badge>
+          </div>
+
+          {tool === 'files' ? (
+            <>
+              <div className="border-b border-border/60 p-3">
+                <div className="relative">
+                  <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/50" />
+                  <Input
+                    value={query}
+                    onChange={e => setQuery(e.target.value)}
+                    placeholder="Find files"
+                    className="h-8 text-xs"
+                    style={{ paddingLeft: 32 }}
+                  />
+                </div>
+                <p className="mt-2 text-[11px] text-muted-foreground/60">
+                  {filesLoading ? 'Loading...' : `${filteredFiles.length} of ${fileList.length} files`}
                 </p>
-              ) : sortedChildren(tree).map(child => (
-                <TreeRow key={child.path} node={child} depth={0} selected={selectedFile} openDirs={openDirs} setOpenDirs={setOpenDirs} onSelect={selectFile} />
-              ))}
-            </div>
-          </aside>
-
-          <section className="min-w-0 rounded-lg border border-border/60 bg-card overflow-hidden">
-            {selectedFile ? (
-              <>
-                <div className="flex items-center gap-3 px-4 py-3 border-b border-border/50">
-                  {(() => { const { icon: Icon, color } = fileMeta(selectedFile); return <Icon size={15} style={{ color }} /> })()}
-                  <div className="min-w-0 flex-1">
-                    <p className="font-mono text-xs text-foreground truncate">{selectedFile}</p>
-                    <p className="text-[11px] text-muted-foreground/60">{selectedName}</p>
+              </div>
+              {htmlEntries.length > 0 && (
+                <div className="border-b border-border/60 px-3 py-2">
+                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-normal text-muted-foreground">HTML entries</p>
+                  <div className="flex flex-col gap-1">
+                    {htmlEntries.slice(0, 6).map(entry => (
+                      <Button key={entry} size="sm" variant="ghost" className="h-7 justify-start px-2 text-xs" onClick={() => selectFile(entry)}>
+                        <Globe size={12} />{entry}
+                      </Button>
+                    ))}
                   </div>
-                  {canRender && (
-                    <div className="flex items-center gap-1">
-                      <Button size="sm" variant={view === 'code' ? 'secondary' : 'ghost'} onClick={() => setView('code')}>Code</Button>
-                      <Button size="sm" variant={view === 'render' ? 'secondary' : 'ghost'} onClick={() => setView('render')}>Render</Button>
-                    </div>
-                  )}
-                  <Button size="icon" variant="ghost" onClick={() => { setSelected(null); setContent(null) }} title="Close file">
-                    <X size={14} />
-                  </Button>
                 </div>
-                <div className="p-4 min-h-[480px]">
-                  {loading ? (
-                    <p className="font-mono text-xs text-muted-foreground">Loading…</p>
-                  ) : view === 'render' && canRender ? (
-                    <iframe
-                      title={selectedFile}
-                      sandbox="allow-scripts allow-forms allow-modals"
-                      className="w-full min-h-[560px] rounded-lg border border-border bg-white"
-                      srcDoc={fileContent ?? ''}
-                    />
-                  ) : (
-                    <CodePreview content={fileContent ?? ''} filePath={selectedFile} />
-                  )}
-                </div>
-              </>
-            ) : (
-              <div className="min-h-[520px] grid place-items-center px-8 text-center">
-                <div>
-                  <FileCode2 size={28} className="mx-auto text-muted-foreground/40 mb-3" />
-                  <p className="text-sm font-medium text-foreground">Pick a file</p>
-                  <p className="text-xs text-muted-foreground mt-1 max-w-sm">
-                    Browse main branch files, render HTML, or start a package script from the app runtime panel.
+              )}
+              <div className="max-h-[calc(100vh-220px)] overflow-auto p-2">
+                {filteredFiles.length === 0 ? (
+                  <p className="px-2 py-8 text-center text-sm text-muted-foreground/60">
+                    {fileList.length === 0 ? 'Files appear here after something is committed to main.' : 'No files match your search.'}
                   </p>
-                </div>
+                ) : sortedChildren(tree).map(child => (
+                  <TreeRow key={child.path} node={child} depth={0} selected={selectedFile} openDirs={openDirs} setOpenDirs={setOpenDirs} onSelect={selectFile} />
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="p-2">
+              {WORKSPACE_TOOLS.filter(item => item.id !== 'files').map(item => {
+                const Icon = item.icon
+                return (
+                  <Button
+                    key={item.id}
+                    variant={tool === item.id ? 'secondary' : 'ghost'}
+                    className="h-auto w-full justify-start px-3 py-2 text-left"
+                    onClick={() => setTool(item.id)}
+                  >
+                    <Icon size={15} className="shrink-0" />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium">{item.label}</span>
+                      <span className="block text-[11px] leading-snug text-muted-foreground">{item.description}</span>
+                    </span>
+                  </Button>
+                )
+              })}
+            </div>
+          )}
+        </aside>
+
+        <main className="min-h-0 min-w-0 overflow-auto bg-background">
+          <div className="min-h-full p-4">
+            {tool === 'commands' && (
+              <div className="flex flex-col gap-4">
+                <AppPanel
+                  info={appInfo}
+                  selectedCommand={selectedCommand}
+                  setSelectedCommand={setSelectedCommand}
+                  onStart={() => startApp.mutate()}
+                  onStop={() => stopApp.mutate()}
+                  starting={startApp.isPending}
+                  stopping={stopApp.isPending}
+                />
+                {(startApp.isError || stopApp.isError) && (
+                  <p className="text-sm text-destructive">{(startApp.error ?? stopApp.error)?.message}</p>
+                )}
               </div>
             )}
-          </section>
-        </div>
 
-        {(startApp.isError || stopApp.isError) && (
-          <p className="text-sm text-destructive">{(startApp.error ?? stopApp.error)?.message}</p>
-        )}
+            {tool === 'files' && (
+              <section className="min-h-[calc(100vh-120px)] overflow-hidden rounded-lg border border-border/60 bg-card">
+                {selectedFile ? (
+                  <>
+                    <div className="flex h-11 items-center gap-3 border-b border-border/50 bg-background/70 px-3">
+                      {(() => { const { icon: Icon, color } = fileMeta(selectedFile); return <Icon size={15} style={{ color }} /> })()}
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-mono text-xs text-foreground">{selectedFile}</p>
+                      </div>
+                      {canRender && (
+                        <div className="flex items-center gap-1">
+                          <Button size="sm" variant={view === 'code' ? 'secondary' : 'ghost'} onClick={() => setView('code')}>Code</Button>
+                          <Button size="sm" variant={view === 'render' ? 'secondary' : 'ghost'} onClick={() => setView('render')}>Render</Button>
+                        </div>
+                      )}
+                      <Button size="icon" variant="ghost" onClick={() => { setSelected(null); setContent(null) }} title="Close file">
+                        <X size={14} />
+                      </Button>
+                    </div>
+                    <div className="min-h-[560px] p-4">
+                      {loading ? (
+                        <p className="font-mono text-xs text-muted-foreground">Loading...</p>
+                      ) : view === 'render' && canRender ? (
+                        <iframe
+                          title={selectedFile}
+                          sandbox="allow-scripts allow-forms allow-modals"
+                          className="h-[calc(100vh-190px)] min-h-[560px] w-full rounded-md border border-border bg-white"
+                          srcDoc={fileContent ?? ''}
+                        />
+                      ) : (
+                        <CodePreview content={fileContent ?? ''} filePath={selectedFile} />
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div className="grid min-h-[calc(100vh-120px)] place-items-center px-8 text-center">
+                    <div>
+                      <FileCode2 size={30} className="mx-auto mb-3 text-muted-foreground/40" />
+                      <p className="text-sm font-medium text-foreground">Pick a file from Explorer</p>
+                      <p className="mt-1 max-w-sm text-xs text-muted-foreground">
+                        Browse main branch files, render HTML, or open source in the editor pane.
+                      </p>
+                      <div className="mt-4 flex justify-center gap-2 lg:hidden">
+                        {htmlEntries.slice(0, 3).map(entry => (
+                          <Button key={entry} size="sm" variant="outline" onClick={() => selectFile(entry)}>
+                            <Globe size={12} />{entry}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {tool === 'artifacts' && (
+              <section className="min-h-[620px] rounded-lg border border-border/60 bg-card grid place-items-center px-8 text-center">
+                <div>
+                  <Archive size={30} className="mx-auto text-muted-foreground/40 mb-3" />
+                  <p className="text-sm font-semibold text-foreground">Artifacts</p>
+                  <p className="text-xs text-muted-foreground mt-1 max-w-md">
+                    Generated files, screenshots, reports, and build outputs will live here.
+                  </p>
+                </div>
+              </section>
+            )}
+
+            {tool === 'environments' && (
+              <section className="min-h-[620px] rounded-lg border border-border/60 bg-card grid place-items-center px-8 text-center">
+                <div>
+                  <Monitor size={30} className="mx-auto text-muted-foreground/40 mb-3" />
+                  <p className="text-sm font-semibold text-foreground">Environments</p>
+                  <p className="text-xs text-muted-foreground mt-1 max-w-md">
+                    Runtime services, ports, worktrees, and environment state will be managed here.
+                  </p>
+                </div>
+              </section>
+            )}
+          </div>
+        </main>
       </div>
     </div>
   )

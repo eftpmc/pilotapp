@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils'
 import { useEffect, useRef, useState, useCallback } from 'react'
 import {
   BookOpen, ChevronRight, FolderOpen, Home, LogOut, Moon, Plus, Search,
-  Settings, Sun, Users, Wrench,
+  Settings, SquareTerminal, Sun, Users, Wrench,
 } from 'lucide-react'
 
 const BOTTOM_NAV = [
@@ -20,6 +20,7 @@ const NAV = [
   { label: 'Agents',   path: '/agents', end: false, icon: Users },
   { label: 'Knowledge', path: '/knowledge', end: false, icon: BookOpen },
   { label: 'Tools', path: '/tools', end: false, icon: Wrench },
+  { label: 'Workspace', path: '/workspace', end: false, icon: SquareTerminal },
   { label: 'Settings', path: '/settings', end: false, icon: Settings },
 ]
 

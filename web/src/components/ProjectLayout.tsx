@@ -2,13 +2,13 @@ import { NavLink, Outlet, useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { projects, sessions } from '../api/client'
 import { cn } from '@/lib/utils'
-import { ArrowLeft } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { ArrowLeft, SquareTerminal } from 'lucide-react'
 
 const TABS = [
   { label: 'Board',    path: ''          },
-  { label: 'History',  path: '/sessions' },
+  { label: 'Sessions', path: '/sessions' },
   { label: 'Plans',    path: '/plans'    },
-  { label: 'Files',    path: '/files'    },
   { label: 'Settings', path: '/settings' },
 ]
 
@@ -38,7 +38,13 @@ export default function ProjectLayout() {
           <ArrowLeft size={13} />
           Projects
         </button>
-        <h1 className="proj-name">{project?.name ?? '…'}</h1>
+        <div className="proj-title-row">
+          <h1 className="proj-name">{project?.name ?? '…'}</h1>
+          <Button size="sm" variant="outline" onClick={() => navigate(`/workspace/${id}`)} disabled={!id}>
+            <SquareTerminal size={13} />
+            Open in Workspace
+          </Button>
+        </div>
         <nav className="proj-tabs">
           {TABS.map(({ label, path }) => (
             <NavLink
@@ -51,7 +57,7 @@ export default function ProjectLayout() {
               {label === 'Board' && reviewCount > 0 && (
                 <span className="badge">{reviewCount}</span>
               )}
-              {label === 'History' && runningCount > 0 && (
+              {label === 'Sessions' && runningCount > 0 && (
                 <span className="badge green">{runningCount}</span>
               )}
             </NavLink>

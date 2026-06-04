@@ -19,6 +19,8 @@ interface ProjectRun {
   proc: ChildProcess;
   projectId: string;
   script: string;
+  command: string;
+  source: string;
   cwd: string;
   startedAt: string;
   output: string[];
@@ -28,10 +30,19 @@ interface ProjectRun {
 interface ProjectAppStatus {
   running: boolean;
   script?: string;
+  command?: string;
+  source?: string;
   cwd?: string;
   startedAt?: string;
   output?: string;
   url?: string;
+}
+
+interface ProjectCommand {
+  id: string;
+  label: string;
+  command: string;
+  source: string;
 }
 
 const runningApps = new Map<string, ProjectRun>();
@@ -93,6 +104,83 @@ function parsePackageScripts(raw: string | null): Record<string, string> {
   }
 }
 
+function makeCommandId(source: string, label: string) {
+  return `${source}:${label}`;
+}
+
+function parseMakeTargets(raw: string | null): ProjectCommand[] {
+  if (!raw) return [];
+  const seen = new Set<string>();
+  const commands: ProjectCommand[] = [];
+  for (const line of raw.split('\n')) {
+    const match = line.match(/^([A-Za-z0-9][\w./-]*):(?:\s|$)/);
+    const target = match?.[1];
+    if (!target || target.startsWith('.') || target.includes('%') || seen.has(target)) continue;
+    seen.add(target);
+    commands.push({ id: makeCommandId('make', target), label: target, command: `make ${target}`, source: 'Makefile' });
+  }
+  return commands;
+}
+
+function parseJustRecipes(raw: string | null): ProjectCommand[] {
+  if (!raw) return [];
+  const seen = new Set<string>();
+  const commands: ProjectCommand[] = [];
+  for (const line of raw.split('\n')) {
+    const match = line.match(/^([A-Za-z0-9][\w-]*)(?:\s|:)/);
+    const recipe = match?.[1];
+    if (!recipe || line.startsWith(' ') || line.startsWith('\t') || seen.has(recipe)) continue;
+    seen.add(recipe);
+    commands.push({ id: makeCommandId('just', recipe), label: recipe, command: `just ${recipe}`, source: 'justfile' });
+  }
+  return commands;
+}
+
+function parseTaskfileTasks(raw: string | null): ProjectCommand[] {
+  if (!raw) return [];
+  const commands: ProjectCommand[] = [];
+  const lines = raw.split('\n');
+  const start = lines.findIndex(line => /^tasks:\s*$/.test(line));
+  if (start < 0) return commands;
+  for (let i = start + 1; i < lines.length; i++) {
+    const match = lines[i].match(/^  ([A-Za-z0-9][\w-]*):\s*$/);
+    if (match?.[1]) {
+      const task = match[1];
+      commands.push({ id: makeCommandId('task', task), label: task, command: `task ${task}`, source: 'Taskfile' });
+    } else if (/^\S/.test(lines[i])) {
+      break;
+    }
+  }
+  return commands;
+}
+
+async function detectProjectCommands(repoPath: string, files: string[]) {
+  const scripts = parsePackageScripts(await readMainFile(repoPath, 'package.json'));
+  const commands: ProjectCommand[] = Object.entries(scripts).map(([label]) => ({
+    id: makeCommandId('npm', label),
+    label,
+    command: `npm run ${label}`,
+    source: 'package.json',
+  }));
+
+  commands.push(...parseMakeTargets(await readMainFile(repoPath, 'Makefile')));
+  commands.push(...parseMakeTargets(await readMainFile(repoPath, 'makefile')));
+  commands.push(...parseJustRecipes(await readMainFile(repoPath, 'justfile')));
+  commands.push(...parseJustRecipes(await readMainFile(repoPath, 'Justfile')));
+  commands.push(...parseTaskfileTasks(await readMainFile(repoPath, 'Taskfile.yml')));
+  commands.push(...parseTaskfileTasks(await readMainFile(repoPath, 'Taskfile.yaml')));
+
+  for (const file of files) {
+    if (/^scripts\/[^/]+\.(sh|bash|zsh|js|ts|py)$/i.test(file)) {
+      const label = file.replace(/^scripts\//, '');
+      const runner = file.endsWith('.py') ? 'python' : file.endsWith('.js') ? 'node' : file.endsWith('.ts') ? 'npx tsx' : 'bash';
+      commands.push({ id: makeCommandId('script', label), label, command: `${runner} ${file}`, source: 'scripts/' });
+    }
+  }
+
+  return { scripts, commands };
+}
+
 function appendRunOutput(run: ProjectRun, chunk: Buffer | string) {
   const text = chunk.toString();
   run.output.push(text);
@@ -107,6 +195,8 @@ function runStatus(projectId: string): ProjectAppStatus {
   return {
     running: true as const,
     script: run.script,
+    command: run.command,
+    source: run.source,
     cwd: run.cwd,
     startedAt: run.startedAt,
     output: run.output.join('').slice(-20000),
@@ -238,7 +328,7 @@ router.get('/:id/app-info', async (req: Request, res: Response) => {
     files = out.trim().split('\n').filter(Boolean);
   } catch { /* empty repo */ }
 
-  const scripts = parsePackageScripts(await readMainFile(row.repo_path, 'package.json'));
+  const { scripts, commands } = await detectProjectCommands(row.repo_path, files);
   const htmlEntries = files.filter(f => /\.html?$/i.test(f)).sort((a, b) => {
     if (a === 'index.html') return -1;
     if (b === 'index.html') return 1;
@@ -247,6 +337,7 @@ router.get('/:id/app-info', async (req: Request, res: Response) => {
 
   res.json({
     scripts,
+    commands,
     htmlEntries,
     status: runStatus(row.id),
   });
@@ -263,9 +354,16 @@ router.post('/:id/app/start', async (req: Request, res: Response) => {
   const row = db.prepare('SELECT * FROM projects WHERE id = ? AND user_id = ?').get(req.params.id, userId(req)) as Row | undefined;
   if (!row) { res.status(404).json({ error: 'Not found' }); return; }
 
-  const scripts = parsePackageScripts(await readMainFile(row.repo_path, 'package.json'));
-  if (!scripts[parsed.data.script]) {
-    res.status(400).json({ error: 'Unknown package script' });
+  let files: string[] = [];
+  try {
+    const out = await simpleGit(row.repo_path).raw(['ls-tree', '-r', '--name-only', 'main']);
+    files = out.trim().split('\n').filter(Boolean);
+  } catch { /* empty repo */ }
+  const { commands } = await detectProjectCommands(row.repo_path, files);
+  const command = commands.find(c => c.id === parsed.data.script) ??
+    commands.find(c => c.id === makeCommandId('npm', parsed.data.script));
+  if (!command) {
+    res.status(400).json({ error: 'Unknown project command' });
     return;
   }
 
@@ -277,22 +375,25 @@ router.post('/:id/app/start', async (req: Request, res: Response) => {
   lastApps.delete(row.id);
 
   const cwd = await ensureProjectWorktree(row);
-  const proc = spawn('npm', ['run', parsed.data.script], {
+  const proc = spawn(command.command, [], {
     cwd,
     env: { ...process.env, FORCE_COLOR: '0' },
+    shell: true,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   const run: ProjectRun = {
     proc,
     projectId: row.id,
-    script: parsed.data.script,
+    script: command.id,
+    command: command.command,
+    source: command.source,
     cwd,
     startedAt: new Date().toISOString(),
     output: [],
   };
   runningApps.set(row.id, run);
 
-  appendRunOutput(run, `$ npm run ${parsed.data.script}\n`);
+  appendRunOutput(run, `$ ${command.command}\n`);
   proc.stdout?.on('data', chunk => appendRunOutput(run, chunk));
   proc.stderr?.on('data', chunk => appendRunOutput(run, chunk));
   proc.on('close', code => {
@@ -300,6 +401,8 @@ router.post('/:id/app/start', async (req: Request, res: Response) => {
     lastApps.set(row.id, {
       running: false,
       script: run.script,
+      command: command.command,
+      source: command.source,
       cwd: run.cwd,
       startedAt: run.startedAt,
       output: run.output.join('').slice(-20000),

@@ -2405,9 +2405,14 @@ html.light {
   transition: color .1s;
 }
 .proj-back:hover { color: var(--ink); }
+.proj-title-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-bottom: 16px;
+}
 .proj-name {
   font-size: 22px; font-weight: 700; letter-spacing: -0.02em;
-  color: var(--ink); margin: 0 0 16px;
+  color: var(--ink); margin: 0;
+  min-width: 0;
 }
 
 @media (max-width: 640px) {
@@ -2415,5 +2420,6 @@ html.light {
   .page-content { padding: 0 16px; }
   .metrics   { flex-wrap: wrap; }
   .proj-header { padding: 16px 16px 0; }
+  .proj-title-row { align-items: flex-start; flex-direction: column; }
   .proj-tabs { padding: 0 16px; }
 }
