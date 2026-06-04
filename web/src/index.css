@@ -2250,6 +2250,32 @@ html.light {
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+/* ── Menubar ───────────────────────────────────────────────────────────────── */
+.menubar {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+.menubar-trigger {
+  display: flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  cursor: pointer;
+  outline: none;
+  user-select: none;
+  line-height: 1;
+  transition: background .1s, color .1s;
+}
+.menubar-trigger:hover,
+.menubar-trigger[data-highlighted],
+.menubar-trigger[data-state="open"] {
+  background: var(--panel);
+  color: var(--ink);
+}
+
 /* ── Activity feed ─────────────────────────────────────────────────────────── */
 .feed      { display: flex; flex-direction: column; gap: 4px; }
 .feedrow   {

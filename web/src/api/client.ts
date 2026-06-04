@@ -19,19 +19,6 @@ export interface Project {
   id: string; name: string; repoPath: string; role: ProjectRole;
   remoteUrl?: string; localPath?: string; createdAt: string;
 }
-export interface ProjectAppStatus {
-  running: boolean; script?: string; command?: string; source?: string;
-  cwd?: string; startedAt?: string; output?: string; url?: string;
-}
-export interface ProjectCommand {
-  id: string; label: string; command: string; source: string;
-}
-export interface ProjectAppInfo {
-  scripts: Record<string, string>;
-  commands?: ProjectCommand[];
-  htmlEntries: string[];
-  status: ProjectAppStatus;
-}
 export interface Agent {
   id: string; name: string; provider: AgentProvider;
   role: AgentRole; connectionId?: string; personality?: string;
@@ -112,6 +99,23 @@ export interface ServerSettings {
 export interface AdminUser {
   id: string; email: string; name: string; role: 'admin' | 'user';
   disabled: boolean; createdAt: string;
+}
+
+export interface CharVariantSetting {
+  variant: number;
+  excluded: boolean;
+  weight: number;
+}
+
+export interface AdminCharacterSettings {
+  settings: Record<string, CharVariantSetting[]>;
+  beardChance: number;
+}
+
+export interface CharacterSettings {
+  exclusions: Record<string, number[]>;
+  weights: Record<string, Record<number, number>>;
+  beardChance: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -216,12 +220,8 @@ export const projects = {
   update: (id: string, body: { name?: string; remoteUrl?: string; githubToken?: string }) =>
     req<Project>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   push:   (id: string) => req<{ pushed: boolean }>(`/projects/${id}/push`, { method: 'POST' }),
-  appInfo: (id: string) => req<ProjectAppInfo>(`/projects/${id}/app-info`),
-  startApp: (id: string, script: string) =>
-    req<ProjectAppStatus>(`/projects/${id}/app/start`, { method: 'POST', body: JSON.stringify({ script }) }),
-  stopApp: (id: string) => req<{ stopped: boolean }>(`/projects/${id}/app/stop`, { method: 'POST' }),
   files:  (id: string) => req<{ files: string[] }>(`/projects/${id}/files`),
-  file:   (id: string, path: string) => req<{ content: string }>(`/projects/${id}/file?path=${encodeURIComponent(path)}`),
+  file:   (id: string, p: string) => req<{ content: string }>(`/projects/${id}/file?path=${encodeURIComponent(p)}`),
   delete: (id: string) => req<void>(`/projects/${id}`, { method: 'DELETE' }),
 };
 
@@ -367,6 +367,15 @@ export const admin = {
   resetPassword:  (id: string) =>
     req<{ password: string }>(`/admin/users/${id}/reset-password`, { method: 'POST' }),
   deleteUser:     (id: string) => req<void>(`/admin/users/${id}`, { method: 'DELETE' }),
+  characters:     () => req<AdminCharacterSettings>('/admin/characters'),
+  updateVariant:  (part: string, variant: number, body: { excluded?: boolean; weight?: number }) =>
+    req<CharVariantSetting>(`/admin/characters/${part}/${variant}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  updateBeardChance: (chance: number) =>
+    req<{ beardChance: number }>('/admin/characters/beard-chance', { method: 'PATCH', body: JSON.stringify({ chance }) }),
+};
+
+export const characters = {
+  settings: () => req<CharacterSettings>('/settings/characters'),
 };
 
 // ---------------------------------------------------------------------------

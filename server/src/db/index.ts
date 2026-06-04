@@ -270,3 +270,12 @@ migrate('036_drop_shifts', `
   ALTER TABLE tasks DROP COLUMN shift_id;
   DROP TABLE IF EXISTS shifts;
 `);
+migrate('038_character_settings', `
+  CREATE TABLE IF NOT EXISTS character_settings (
+    part     TEXT    NOT NULL,
+    variant  INTEGER NOT NULL,
+    excluded INTEGER NOT NULL DEFAULT 0,
+    weight   INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (part, variant)
+  );
+`);

@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import LoginPage from './pages/LoginPage'
@@ -14,13 +14,14 @@ import ProjectsPage from './pages/ProjectsPage'
 import ProjectDetailPage from './pages/ProjectDetailPage'
 import SessionsPage from './pages/SessionsPage'
 import PlansPage from './pages/PlansPage'
-import WorkspacePage from './pages/FilesPage'
+import ProjectOutputsPage from './pages/ProjectOutputsPage'
 import ProjectSettingsPage from './pages/ProjectSettingsPage'
 import SessionPage from './pages/SessionPage'
 import SettingsPage from './pages/SettingsPage'
 import ToolsPage from './pages/ToolsPage'
 import AdminUsersPage from './pages/AdminUsersPage'
 import AdminServerPage from './pages/AdminServerPage'
+import AdminCharactersPage from './pages/AdminCharactersPage'
 
 const qc = new QueryClient({ defaultOptions: { queries: { staleTime: 10_000 } } })
 
@@ -36,11 +37,6 @@ function RequireUser({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
-function ProjectWorkspaceRedirect() {
-  const { id } = useParams<{ id: string }>()
-  return <Navigate to={id ? `/workspace/${id}` : '/workspace'} replace />
-}
-
 export default function App() {
   return (
     <QueryClientProvider client={qc}>
@@ -53,6 +49,7 @@ export default function App() {
           <Route path="/admin" element={<RequireAdmin><AdminLayout /></RequireAdmin>}>
             <Route index                  element={<Navigate to="/admin/users" replace />} />
             <Route path="users"           element={<AdminUsersPage />} />
+            <Route path="characters"      element={<AdminCharactersPage />} />
             <Route path="server"          element={<AdminServerPage />} />
           </Route>
 
@@ -65,16 +62,13 @@ export default function App() {
             <Route path="projects"      element={<ProjectsPage />} />
             <Route path="knowledge"     element={<KnowledgePage />} />
             <Route path="tools"         element={<ToolsPage />} />
-            <Route path="workspace"     element={<WorkspacePage />} />
-            <Route path="workspace/:id" element={<WorkspacePage />} />
             <Route path="settings"      element={<SettingsPage />} />
             <Route path="sessions/:id"  element={<SessionPage />} />
             <Route path="projects/:id"  element={<ProjectLayout />}>
               <Route index              element={<ProjectDetailPage />} />
               <Route path="sessions"    element={<SessionsPage />} />
               <Route path="plans"       element={<PlansPage />} />
-              <Route path="workspace"   element={<ProjectWorkspaceRedirect />} />
-              <Route path="files"       element={<ProjectWorkspaceRedirect />} />
+              <Route path="outputs"     element={<ProjectOutputsPage />} />
               <Route path="settings"    element={<ProjectSettingsPage />} />
             </Route>
           </Route>

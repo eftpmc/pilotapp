@@ -359,6 +359,8 @@ router.post('/:id/clarifications/:clarificationId/respond', (req: Request, res: 
 // DELETE /sessions/:id
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+
 router.delete('/:id', async (req: Request, res: Response) => {
   const uid = userId(req);
   const row = db.prepare('SELECT * FROM sessions WHERE id = ? AND user_id = ?').get(req.params.id, uid) as SessionRow | undefined;

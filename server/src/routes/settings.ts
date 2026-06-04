@@ -69,4 +69,27 @@ router.put('/credentials', (req: Request, res: Response) => {
   res.json(credentialStatus(uid));
 });
 
+// GET /settings/characters — read character generation settings (any authenticated user)
+router.get('/characters', (_req: Request, res: Response) => {
+  type Row = { part: string; variant: number; excluded: number; weight: number };
+  const rows = db.prepare('SELECT part, variant, excluded, weight FROM character_settings').all() as Row[];
+
+  const exclusions: Record<string, number[]> = {};
+  const weights: Record<string, Record<number, number>> = {};
+
+  for (const r of rows) {
+    if (r.excluded) {
+      if (!exclusions[r.part]) exclusions[r.part] = [];
+      exclusions[r.part].push(r.variant);
+    }
+    if (r.weight > 0) {
+      if (!weights[r.part]) weights[r.part] = {};
+      weights[r.part][r.variant] = r.weight;
+    }
+  }
+
+  const bChance = db.prepare("SELECT value FROM server_settings WHERE key = 'character.beard_chance'").get() as { value: string } | undefined;
+  res.json({ exclusions, weights, beardChance: bChance ? parseInt(bChance.value, 10) : 10 });
+});
+
 export default router;

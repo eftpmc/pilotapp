@@ -2,13 +2,13 @@ import { NavLink, Outlet, useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { projects, sessions } from '../api/client'
 import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
-import { ArrowLeft, SquareTerminal } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 
 const TABS = [
   { label: 'Board',    path: ''          },
   { label: 'Sessions', path: '/sessions' },
   { label: 'Plans',    path: '/plans'    },
+  { label: 'Outputs',  path: '/outputs'  },
   { label: 'Settings', path: '/settings' },
 ]
 
@@ -40,10 +40,6 @@ export default function ProjectLayout() {
         </button>
         <div className="proj-title-row">
           <h1 className="proj-name">{project?.name ?? '…'}</h1>
-          <Button size="sm" variant="outline" onClick={() => navigate(`/workspace/${id}`)} disabled={!id}>
-            <SquareTerminal size={13} />
-            Open in Workspace
-          </Button>
         </div>
         <nav className="proj-tabs">
           {TABS.map(({ label, path }) => (

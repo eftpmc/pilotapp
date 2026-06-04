@@ -22,6 +22,7 @@ export default defineConfig({
     emptyOutDir: true,
   },
   server: {
+    host: '0.0.0.0',
     proxy: {
       '/auth':        'http://localhost:3000',
       '/projects':    { target: 'http://localhost:3000', bypass: spaBypass },

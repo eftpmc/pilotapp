@@ -41,6 +41,29 @@ function loadAssets(): Promise<LoadedAssets> {
 }
 
 // ---------------------------------------------------------------------------
+// Character settings (fetched once, applied to skin generation)
+// ---------------------------------------------------------------------------
+
+interface CharSettings {
+  exclusions: Record<string, number[]>;
+  weights: Record<string, Record<number, number>>;
+  beardChance: number;
+}
+
+const DEFAULT_CHAR_SETTINGS: CharSettings = { exclusions: {}, weights: {}, beardChance: 10 }
+let charSettingsPromise: Promise<CharSettings> | null = null
+
+function loadCharSettings(): Promise<CharSettings> {
+  if (charSettingsPromise) return charSettingsPromise
+  charSettingsPromise = fetch('/settings/characters', {
+    headers: { Authorization: `Bearer ${localStorage.getItem('token') ?? ''}` },
+  })
+    .then(r => r.ok ? r.json() : DEFAULT_CHAR_SETTINGS)
+    .catch(() => DEFAULT_CHAR_SETTINGS)
+  return charSettingsPromise
+}
+
+// ---------------------------------------------------------------------------
 // Deterministic skin + color generation
 // ---------------------------------------------------------------------------
 
@@ -49,17 +72,38 @@ function djb2(s: string): number {
   for (let i = 0; i < s.length; i++) h = (((h << 5) + h) ^ s.charCodeAt(i)) >>> 0
   return h
 }
-function pick(name: string, salt: string, n: number, offset = 1) {
-  return (djb2(name + salt) % n) + offset
-}
 function pickFrom<T>(name: string, salt: string, arr: T[]): T {
   return arr[djb2(name + salt) % arr.length]
 }
-// weights: [[value, weight], ...] where weights sum to 100
-function weightedPick(name: string, salt: string, weights: [number, number][]): number {
-  let v = djb2(name + salt) % 100
-  for (const [val, w] of weights) { if (v < w) return val; v -= w }
-  return weights[0][0]
+function weightedPickDynamic(name: string, salt: string, pairs: [number, number][]): number {
+  const total = pairs.reduce((s, [, w]) => s + w, 0)
+  if (total === 0) return pairs[0]?.[0] ?? 1
+  let v = djb2(name + salt) % total
+  for (const [val, w] of pairs) { if (v < w) return val; v -= w }
+  return pairs[0][0]
+}
+
+function applyExclAndWeights(
+  name: string,
+  salt: string,
+  part: string,
+  defaultWeights: [number, number][],
+  settings: CharSettings,
+): number {
+  const excl    = new Set(settings.exclusions[part] ?? [])
+  const wOverride = settings.weights[part] ?? {}
+  const active: [number, number][] = defaultWeights
+    .filter(([id]) => !excl.has(id))
+    .map(([id, dw]) => [id, wOverride[id] ?? dw])
+  if (active.length === 0) return defaultWeights[0][0]
+  return weightedPickDynamic(name, salt, active)
+}
+
+function applyExclUniform(name: string, salt: string, part: string, pool: number[], settings: CharSettings): number {
+  const excl   = new Set(settings.exclusions[part] ?? [])
+  const active = pool.filter(v => !excl.has(v))
+  if (active.length === 0) return pool[0]
+  return pickFrom(name, salt, active)
 }
 
 const SKIN_TONES: [number, number, number][] = [
@@ -108,29 +152,30 @@ function buildSlotColors(name: string): Map<string, [number, number, number]> {
   return map
 }
 
-function buildSkin(name: string, skeletonData: SkeletonData): Skin {
+function buildSkin(name: string, skeletonData: SkeletonData, settings: CharSettings): Skin {
   const n = name.toLowerCase()
   const combo = new Skin('agent')
 
-  const hairSkin = `hair_short/hair_short_c_${pick(n, 'h', 30)}`
-
-  const eye  = weightedPick(n, 'e',  [[2,80],[3,5],[4,5],[6,4],[11,3],[13,3]])
-  const mth  = weightedPick(n, 'm',  [[1,80],[3,5],[4,5],[6,4],[8,3],[9,3]])
-  const brow = pickFrom(n, 'b', [1,2,3,4,5,8,9])
+  const hair = applyExclUniform(n, 'h', 'hair', Array.from({ length: 30 }, (_, i) => i + 1), settings)
+  const eye  = applyExclAndWeights(n, 'e', 'eyes',  [[2,80],[3,5],[4,5],[6,4],[11,3],[13,3]], settings)
+  const mth  = applyExclAndWeights(n, 'm', 'mouth', [[1,80],[3,5],[4,5],[6,4],[8,3],[9,3]],   settings)
+  const brow = applyExclUniform(n, 'b', 'brow', [1,2,3,4,5,8,9], settings)
+  const top  = applyExclUniform(n, 't', 'top',  Array.from({ length: 48 }, (_, i) => i + 1), settings)
 
   const parts = [
     'skin/skin_1',
     `eyes/eyes_c_${eye}`,
-    hairSkin,
+    `hair_short/hair_short_c_${hair}`,
     `mouth/mouth_c_${mth}`,
     `brow/brow_c_${brow}`,
-    `top/top_c_${pick(n, 't', 48)}`,
+    `top/top_c_${top}`,
   ]
   for (const s of parts) { const sk = skeletonData.findSkin(s); if (sk) combo.addSkin(sk) }
 
-  // ~10% chance of beard
-  if (pick(n, 'beard', 10) > 9) {
-    const s = skeletonData.findSkin(`beard/beard_c_${pick(n, 'beardN', 10)}`)
+  const beardThreshold = 100 - (settings.beardChance ?? 10)
+  if (djb2(n + 'beard') % 100 >= beardThreshold) {
+    const beardVariant = applyExclUniform(n, 'beardN', 'beard', Array.from({ length: 10 }, (_, i) => i + 1), settings)
+    const s = skeletonData.findSkin(`beard/beard_c_${beardVariant}`)
     if (s) combo.addSkin(s)
   }
   return combo
@@ -242,11 +287,11 @@ export function SpineAvatar({
     let lastTime = 0
     let cancelled = false
 
-    loadAssets().then(({ skeletonData }) => {
+    Promise.all([loadAssets(), loadCharSettings()]).then(([{ skeletonData }, charSettings]) => {
       if (cancelled) return
 
       const skeleton = new Skeleton(skeletonData)
-      skeleton.setSkin(buildSkin(name, skeletonData))
+      skeleton.setSkin(buildSkin(name, skeletonData, charSettings))
       skeleton.setSlotsToSetupPose()
 
       const slotColors = buildSlotColors(name)
@@ -287,6 +332,89 @@ export function SpineAvatar({
       cancelAnimationFrame(rafId)
     }
   }, [name, width, height, animation, animated])
+
+  return (
+    <canvas
+      ref={canvasRef}
+      width={width}
+      height={height}
+      style={{ display: 'block' }}
+    />
+  )
+}
+
+// ---------------------------------------------------------------------------
+// SpinePartPreview — static single-frame render of specific skin(s) on a
+// neutral base head. Used in the admin characters page.
+// ---------------------------------------------------------------------------
+
+const NEUTRAL_COLORS = new Map<string, [number, number, number]>([
+  ['head',  [0.95, 0.78, 0.60]],
+  ['hair',  [0.52, 0.34, 0.16]],
+  ['brow',  [0.39, 0.26, 0.12]],
+  ['beard', [0.44, 0.29, 0.14]],
+])
+
+export function SpinePartPreview({
+  skins,
+  width = 56,
+  height = 64,
+  bustMode = false,
+}: {
+  skins: string[]
+  width?: number
+  height?: number
+  bustMode?: boolean
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const key = skins.join('|')
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    let cancelled = false
+
+    loadAssets().then(({ skeletonData }) => {
+      if (cancelled) return
+
+      const combo = new Skin('preview')
+      for (const s of skins) {
+        const sk = skeletonData.findSkin(s)
+        if (sk) combo.addSkin(sk)
+      }
+
+      const skeleton = new Skeleton(skeletonData)
+      skeleton.setSkin(combo)
+      skeleton.setSlotsToSetupPose()
+
+      const animStateData = new AnimationStateData(skeletonData)
+      const animState = new AnimationState(animStateData)
+      animState.setAnimation(0, 'Idle', false)
+      animState.update(0)
+      animState.apply(skeleton)
+      skeleton.updateWorldTransform(Physics.update)
+
+      // Head crop: worldY 40–93; bust mode: 10–93 (shows collar)
+      const yTop    = bustMode ? 10 : 40
+      const yBottom = 93
+      const range   = yBottom - yTop
+      const scale   = (height - 4) / range
+      const offsetX = width / 2
+      const offsetY = 2 + yBottom * scale
+
+      ctx.clearRect(0, 0, width, height)
+      ctx.save()
+      ctx.translate(offsetX, offsetY)
+      ctx.scale(scale, -scale)
+      drawWithTints(ctx, skeleton, NEUTRAL_COLORS)
+      ctx.restore()
+    })
+
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, width, height, bustMode])
 
   return (
     <canvas

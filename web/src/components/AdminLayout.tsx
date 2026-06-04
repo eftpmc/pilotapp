@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import { LogOut, Moon, Server, Sun, Users } from 'lucide-react'
+import { LogOut, Moon, Server, Smile, Sun, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 function getTheme(): 'light' | 'dark' {
@@ -15,8 +15,9 @@ function applyTheme(t: 'light' | 'dark') {
 }
 
 const NAV = [
-  { label: 'Users',    path: '/admin/users',    icon: Users  },
-  { label: 'Server',   path: '/admin/server',   icon: Server },
+  { label: 'Users',      path: '/admin/users',      icon: Users  },
+  { label: 'Characters', path: '/admin/characters',  icon: Smile  },
+  { label: 'Server',     path: '/admin/server',      icon: Server },
 ]
 
 export default function AdminLayout() {

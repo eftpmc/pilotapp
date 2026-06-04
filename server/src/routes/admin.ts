@@ -195,4 +195,58 @@ router.delete('/users/:id', (req: Request, res: Response) => {
   res.status(204).end();
 });
 
+// ── Characters ────────────────────────────────────────────────────────────
+
+type CharSettingRow = { part: string; variant: number; excluded: number; weight: number };
+
+// GET /admin/characters
+router.get('/characters', (req: Request, res: Response) => {
+  const rows = db.prepare('SELECT part, variant, excluded, weight FROM character_settings').all() as CharSettingRow[];
+  const map: Record<string, CharSettingRow[]> = {};
+  for (const r of rows) {
+    if (!map[r.part]) map[r.part] = [];
+    map[r.part].push(r);
+  }
+  // Also pull beard overall chance from server_settings
+  const bChanceRow = db.prepare("SELECT value FROM server_settings WHERE key = 'character.beard_chance'").get() as { value: string } | undefined;
+  res.json({ settings: map, beardChance: bChanceRow ? parseInt(bChanceRow.value, 10) : 10 });
+});
+
+// PATCH /admin/characters/beard-chance  — must be before /:part/:variant wildcard
+router.patch('/characters/beard-chance', (req: Request, res: Response) => {
+  const { chance } = req.body;
+  if (typeof chance !== 'number' || chance < 0 || chance > 100) {
+    res.status(400).json({ error: 'chance must be 0–100' }); return;
+  }
+  db.prepare(
+    "INSERT INTO server_settings (key, value) VALUES ('character.beard_chance', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+  ).run(String(Math.round(chance)));
+  res.json({ beardChance: Math.round(chance) });
+});
+
+// PATCH /admin/characters/:part/:variant
+const CharVariantSchema = z.object({
+  excluded: z.boolean().optional(),
+  weight:   z.number().int().min(0).max(9999).optional(),
+});
+
+router.patch('/characters/:part/:variant', (req: Request, res: Response) => {
+  const part    = String(req.params.part);
+  const variant = parseInt(String(req.params.variant), 10);
+  if (isNaN(variant)) { res.status(400).json({ error: 'Invalid variant' }); return; }
+
+  const parsed = CharVariantSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+
+  const existing = db.prepare('SELECT excluded, weight FROM character_settings WHERE part = ? AND variant = ?').get(part, variant) as { excluded: number; weight: number } | undefined;
+  const excl = parsed.data.excluded !== undefined ? (parsed.data.excluded ? 1 : 0) : (existing?.excluded ?? 0);
+  const wgt  = parsed.data.weight   !== undefined ? parsed.data.weight              : (existing?.weight   ?? 0);
+
+  db.prepare(
+    'INSERT INTO character_settings (part, variant, excluded, weight) VALUES (?, ?, ?, ?) ON CONFLICT(part, variant) DO UPDATE SET excluded = ?, weight = ?'
+  ).run(part, variant, excl, wgt, excl, wgt);
+
+  res.json({ part, variant, excluded: !!excl, weight: wgt });
+});
+
 export default router;
