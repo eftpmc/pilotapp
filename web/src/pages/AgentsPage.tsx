@@ -248,7 +248,7 @@ export default function AgentsPage() {
   }
 
   function goNewAgent(deptId?: string) {
-    navigate(deptId ? `/agents/new?dept=${deptId}` : '/agents/new')
+    navigate(deptId ? `/agents/hire?dept=${deptId}` : '/agents/hire')
   }
 
   return (
@@ -265,7 +265,7 @@ export default function AgentsPage() {
           </div>
           <div className="flex gap-2 shrink-0">
             <Button size="sm" variant="outline" onClick={() => setDeptDialog({ open: true })}>+ Team</Button>
-            <Button size="sm" onClick={() => goNewAgent()}>+ Agent</Button>
+            <Button size="sm" onClick={() => goNewAgent()}>Hire agent</Button>
           </div>
         </div>
 
@@ -291,7 +291,7 @@ export default function AgentsPage() {
         )}
 
         {deptList.length === 0 && employeeList.length === 0 && (
-          <p className="empty-line">No agents yet. <button className="text-primary hover:underline" onClick={() => goNewAgent()}>Hire your first agent.</button></p>
+          <p className="empty-line">No agents yet. <button className="text-primary hover:underline" onClick={() => navigate('/agents/hire')}>Hire your first agent.</button></p>
         )}
 
       </div>

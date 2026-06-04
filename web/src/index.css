@@ -1491,6 +1491,42 @@ html.light {
   .na-step-body { width: 100%; }
 }
 
+/* ── Hire roster (full-page catalog) ────────────────────────────────────────── */
+.hire-roster-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.hire-roster-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 22px;
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  background: var(--panel);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  transition: background .12s, border-color .15s, box-shadow .15s, transform .12s;
+}
+.hire-roster-card:hover {
+  background: var(--panel-2);
+  border-color: color-mix(in srgb, var(--ink) 22%, var(--rule));
+  box-shadow: 0 4px 14px oklch(0 0 0 / .07);
+  transform: translateY(-1px);
+}
+.hire-roster-card.hire-roster-custom {
+  border-style: dashed;
+  align-items: center;
+}
+@media (max-width: 600px) {
+  .hire-roster-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 400px) {
+  .hire-roster-grid { grid-template-columns: 1fr; }
+}
+
 /* ── Roster gallery (dialog, legacy) ─────────────────────────────────────────── */
 .agent-roster-grid {
   display: grid;

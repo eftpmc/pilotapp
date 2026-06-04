@@ -299,6 +299,8 @@ export function SpineAvatar({
       const animStateData = new AnimationStateData(skeletonData)
       const animState = new AnimationState(animStateData)
       animState.setAnimation(0, animation, true)
+      // Stagger each avatar's phase so they don't all move in sync
+      animState.update((djb2(name) % 300) / 100)
 
       // Head crop: worldY 40–93 (chin to above hair)
       const scale = (height - 4) / 53

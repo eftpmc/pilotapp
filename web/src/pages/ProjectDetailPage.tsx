@@ -31,7 +31,7 @@ function AgentPickerDropdown({ agentList, onAssign }: { agentList: Agent[]; onAs
       <DropdownMenuContent align="end">
         {agentList.map(a => (
           <DropdownMenuItem key={a.id} onSelect={() => onAssign(a.id)} className="flex items-center gap-2">
-            <AgentAvatar agent={a} size={22} />
+            <AgentAvatar agent={a} size={22} animated={false} />
             {a.name}
           </DropdownMenuItem>
         ))}
@@ -335,7 +335,7 @@ function ReviewerPickerButton({ agentList, onPick }: { agentList: Agent[]; onPic
         <DropdownMenuLabel>Pick reviewer</DropdownMenuLabel>
         {agentList.map(a => (
           <DropdownMenuItem key={a.id} onSelect={() => onPick(a.id)} className="flex items-center gap-2">
-            <AgentAvatar agent={a} size={20} />
+            <AgentAvatar agent={a} size={20} animated={false} />
             {a.name}
           </DropdownMenuItem>
         ))}

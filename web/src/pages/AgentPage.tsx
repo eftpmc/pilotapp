@@ -13,13 +13,10 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PersonalityPicker } from '@/components/PersonalityPicker'
+import { PERSONALITY_PRESETS } from '@/lib/agent-constants'
 import { timeAgo } from '@/lib/time'
 import { cn } from '@/lib/utils'
-import { ArrowLeft, Trash2 } from 'lucide-react'
-
-// ---------------------------------------------------------------------------
-// Page
-// ---------------------------------------------------------------------------
+import { ArrowLeft, Pencil, Trash2 } from 'lucide-react'
 
 export default function AgentPage() {
   const { id } = useParams<{ id: string }>()
@@ -44,6 +41,9 @@ export default function AgentPage() {
   const assignedToolIds  = new Set(toolAssigns.filter(a => a.agentId === id).map(a => a.toolId))
   const deptToolIds      = new Set(deptAssigns.filter(a => a.departmentId === agent?.departmentId).map(a => a.toolId))
   const activeSession   = sessionList.find(s => s.status === 'running') ?? null
+
+  // Edit mode toggle
+  const [editing, setEditing] = useState(false)
 
   const [name,   setName]   = useState('')
   const [deptId, setDeptId] = useState('')
@@ -114,6 +114,24 @@ export default function AgentPage() {
   function taskTitle(wid?: string) { return wid ? taskList.find(t => t.id === wid)?.title : undefined }
   function projectName(pid: string) { return projectList.find(p => p.id === pid)?.name ?? '—' }
 
+  // Compute personality display info
+  const chunks = (agent.personality ?? '').split('\n\n').map(c => c.trim()).filter(Boolean)
+  const activePresets = chunks
+    .map(c => PERSONALITY_PRESETS.find(p => p.prompt === c))
+    .filter(Boolean) as typeof PERSONALITY_PRESETS
+  const isCustomPersonality = agent.personality && activePresets.length === 0
+
+  function cancelEdit() {
+    setName(agent.name)
+    setDeptId(agent.departmentId ?? '')
+    setConnectionId(agent.connectionId ?? '')
+    setRole(agent.role ?? 'worker')
+    setPersonality(agent.personality ?? '')
+    setIdentityDirty(false)
+    setPersonalityDirty(false)
+    setEditing(false)
+  }
+
   return (
     <div className="flex-1 overflow-y-auto bg-background">
       <div className="max-w-[960px] px-6 pt-10 pb-16">
@@ -146,6 +164,12 @@ export default function AgentPage() {
                   </span>
                 </>
               )}
+              {agent.role === 'lead' && (
+                <>
+                  <span className="text-muted-foreground/30 text-xs">·</span>
+                  <span className="text-xs font-medium" style={{ color: 'var(--ember)' }}>Lead</span>
+                </>
+              )}
               {totalCost > 0 && (
                 <>
                   <span className="text-muted-foreground/30 text-xs">·</span>
@@ -154,11 +178,27 @@ export default function AgentPage() {
               )}
             </div>
           </div>
-          <div className="shrink-0 pb-1">
+          <div className="shrink-0 pb-1 flex items-center gap-3">
             {activeSession
               ? <LiveTimer createdAt={activeSession.createdAt} />
               : <span className="text-xs text-muted-foreground">Idle</span>
             }
+            {!editing ? (
+              <button
+                onClick={() => setEditing(true)}
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-md hover:bg-muted/40"
+              >
+                <Pencil size={12} />
+                Edit
+              </button>
+            ) : (
+              <button
+                onClick={cancelEdit}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-md hover:bg-muted/40"
+              >
+                Done
+              </button>
+            )}
           </div>
         </div>
 
@@ -166,82 +206,127 @@ export default function AgentPage() {
 
           {/* ── Identity ── */}
           <section>
-            <p className="text-xs font-medium text-muted-foreground/50 mb-4">Identity</p>
-            <div className="flex flex-col gap-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <Label>Name</Label>
-                  <Input value={name} onChange={e => { setName(e.target.value); setIdentityDirty(true) }} />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>Connection</Label>
-                  <Select value={connectionId || agent.connectionId || ''} onValueChange={v => { setConnectionId(v); setIdentityDirty(true) }}>
-                    <SelectTrigger><SelectValue placeholder="Select connection" /></SelectTrigger>
-                    <SelectContent>
-                      {connList.map(c => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name}{c.model ? ` · ${c.model}` : ''}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>Team</Label>
-                  <Select value={deptId || '__none'} onValueChange={v => { setDeptId(v === '__none' ? '' : v); setIdentityDirty(true) }}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none">No team</SelectItem>
-                      {deptList.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
+            {!editing ? (
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
+                {connection && (
+                  <span className="flex items-center gap-1.5">
+                    <ProviderBadge type={connection.type} />
+                    {connection.name}
+                  </span>
+                )}
+                {dept && (
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: dept.color }} />
+                    {dept.name}
+                  </span>
+                )}
+                {agent.role === 'lead' && (
+                  <span style={{ color: 'var(--ember)' }}>Lead agent</span>
+                )}
               </div>
-              <label className="flex items-center gap-3 px-4 py-3 bg-card rounded-xl border border-border/50 w-full transition-colors hover:bg-muted/30 cursor-pointer">
-                <Checkbox
-                  checked={role === 'lead'}
-                  onCheckedChange={v => { setRole(v ? 'lead' : 'worker'); setIdentityDirty(true) }}
-                />
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground">Lead agent</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Orchestrates the team — breaks down briefs, creates subtasks, and coordinates workers. Cannot write or edit code.</p>
+            ) : (
+              <div className="flex flex-col gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Name</Label>
+                    <Input value={name} onChange={e => { setName(e.target.value); setIdentityDirty(true) }} />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Connection</Label>
+                    <Select value={connectionId || agent.connectionId || ''} onValueChange={v => { setConnectionId(v); setIdentityDirty(true) }}>
+                      <SelectTrigger><SelectValue placeholder="Select connection" /></SelectTrigger>
+                      <SelectContent>
+                        {connList.map(c => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.name}{c.model ? ` · ${c.model}` : ''}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Team</Label>
+                    <Select value={deptId || '__none'} onValueChange={v => { setDeptId(v === '__none' ? '' : v); setIdentityDirty(true) }}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none">No team</SelectItem>
+                        {deptList.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-              </label>
-              {identityDirty && (
-                <div className="flex gap-2 justify-end">
-                  <Button size="sm" variant="outline" onClick={() => {
-                    setName(agent.name); setDeptId(agent.departmentId ?? ''); setConnectionId(agent.connectionId ?? ''); setRole(agent.role ?? 'worker'); setIdentityDirty(false)
-                  }}>Cancel</Button>
-                  <Button size="sm" disabled={updateAgent.isPending || !connectionId} onClick={() => {
-                    updateAgent.mutate({ name: name.trim(), connectionId, role, departmentId: deptId || null })
-                    setIdentityDirty(false)
-                  }}>Save</Button>
-                </div>
-              )}
-              {updateAgent.isError && (
-                <p className="text-xs text-destructive">{updateAgent.error.message}</p>
-              )}
-            </div>
+                <label className="flex items-center gap-3 px-4 py-3 bg-card rounded-xl border border-border/50 w-full transition-colors hover:bg-muted/30 cursor-pointer">
+                  <Checkbox
+                    checked={role === 'lead'}
+                    onCheckedChange={v => { setRole(v ? 'lead' : 'worker'); setIdentityDirty(true) }}
+                  />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground">Lead agent</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Orchestrates the team — breaks down briefs, creates subtasks, and coordinates workers. Cannot write or edit code.</p>
+                  </div>
+                </label>
+                {identityDirty && (
+                  <div className="flex gap-2 justify-end">
+                    <Button size="sm" variant="outline" onClick={() => {
+                      setName(agent.name); setDeptId(agent.departmentId ?? ''); setConnectionId(agent.connectionId ?? ''); setRole(agent.role ?? 'worker'); setIdentityDirty(false)
+                    }}>Cancel</Button>
+                    <Button size="sm" disabled={updateAgent.isPending || !connectionId} onClick={() => {
+                      updateAgent.mutate({ name: name.trim(), connectionId, role, departmentId: deptId || null })
+                      setIdentityDirty(false)
+                    }}>Save</Button>
+                  </div>
+                )}
+                {updateAgent.isError && (
+                  <p className="text-xs text-destructive">{updateAgent.error.message}</p>
+                )}
+              </div>
+            )}
           </section>
 
           {/* ── Personality ── */}
           <section>
             <p className="text-xs font-medium text-muted-foreground/50 mb-4">Personality</p>
-            <div className="flex flex-col gap-3">
-              <PersonalityPicker
-                value={personality}
-                onChange={v => { setPersonality(v); setPersonalityDirty(true) }}
-              />
-              {personalityDirty && (
-                <div className="flex gap-2 justify-end">
-                  <Button size="sm" variant="outline" onClick={() => { setPersonality(agent.personality ?? ''); setPersonalityDirty(false) }}>Cancel</Button>
-                  <Button size="sm" disabled={updateAgent.isPending} onClick={() => {
-                    updateAgent.mutate({ personality: personality.trim() || undefined })
-                    setPersonalityDirty(false)
-                  }}>Save</Button>
-                </div>
-              )}
-            </div>
+            {!editing ? (
+              <div className="flex flex-col gap-3">
+                {activePresets.length > 0 ? (
+                  <>
+                    <div className="flex flex-wrap gap-1.5">
+                      {activePresets.map(p => (
+                        <span key={p.label} className="na-roster-tag" style={{ fontSize: 11 }}>{p.label}</span>
+                      ))}
+                    </div>
+                    <div className="flex flex-col gap-1.5 px-3 py-2.5 rounded-lg bg-muted/30 border border-border/40">
+                      {activePresets.map(p => (
+                        <p key={p.label} className="text-xs text-muted-foreground leading-relaxed">
+                          <span className="font-medium text-foreground">{p.label}. </span>
+                          {p.prompt}
+                        </p>
+                      ))}
+                    </div>
+                  </>
+                ) : isCustomPersonality ? (
+                  <p className="text-xs text-muted-foreground whitespace-pre-wrap">{agent.personality}</p>
+                ) : (
+                  <p className="text-xs text-muted-foreground/50">No personality set.</p>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <PersonalityPicker
+                  value={personality}
+                  onChange={v => { setPersonality(v); setPersonalityDirty(true) }}
+                />
+                {personalityDirty && (
+                  <div className="flex gap-2 justify-end">
+                    <Button size="sm" variant="outline" onClick={() => { setPersonality(agent.personality ?? ''); setPersonalityDirty(false) }}>Cancel</Button>
+                    <Button size="sm" disabled={updateAgent.isPending} onClick={() => {
+                      updateAgent.mutate({ personality: personality.trim() || undefined })
+                      setPersonalityDirty(false)
+                    }}>Save</Button>
+                  </div>
+                )}
+              </div>
+            )}
           </section>
 
           {/* ── Tools ── */}
@@ -254,6 +339,33 @@ export default function AgentPage() {
             </div>
             {allTools.length === 0 ? (
               <p className="text-xs text-muted-foreground">No tools configured. <a href="/tools" className="text-primary hover:underline">Add in Tools.</a></p>
+            ) : !editing ? (
+              (() => {
+                const assigned = allTools.filter(t => deptToolIds.has(t.id) || assignedToolIds.has(t.id))
+                return assigned.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No tools assigned.</p>
+                ) : (
+                  <div className="flex flex-col divide-y divide-border/40">
+                    {assigned.map(tool => {
+                      const fromDept = deptToolIds.has(tool.id)
+                      return (
+                        <div key={tool.id} className="flex items-center gap-3 py-2.5">
+                          <div className="min-w-0 flex-1">
+                            <span className="text-sm font-medium text-foreground">{tool.name}</span>
+                            {tool.description && <span className="text-xs text-muted-foreground ml-2">{tool.description}</span>}
+                          </div>
+                          {fromDept && (
+                            <span className="text-[10px] text-muted-foreground/50 shrink-0 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: dept?.color }} />
+                              {dept?.name}
+                            </span>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })()
             ) : (
               <div className="flex flex-col divide-y divide-border/40">
                 {allTools.map(tool => {

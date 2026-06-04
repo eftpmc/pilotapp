@@ -9,6 +9,8 @@ import OverviewPage from './pages/OverviewPage'
 import AgentsPage from './pages/AgentsPage'
 import AgentPage from './pages/AgentPage'
 import NewAgentPage from './pages/NewAgentPage'
+import HireRosterPage from './pages/HireRosterPage'
+import HireAgentPage from './pages/HireAgentPage'
 import KnowledgePage from './pages/KnowledgePage'
 import ProjectsPage from './pages/ProjectsPage'
 import ProjectDetailPage from './pages/ProjectDetailPage'
@@ -56,9 +58,11 @@ export default function App() {
           {/* User shell */}
           <Route path="/" element={<RequireUser><Layout /></RequireUser>}>
             <Route index                element={<OverviewPage />} />
-            <Route path="agents"        element={<AgentsPage />} />
-            <Route path="agents/new"    element={<NewAgentPage />} />
-            <Route path="agents/:id"    element={<AgentPage />} />
+            <Route path="agents"              element={<AgentsPage />} />
+            <Route path="agents/new"          element={<NewAgentPage />} />
+            <Route path="agents/hire"         element={<HireRosterPage />} />
+            <Route path="agents/hire/:presetId" element={<HireAgentPage />} />
+            <Route path="agents/:id"          element={<AgentPage />} />
             <Route path="projects"      element={<ProjectsPage />} />
             <Route path="knowledge"     element={<KnowledgePage />} />
             <Route path="tools"         element={<ToolsPage />} />

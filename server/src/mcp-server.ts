@@ -238,6 +238,18 @@ const TOOLS = [
     },
   },
   {
+    name: 'run_checks',
+    description: 'Run available lint, test, and/or type-check scripts in the current worktree. Detects scripts from package.json automatically. Returns pass/fail with output for each script.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        command:        { type: 'string', description: 'Specific npm script name to run (e.g. "test", "lint"). Omit to run all detected check scripts.' },
+        timeoutSeconds: { type: 'number', description: 'Max seconds to wait per script (default: 120)' },
+      },
+      required: [],
+    },
+  },
+  {
     name: 'send_to_agent',
     description: 'Queue a follow-up prompt for another session. The target session must be done or in error state.',
     inputSchema: {
@@ -405,6 +417,23 @@ async function callTool(name: string, args: Record<string, unknown>): Promise<{ 
         const r = result as { id?: string; error?: string };
         if (r.error) return err(`update_knowledge failed: ${r.error}`);
         return text(`Knowledge doc "${args.title}" saved (id: ${r.id}).`);
+      }
+
+      case 'run_checks': {
+        const result = await callInternal(
+          'POST',
+          `/internal/sessions/${SESSION_ID}/run-checks`,
+          { command: args.command, timeoutSeconds: args.timeoutSeconds },
+          ((args.timeoutSeconds as number ?? 120) + 15) * 1000,
+        );
+        const r = result as { passed?: boolean; results?: { name: string; passed: boolean; output: string }[]; note?: string; error?: string };
+        if (r.error) return err(`run_checks failed: ${r.error}`);
+        if (r.note)  return text(r.note);
+        const lines = (r.results ?? []).map(res =>
+          `### ${res.name}: ${res.passed ? 'PASSED' : 'FAILED'}\n\`\`\`\n${res.output}\n\`\`\``
+        );
+        const summary = r.passed ? 'All checks passed.' : 'One or more checks failed.';
+        return text(`${summary}\n\n${lines.join('\n\n')}`);
       }
 
       case 'send_to_agent': {

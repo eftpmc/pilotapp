@@ -80,7 +80,7 @@ function ReviewerPickerButton({ agentList, onPick }: { agentList: Agent[]; onPic
         <DropdownMenuLabel>Pick reviewer</DropdownMenuLabel>
         {agentList.map(a => (
           <DropdownMenuItem key={a.id} onSelect={() => onPick(a.id)} className="flex items-center gap-2">
-            <AgentAvatar agent={a} size={24} />
+            <AgentAvatar agent={a} size={24} animated={false} />
             {a.name}
           </DropdownMenuItem>
         ))}

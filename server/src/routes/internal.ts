@@ -4,6 +4,10 @@
  * Mounted at /internal in app.ts.
  */
 
+import { exec } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+import { promisify } from 'util';
 import { Router, Request, Response } from 'express';
 import { v4 as uuid } from 'uuid';
 import { db } from '../db';
@@ -11,6 +15,8 @@ import { broadcastGlobal } from '../services/broadcast';
 import { writeEvent } from '../services/events';
 import { markSessionWaiting, markSessionRunning, assignTaskToSession } from '../services/lifecycle';
 import { continueAgent, broadcastToSession } from '../services/agents';
+
+const execAsync = promisify(exec);
 
 const router = Router();
 
@@ -575,6 +581,58 @@ router.post('/knowledge', (req: Request, res: Response) => {
     ).run(id, session.user_id, session.agent_id, title, content, now, now);
     res.status(201).json({ id });
   }
+});
+
+// ---------------------------------------------------------------------------
+// POST /internal/sessions/:id/run-checks
+// Run lint / test / typecheck scripts in the session's worktree.
+// ---------------------------------------------------------------------------
+
+const CHECK_SCRIPTS = ['test', 'lint', 'typecheck', 'type-check', 'check', 'validate'];
+
+router.post('/sessions/:id/run-checks', async (req: Request, res: Response) => {
+  const { command, timeoutSeconds = 120 } = req.body as { command?: string; timeoutSeconds?: number };
+
+  const session = getSession(param(req.params.id));
+  if (!session) { res.status(404).json({ error: 'Not found' }); return; }
+
+  // Detect available scripts from package.json
+  let available: string[] = [];
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(session.worktree_path, 'package.json'), 'utf-8'));
+    const scripts = (pkg.scripts ?? {}) as Record<string, string>;
+    available = CHECK_SCRIPTS.filter(s => s in scripts);
+  } catch { /* no package.json or unreadable */ }
+
+  const toRun = command ? [command] : available;
+  if (toRun.length === 0) {
+    res.json({ passed: true, results: [], note: 'No check scripts found in package.json' });
+    return;
+  }
+
+  const results: { name: string; passed: boolean; output: string }[] = [];
+  let allPassed = true;
+
+  for (const script of toRun) {
+    try {
+      const { stdout, stderr } = await execAsync(`npm run ${script}`, {
+        cwd: session.worktree_path,
+        timeout: timeoutSeconds * 1000,
+        env: { ...process.env, CI: '1', FORCE_COLOR: '0' },
+      });
+      const combined = [stdout, stderr].filter(Boolean).join('\n').trim();
+      // Keep the tail — failures show up at the end
+      results.push({ name: script, passed: true, output: combined.slice(-3000) });
+    } catch (err: unknown) {
+      allPassed = false;
+      const e = err as { stdout?: string; stderr?: string; message?: string };
+      const combined = [(e.stdout ?? ''), (e.stderr ?? '')].filter(Boolean).join('\n').trim()
+        || (e.message ?? 'unknown error');
+      results.push({ name: script, passed: false, output: combined.slice(-3000) });
+    }
+  }
+
+  res.json({ passed: allPassed, results });
 });
 
 export default router;
