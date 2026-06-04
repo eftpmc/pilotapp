@@ -29,10 +29,6 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Used for voice input to agent tasks</string>
-	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Used to transcribe voice commands into prompts</string>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>
@@ -43,9 +39,6 @@
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 </dict>
 </plist>

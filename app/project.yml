@@ -16,25 +16,18 @@ targets:
     platform: iOS
     sources:
       - Pilot
-    resources:
-      - Pilot/Sprites
     info:
       path: Pilot/Info.plist
       properties:
         CFBundleDisplayName: Pilot
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
-          - UIInterfaceOrientationPortraitUpsideDown
-          - UIInterfaceOrientationLandscapeLeft
-          - UIInterfaceOrientationLandscapeRight
-        NSMicrophoneUsageDescription: Used for voice input to agent tasks
-        NSSpeechRecognitionUsageDescription: Used to transcribe voice commands into prompts
-        UILaunchScreen:
-          UIColorName: ""
-          UIImageName: ""
         CFBundleURLTypes:
           - CFBundleURLSchemes:
               - pilotapp
+        UILaunchScreen:
+          UIColorName: ""
+          UIImageName: ""
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.pilotapp.pilot

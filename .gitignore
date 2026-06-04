@@ -1,5 +1,18 @@
 # macOS
 .DS_Store
+**/.DS_Store
+
+# Node
+node_modules/
+package-lock.json
+
+# Server
+server/dist/
+server/data/
+server/.env
+
+# Web
+web/dist/
 
 # iOS / Xcode
 app/*.xcodeproj/xcuserdata/
@@ -8,12 +21,10 @@ app/**/*.xcuserstate
 app/DerivedData/
 app/.build/
 
-# Node / Server
-server/node_modules/
-server/dist/
-server/data/
-server/.env
+# Docker
+data/
 
-2dart
+# Dev tools
 .playwright-mcp
 .codex
+2dart
