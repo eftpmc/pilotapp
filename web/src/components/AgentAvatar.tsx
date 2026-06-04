@@ -20,7 +20,6 @@ export function AgentAvatar({
   height: heightProp,
   running = false,
   animated = true,
-  mode = 'head',
 }: {
   agent?: Agent
   name?: string
@@ -29,7 +28,6 @@ export function AgentAvatar({
   height?: number
   running?: boolean
   animated?: boolean
-  mode?: 'head' | 'cover'
 }) {
   const displayName = (nameProp ?? agent?.name ?? '').trim()
   if (!displayName) return null
@@ -45,7 +43,7 @@ export function AgentAvatar({
       className={running ? 'av ring-green' : 'av'}
       style={{ width: w, height: h, flexShrink: 0, borderRadius: br, overflow: 'hidden', background: bg }}
     >
-      <SpineAvatar name={hashKey} width={w} height={h} mode={mode} animated={animated} />
+      <SpineAvatar name={hashKey} width={w} height={h} animated={animated} />
     </span>
   )
 }

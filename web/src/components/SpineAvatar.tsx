@@ -55,6 +55,12 @@ function pick(name: string, salt: string, n: number, offset = 1) {
 function pickFrom<T>(name: string, salt: string, arr: T[]): T {
   return arr[djb2(name + salt) % arr.length]
 }
+// weights: [[value, weight], ...] where weights sum to 100
+function weightedPick(name: string, salt: string, weights: [number, number][]): number {
+  let v = djb2(name + salt) % 100
+  for (const [val, w] of weights) { if (v < w) return val; v -= w }
+  return weights[0][0]
+}
 
 const SKIN_TONES: [number, number, number][] = [
   [1.00, 0.88, 0.76],
@@ -83,11 +89,10 @@ const HAIR_COLORS: [number, number, number][] = [
   [0.90, 0.90, 0.90],  // white
 ]
 
-// Slot name → which color group it belongs to
+// Slot name → which color group it belongs to (head-visible slots only)
 const SLOT_GROUP: Record<string, 'skin' | 'hair' | 'brow' | 'beard'> = {
-  head: 'skin', body: 'skin', arm_l: 'skin', arm_r: 'skin',
-  leg_l: 'skin', leg_r: 'skin',
-  hair: 'hair', hair_long: 'hair',
+  head: 'skin',
+  hair: 'hair',
   brow: 'brow', beard: 'beard',
 }
 
@@ -106,24 +111,25 @@ function buildSlotColors(name: string): Map<string, [number, number, number]> {
 function buildSkin(name: string, skeletonData: SkeletonData): Skin {
   const n = name.toLowerCase()
   const combo = new Skin('agent')
-  const LONG_HAIR_SKINS = ['hair_long/hair_long_20', 'hair_long/hair_long_21', 'hair_long/hair_long_28', 'hair_long/hair_long_29']
-  const useLongHair = djb2(n + 'hl') % 3 === 0
-  const hairSkin = useLongHair
-    ? pickFrom(n, 'hlv', LONG_HAIR_SKINS)
-    : `hair_short/hair_short_c_${pick(n, 'h', 30)}`
+
+  const hairSkin = `hair_short/hair_short_c_${pick(n, 'h', 30)}`
+
+  const eye  = weightedPick(n, 'e',  [[2,80],[3,5],[4,5],[6,4],[11,3],[13,3]])
+  const mth  = weightedPick(n, 'm',  [[1,80],[3,5],[4,5],[6,4],[8,3],[9,3]])
+  const brow = pickFrom(n, 'b', [1,2,3,4,5,8,9])
 
   const parts = [
-    `eyes/eyes_c_${pick(n, 'e', 20)}`,
-    hairSkin,
-    `mouth/mouth_c_${pick(n, 'm', 10)}`,
-    `brow/brow_c_${pick(n, 'b', 10)}`,
-    `top/top_c_${pick(n, 't', 60)}`,
-    `bottom/bottom_c_${pick(n, 'bt', 50)}`,
-    `boots/boots_c_${pick(n, 'bo', 30)}`,
     'skin/skin_1',
+    `eyes/eyes_c_${eye}`,
+    hairSkin,
+    `mouth/mouth_c_${mth}`,
+    `brow/brow_c_${brow}`,
+    `top/top_c_${pick(n, 't', 48)}`,
   ]
   for (const s of parts) { const sk = skeletonData.findSkin(s); if (sk) combo.addSkin(sk) }
-  if (pick(n, 'beard', 10) > 6) {
+
+  // ~10% chance of beard
+  if (pick(n, 'beard', 10) > 9) {
     const s = skeletonData.findSkin(`beard/beard_c_${pick(n, 'beardN', 10)}`)
     if (s) combo.addSkin(s)
   }
@@ -215,14 +221,12 @@ export function SpineAvatar({
   name,
   width,
   height,
-  mode = 'head',
   animation = 'Idle',
   animated = true,
 }: {
   name: string
   width: number
   height: number
-  mode?: 'head' | 'cover'
   animation?: string
   animated?: boolean
 }) {
@@ -251,13 +255,10 @@ export function SpineAvatar({
       const animState = new AnimationState(animStateData)
       animState.setAnimation(0, animation, true)
 
-      // "head": crop to worldY 40–93 (chin to above hair) — body excluded
-      //         scale = (height−4)/53,  offsetY = 3 + 93*scale
-      // "cover": full body
-      //         scale = (height−16)/96, offsetY = height−4
-      const scale = mode === 'cover' ? (height - 16) / 96 : (height - 4) / 53
+      // Head crop: worldY 40–93 (chin to above hair)
+      const scale = (height - 4) / 53
       const offsetX = width / 2
-      const offsetY = mode === 'cover' ? height - 4 : 3 + 93 * scale
+      const offsetY = 3 + 93 * scale
 
       function render(time: number) {
         if (cancelled) return
@@ -285,7 +286,7 @@ export function SpineAvatar({
       cancelled = true
       cancelAnimationFrame(rafId)
     }
-  }, [name, width, height, mode, animation, animated])
+  }, [name, width, height, animation, animated])
 
   return (
     <canvas

@@ -15,6 +15,8 @@ import eventsRoutes     from './routes/events';
 import shiftsRoutes     from './routes/shifts';
 import toolsRoutes      from './routes/tools';
 import internalRoutes   from './routes/internal';
+import meRoutes         from './routes/me';
+import adminRoutes      from './routes/admin';
 import { agentHealth }  from './services/agents';
 
 const app = express();
@@ -38,6 +40,8 @@ app.use('/events',      eventsRoutes);
 app.use('/shifts',      shiftsRoutes);
 app.use('/tools',       toolsRoutes);
 app.use('/internal',    internalRoutes);
+app.use('/me',          meRoutes);
+app.use('/admin',       adminRoutes);
 
 app.get('/health', (_req, res) => res.json({ ok: true, agents: agentHealth() }));
 

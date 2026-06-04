@@ -82,6 +82,30 @@ export interface Tool {
   createdAt: string;
 }
 
+export interface UserProfile {
+  id: string; email: string; name: string; role: 'admin' | 'user'; createdAt: string;
+  token?: string;
+}
+
+export interface UserDevice {
+  id: string; name: string; deviceType: 'mobile' | 'desktop' | 'web';
+  createdAt: string; lastSeenAt: string | null;
+}
+
+export interface ServerInfo {
+  version: string; nodeVersion: string; uptimeSeconds: number;
+  dataDir: string; dbSizeBytes: number; userCount: number;
+}
+
+export interface ServerSettings {
+  allowRegistration: boolean;
+}
+
+export interface AdminUser {
+  id: string; email: string; name: string; role: 'admin' | 'user';
+  disabled: boolean; createdAt: string;
+}
+
 // ---------------------------------------------------------------------------
 // Departments
 // ---------------------------------------------------------------------------
@@ -168,9 +192,9 @@ async function authReq<T>(path: string, body: unknown): Promise<T> {
 
 export const auth = {
   login:    (email: string, password: string) =>
-    authReq<{ token: string }>('/auth/login',    { email, password }),
+    authReq<{ token: string; role: string }>('/auth/login',    { email, password }),
   register: (email: string, password: string) =>
-    authReq<{ token: string }>('/auth/register', { email, password }),
+    authReq<{ token: string; role: string }>('/auth/register', { email, password }),
 };
 
 // ---------------------------------------------------------------------------
@@ -310,6 +334,39 @@ export const settings = {
   credentials:       () => req<CredentialStatus>('/settings/credentials'),
   updateCredentials: (body: { claude?: string; codex?: string }) =>
     req<CredentialStatus>('/settings/credentials', { method: 'PUT', body: JSON.stringify(body) }),
+};
+
+// ---------------------------------------------------------------------------
+// Me (current user)
+// ---------------------------------------------------------------------------
+
+export const me = {
+  profile:       () => req<UserProfile>('/me'),
+  update:        (body: { name?: string; email?: string; currentPassword?: string; newPassword?: string }) =>
+    req<UserProfile>('/me', { method: 'PATCH', body: JSON.stringify(body) }),
+  devices:       () => req<UserDevice[]>('/me/devices'),
+  revokeDevice:  (id: string) => req<void>(`/me/devices/${id}`, { method: 'DELETE' }),
+  revokeAll:     () => req<void>('/me/devices', { method: 'DELETE' }),
+  pairToken:     () => req<{ token: string; expiresAt: string }>('/me/pair-token', { method: 'POST' }),
+};
+
+// ---------------------------------------------------------------------------
+// Admin
+// ---------------------------------------------------------------------------
+
+export const admin = {
+  serverInfo:     () => req<ServerInfo>('/admin/server-info'),
+  settings:       () => req<ServerSettings>('/admin/settings'),
+  updateSettings: (body: Partial<ServerSettings>) =>
+    req<ServerSettings>('/admin/settings', { method: 'PATCH', body: JSON.stringify(body) }),
+  users:          () => req<AdminUser[]>('/admin/users'),
+  createUser:     (body: { email: string; password: string; name?: string; role?: 'user' | 'admin' }) =>
+    req<AdminUser>('/admin/users', { method: 'POST', body: JSON.stringify(body) }),
+  updateUser:     (id: string, body: { name?: string; email?: string; role?: 'user' | 'admin'; disabled?: boolean }) =>
+    req<AdminUser>(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  resetPassword:  (id: string) =>
+    req<{ password: string }>(`/admin/users/${id}/reset-password`, { method: 'POST' }),
+  deleteUser:     (id: string) => req<void>(`/admin/users/${id}`, { method: 'DELETE' }),
 };
 
 // ---------------------------------------------------------------------------

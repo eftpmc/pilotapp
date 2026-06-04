@@ -156,10 +156,9 @@ const leadBlocker     = isLead && selectedBrain && selectedBrain.type !== 'claud
                 <div className="flex items-end gap-4">
                   <div className="flex items-end gap-2 shrink-0">
                     <AgentAvatar name={name || 'New'} seed={seed} size={56} animated />
-                    <button type="button" onClick={() => setSeed(randomSeed())} title="Roll new avatar"
-                      className="btn icon ghost" style={{ width: 28, height: 28, borderRadius: 8 }}>
+                    <Button type="button" size="icon" variant="ghost" onClick={() => setSeed(randomSeed())} title="Roll new avatar" className="w-7 h-7 rounded-lg">
                       <Dices size={13} />
-                    </button>
+                    </Button>
                   </div>
                   <div className="flex flex-col gap-1.5 flex-1">
                     <Label>Name</Label>

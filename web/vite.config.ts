@@ -42,6 +42,8 @@ export default defineConfig({
       '/knowledge':   { target: 'http://localhost:3000', bypass: spaBypass },
       '/settings':    { target: 'http://localhost:3000', bypass: spaBypass },
       '/tools':       { target: 'http://localhost:3000', bypass: spaBypass },
+      '/me':          'http://localhost:3000',
+      '/admin':       'http://localhost:3000',
       '/ws': { target: 'ws://localhost:3000', ws: true },
     },
   },

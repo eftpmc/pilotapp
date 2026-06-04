@@ -4,7 +4,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { sessions, agents, projects, tasks } from '../api/client'
 import type { Agent } from '../api/client'
 import { Textarea } from '@/components/ui/textarea'
+import { Button } from '@/components/ui/button'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { AgentAvatar } from '@/components/AgentAvatar'
+import { StatusBadge } from '@/components/StatusBadge'
 import { fmtSecs, useElapsed } from '@/lib/time'
 import { ArrowLeft, ChevronDown, ChevronRight } from 'lucide-react'
 
@@ -66,43 +69,23 @@ function ColoredDiff({ raw }: { raw: string }) {
   )
 }
 
-function StatusStat({ status }: { status: string }) {
-  if (status === 'running') return <span className="stat green"><span className="dot green pulse" />Running</span>
-  if (status === 'waiting') return <span className="stat" style={{ color: 'var(--amber)' }}><span className="dot" style={{ background: 'var(--amber)', animation: 'pulse 1.6s ease-out infinite' }} />Waiting</span>
-  if (status === 'done')    return <span className="stat green"><span className="dot green" />Done</span>
-  if (status === 'merged')  return <span className="stat indigo"><span className="dot indigo" />Merged</span>
-  if (status === 'error')   return <span className="stat red"><span className="dot red" />Error</span>
-  return <span className="stat" style={{ color: 'var(--muted)' }}>{status}</span>
-}
-
 function ReviewerPickerButton({ agentList, onPick }: { agentList: Agent[]; onPick: (id: string) => void }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (!open) return
-    const down = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
-    document.addEventListener('mousedown', down)
-    return () => document.removeEventListener('mousedown', down)
-  }, [open])
   if (agentList.length === 0) return null
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <button className="btn sm" onClick={() => setOpen(o => !o)}>Request Review</button>
-      {open && (
-        <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 30, background: 'var(--bg)', border: '1px solid var(--rule)', borderRadius: 10, overflow: 'hidden', minWidth: 160, boxShadow: 'var(--shadow-dialog)' }}>
-          <p style={{ fontSize: 11, color: 'var(--muted)', padding: '8px 14px', borderBottom: '1px solid var(--rule-soft)', margin: 0 }}>Pick reviewer</p>
-          {agentList.map(a => (
-            <button key={a.id} onClick={() => { onPick(a.id); setOpen(false) }}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 14px', fontSize: 13, color: 'var(--ink)', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}
-              onMouseOver={e => (e.currentTarget.style.background = 'var(--panel)')}
-              onMouseOut={e => (e.currentTarget.style.background = 'none')}
-            >
-              <AgentAvatar agent={a} size={28} />{a.name}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button size="sm" variant="outline">Request Review</Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuLabel>Pick reviewer</DropdownMenuLabel>
+        {agentList.map(a => (
+          <DropdownMenuItem key={a.id} onSelect={() => onPick(a.id)} className="flex items-center gap-2">
+            <AgentAvatar agent={a} size={24} />
+            {a.name}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -648,7 +631,7 @@ export default function SessionPage() {
             <div className="flex items-center gap-2.5 mt-1 flex-wrap">
               {agent && <span className="text-sm text-muted-foreground font-medium">{agent.name}</span>}
               {agent && session && <span className="text-muted-foreground/30">·</span>}
-              {session && <StatusStat status={session.status} />}
+              {session && <StatusBadge status={session.status} />}
               {activeRunning && <span className="text-xs font-mono text-green-500 tabular-nums">{fmtSecs(elapsedSecs)}</span>}
               {branchShort && (
                 <>
@@ -666,21 +649,19 @@ export default function SessionPage() {
           </div>
 
           <div className="flex gap-2 shrink-0 flex-wrap justify-end max-sm:basis-full max-sm:pl-[46px] max-sm:justify-start">
-            {activeRunning && <button className="btn sm" onClick={() => stop.mutate()} disabled={stop.isPending}>{stop.isPending ? '…' : 'Stop'}</button>}
-            {(isDone || isError) && <button className="btn sm" onClick={loadDiff} disabled={diffLoading}>{diffLoading ? '…' : 'Diff'}</button>}
+            {activeRunning && <Button size="sm" variant="outline" onClick={() => stop.mutate()} disabled={stop.isPending}>{stop.isPending ? '…' : 'Stop'}</Button>}
+            {(isDone || isError) && <Button size="sm" variant="outline" onClick={loadDiff} disabled={diffLoading}>{diffLoading ? '…' : 'Diff'}</Button>}
             {isDone && !session?.reviewVerdict && !isMerged && (
               <ReviewerPickerButton agentList={agentList.filter(a => a.id !== session?.agentId)} onPick={agentId => requestReview.mutate(agentId)} />
             )}
             {session?.reviewVerdict === 'pending' && <span className="chip" style={{ color: 'var(--muted)' }}>Reviewing…</span>}
             {session?.reviewVerdict === 'approved' && <span className="chip" style={{ color: 'var(--green)', background: 'color-mix(in srgb, var(--green) 10%, transparent)' }}>Approved ✓</span>}
             {session?.reviewVerdict === 'changes_requested' && <span className="chip" style={{ color: 'var(--amber)', background: 'color-mix(in srgb, var(--amber) 10%, transparent)' }}>Changes Requested</span>}
-            {isDone && !isMerged && !session?.parentSessionId && <button className="btn sm primary" onClick={() => merge.mutate()} disabled={merge.isPending}>{merge.isPending ? '…' : 'Merge ✓'}</button>}
+            {isDone && !isMerged && !session?.parentSessionId && <Button size="sm" onClick={() => merge.mutate()} disabled={merge.isPending}>{merge.isPending ? '…' : 'Merge ✓'}</Button>}
             {!isMerged && (
-              <button className="btn sm ghost" style={{ color: 'var(--muted)' }}
+              <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-destructive"
                 onClick={() => discard.mutate()} disabled={discard.isPending}
-                onMouseOver={e => (e.currentTarget.style.color = 'var(--red)')}
-                onMouseOut={e => (e.currentTarget.style.color = 'var(--muted)')}
-              >{discard.isPending ? '…' : 'Discard'}</button>
+              >{discard.isPending ? '…' : 'Discard'}</Button>
             )}
           </div>
         </div>
@@ -764,11 +745,11 @@ export default function SessionPage() {
         <div className="border-t border-green-500/20 bg-green-500/5 px-6 py-3.5 flex items-center gap-3 flex-wrap">
           <span className="text-sm font-semibold text-green-500">Merged ✓</span>
           <div className="flex-1" />
-          {project?.remoteUrl && !pushed && <button className="btn sm primary" onClick={() => push.mutate()} disabled={push.isPending}>{push.isPending ? '…' : 'Push to remote'}</button>}
+          {project?.remoteUrl && !pushed && <Button size="sm" onClick={() => push.mutate()} disabled={push.isPending}>{push.isPending ? '…' : 'Push to remote'}</Button>}
           {project?.remoteUrl && pushed && <span className="text-sm font-semibold text-primary">Pushed ✓</span>}
           {project?.localPath && <CopyCommand text={`git -C ${project.localPath} pull ${project.repoPath} main`} />}
           {push.isError && <span className="text-sm text-destructive">{push.error?.message}</span>}
-          <button className="btn sm" onClick={() => navigate(`/projects/${project?.id ?? ''}`)}>← Board</button>
+          <Button size="sm" variant="outline" onClick={() => navigate(`/projects/${project?.id ?? ''}`)}>← Board</Button>
         </div>
       )}
 
@@ -790,13 +771,12 @@ export default function SessionPage() {
                 }
               }}
             />
-            <button
-              className="btn primary"
+            <Button
               onClick={() => { if (!continuePrompt.trim()) return; addTurn.mutate(continuePrompt.trim()) }}
               disabled={!continuePrompt.trim() || addTurn.isPending}
             >
               {addTurn.isPending ? '…' : 'Send'}
-            </button>
+            </Button>
           </div>
           {addTurn.isError && <p className="text-xs text-destructive mt-2">{addTurn.error?.message}</p>}
         </div>
@@ -808,18 +788,18 @@ export default function SessionPage() {
           <p className="text-sm font-semibold text-foreground mb-3">What should this agent do?</p>
           <div className="flex gap-3 items-end">
             <Textarea value={idlePrompt} onChange={e => setIdlePrompt(e.target.value)} placeholder="Describe the task…" rows={3} className="flex-1" autoFocus />
-            <button className="btn primary" onClick={() => { if (!idlePrompt.trim()) return; retry.mutate(idlePrompt.trim()); setIdlePrompt('') }} disabled={!idlePrompt.trim() || retry.isPending}>
+            <Button onClick={() => { if (!idlePrompt.trim()) return; retry.mutate(idlePrompt.trim()); setIdlePrompt('') }} disabled={!idlePrompt.trim() || retry.isPending}>
               {retry.isPending ? '…' : 'Run'}
-            </button>
+            </Button>
           </div>
         </div>
       )}
 
       {/* Waiting for clarification panel */}
       {isWaiting && !clarification && (
-        <div className="border-t px-6 py-3.5 flex items-center gap-3" style={{ borderColor: 'var(--amber)', background: 'color-mix(in srgb, var(--amber) 6%, transparent)' }}>
-          <span className="dot" style={{ background: 'var(--amber)', animation: 'pulse 1.6s ease-out infinite', flexShrink: 0 }} />
-          <span className="text-sm font-medium" style={{ color: 'var(--amber)' }}>Agent is waiting for your input…</span>
+        <div className="border-t border-[color-mix(in_srgb,var(--amber)_30%,transparent)] bg-[color-mix(in_srgb,var(--amber)_6%,transparent)] px-6 py-3.5 flex items-center gap-3">
+          <span className="dot amber pulse shrink-0" />
+          <span className="text-sm font-medium text-[var(--amber)]">Agent is waiting for your input…</span>
         </div>
       )}
 
@@ -829,48 +809,39 @@ export default function SessionPage() {
           <p className="text-sm font-semibold text-destructive mb-3">Session ended with an error</p>
           <div className="flex gap-3 items-end">
             <Textarea value={hint} onChange={e => setHint(e.target.value)} placeholder="Optional: add context before retrying…" rows={2} className="flex-1" />
-            <button className="btn primary" onClick={() => retry.mutate(hint.trim() ? `Continue where you left off.\n\nAdditional context: ${hint.trim()}` : undefined)} disabled={retry.isPending}>
+            <Button onClick={() => retry.mutate(hint.trim() ? `Continue where you left off.\n\nAdditional context: ${hint.trim()}` : undefined)} disabled={retry.isPending}>
               {retry.isPending ? '…' : 'Retry'}
-            </button>
+            </Button>
           </div>
         </div>
       )}
 
       {/* Clarification dialog — blocks interaction until user responds */}
       {clarification && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 50,
-          background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          padding: '24px',
-        }}>
-          <div style={{
-            background: 'var(--bg)', border: '1px solid var(--rule)',
-            borderRadius: 14, padding: '28px 28px 24px',
-            maxWidth: 520, width: '100%', boxShadow: 'var(--shadow-dialog)',
-          }}>
-            <p style={{ fontSize: 11, fontWeight: 600, color: 'var(--amber)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>
+        <div className="fixed inset-0 z-50 bg-black/55 backdrop-blur flex items-center justify-center p-6">
+          <div className="bg-background border border-border rounded-2xl p-7 max-w-lg w-full [box-shadow:var(--shadow-dialog)]">
+            <p className="text-[11px] font-semibold text-[var(--amber)] uppercase tracking-wider mb-3">
               Agent needs your input
             </p>
-            <p style={{ fontSize: 15, fontWeight: 500, color: 'var(--ink)', lineHeight: 1.55, margin: '0 0 20px' }}>
+            <p className="text-[15px] font-medium text-foreground leading-snug mb-5">
               {clarification.question}
             </p>
 
             {clarification.options ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div className="flex flex-col gap-2">
                 {clarification.options.map(opt => (
-                  <button
+                  <Button
                     key={opt}
+                    variant="outline"
+                    className="justify-start text-left"
                     onClick={() => submitClarification(clarification.id, opt)}
-                    className="btn"
-                    style={{ justifyContent: 'flex-start', textAlign: 'left' }}
                   >
                     {opt}
-                  </button>
+                  </Button>
                 ))}
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div className="flex flex-col gap-3">
                 <Textarea
                   value={clarificationInput}
                   onChange={e => setClarInput(e.target.value)}
@@ -883,13 +854,12 @@ export default function SessionPage() {
                     }
                   }}
                 />
-                <button
-                  className="btn primary"
+                <Button
                   onClick={() => submitClarification(clarification.id, clarificationInput)}
                   disabled={!clarificationInput.trim()}
                 >
                   Send
-                </button>
+                </Button>
               </div>
             )}
           </div>

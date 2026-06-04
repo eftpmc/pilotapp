@@ -69,4 +69,6 @@ export interface Spec {
 
 export interface AuthPayload {
   userId: string;
+  tokenVersion?: number;
+  deviceId?: string;
 }

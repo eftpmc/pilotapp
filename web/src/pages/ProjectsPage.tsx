@@ -6,18 +6,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { timeAgo } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
 type ImportMode = 'github' | 'local' | 'empty'
 
-function timeAgo(iso?: string) {
-  if (!iso) return 'No activity'
-  const m = Math.floor((Date.now() - new Date(iso).getTime()) / 60_000)
-  if (m < 1)  return 'just now'
-  if (m < 60) return `${m}m ago`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h ago`
-  return `${Math.floor(h / 24)}d ago`
+function timeAgoOrDefault(iso?: string) {
+  return iso ? timeAgo(iso) : 'No activity'
 }
 
 export default function ProjectsPage() {
@@ -54,41 +49,32 @@ export default function ProjectsPage() {
 
   if (projectList.length === 0) {
     return (
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
-        <div style={{ width: '100%', maxWidth: 380, padding: '0 24px', display: 'flex', flexDirection: 'column', gap: 28 }}>
+      <div className="flex-1 flex items-center justify-center bg-background">
+        <div className="w-full max-w-sm px-6 flex flex-col gap-7">
           <div>
-            <p style={{ fontWeight: 700, fontSize: 24, letterSpacing: '-0.02em', color: 'var(--ink)', margin: '0 0 6px' }}>pilot</p>
-            <p style={{ fontSize: 14, color: 'var(--muted)', margin: 0 }}>Your AI coding crew, ready to ship.</p>
+            <p className="text-2xl font-bold tracking-tight text-foreground mb-1.5">pilot</p>
+            <p className="text-sm text-muted-foreground">Your AI coding crew, ready to ship.</p>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div className="flex flex-col gap-2">
             {[
               { n: '1', label: 'Add a project',  desc: 'Connect a GitHub repo or local path.' },
               { n: '2', label: 'Add an agent',   desc: 'Configure an API key in Settings.' },
               { n: '3', label: 'Dispatch tasks', desc: 'Agents run in parallel on separate branches.' },
             ].map(({ n, label, desc }) => (
-              <div key={n} style={{
-                display: 'flex', alignItems: 'flex-start', gap: 14,
-                padding: '14px 16px', background: 'var(--panel)',
-                border: '1px solid var(--rule)', borderRadius: 12,
-              }}>
-                <span style={{
-                  width: 22, height: 22, borderRadius: 6, flexShrink: 0,
-                  background: 'var(--ember-wash)', color: 'var(--ember)',
-                  display: 'grid', placeItems: 'center',
-                  fontSize: 11, fontWeight: 700,
-                }}>{n}</span>
+              <div key={n} className="flex items-start gap-3.5 px-4 py-3.5 bg-card border border-border rounded-xl">
+                <span className="w-5 h-5 rounded-md bg-primary/10 text-primary text-[11px] font-bold grid place-items-center shrink-0 mt-0.5">{n}</span>
                 <div>
-                  <p style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)', margin: '0 0 2px' }}>{label}</p>
-                  <p style={{ fontSize: 12, color: 'var(--muted)', margin: 0 }}>{desc}</p>
+                  <p className="text-sm font-semibold text-foreground mb-0.5">{label}</p>
+                  <p className="text-xs text-muted-foreground">{desc}</p>
                 </div>
               </div>
             ))}
           </div>
 
-          <button className="btn primary" style={{ width: '100%', justifyContent: 'center', padding: '10px 16px', borderRadius: 10, fontSize: 14 }} onClick={() => setShowNew(true)}>
+          <Button className="w-full justify-center" onClick={() => setShowNew(true)}>
             Add first project
-          </button>
+          </Button>
         </div>
         <NewProjectDialog open={showNew} onClose={() => setShowNew(false)}
           onCreate={body => createProject.mutate(body)}
@@ -99,7 +85,7 @@ export default function ProjectsPage() {
 
   return (
     <div className="flex-1 overflow-y-auto bg-background">
-      <div className="px-6 pt-10 pb-8">
+      <div className="max-w-[960px] px-6 pt-10 pb-8">
 
         <div className="flex items-start justify-between mb-8">
           <div>
@@ -147,7 +133,7 @@ export default function ProjectsPage() {
                 </div>
                 <div className="project-card-foot">
                   <span>{total > 0 ? `${total} active item${total !== 1 ? 's' : ''}` : 'Quiet'}</span>
-                  <span>{timeAgo(latestAt)}</span>
+                  <span>{timeAgoOrDefault(latestAt)}</span>
                 </div>
               </button>
             )
@@ -192,18 +178,18 @@ function NewProjectDialog({ open, onClose, onCreate, loading, error }: {
     <Dialog open={open} onOpenChange={o => !o && onClose()}>
       <DialogContent>
         <DialogHeader><DialogTitle>New project</DialogTitle></DialogHeader>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div className="flex flex-col gap-4">
           <div className="field">
             <Label>Name</Label>
             <Input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="my-project"
               onKeyDown={e => { if (e.key === 'Enter' && isValid) submit() }} />
           </div>
 
-          <div style={{ display: 'flex', gap: 3, background: 'var(--panel)', borderRadius: 10, padding: 3 }}>
+          <div className="flex gap-1 bg-[var(--panel)] rounded-[10px] p-[3px]">
             {(['github', 'local', 'empty'] as ImportMode[]).map(k => (
               <button key={k} onClick={() => setMode(k)} className={cn(
                 'flex-1 text-[13px] font-medium rounded-lg py-1.5 border-none cursor-pointer transition-colors',
-                mode === k ? 'bg-[var(--bg)] text-[var(--ink)] shadow-sm' : 'bg-transparent text-[var(--muted)]'
+                mode === k ? 'bg-background text-foreground shadow-sm' : 'bg-transparent text-muted-foreground'
               )}>{k === 'github' ? 'GitHub' : k === 'local' ? 'Local path' : 'Empty'}</button>
             ))}
           </div>
@@ -215,19 +201,19 @@ function NewProjectDialog({ open, onClose, onCreate, loading, error }: {
           {mode === 'local' && (
             <div className="field">
               <Label>Path on this machine</Label>
-              <Input value={localPath} onChange={e => setLocal(e.target.value)} placeholder="/Users/you/code/myproject" style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }} />
-              <p style={{ fontSize: 12, color: 'var(--muted)', margin: 0 }}>Pilot clones a bare copy. Your working tree stays untouched.</p>
+              <Input value={localPath} onChange={e => setLocal(e.target.value)} placeholder="/Users/you/code/myproject" className="font-mono text-xs" />
+              <p className="text-xs text-muted-foreground">Pilot clones a bare copy. Your working tree stays untouched.</p>
             </div>
           )}
-          {mode === 'empty' && <p style={{ fontSize: 13, color: 'var(--muted)', margin: 0 }}>Starts with an empty repo. Agents can create files and commit from scratch.</p>}
+          {mode === 'empty' && <p className="text-sm text-muted-foreground">Starts with an empty repo. Agents can create files and commit from scratch.</p>}
 
-          {error && <p style={{ fontSize: 13, color: 'var(--red)', margin: 0 }}>{error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
 
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn" onClick={onClose}>Cancel</button>
-            <button className="btn primary" style={{ flex: 1, justifyContent: 'center' }} disabled={!isValid || loading} onClick={submit}>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+            <Button className="flex-1 justify-center" disabled={!isValid || loading} onClick={submit}>
               {loading ? '…' : 'Create'}
-            </button>
+            </Button>
           </div>
         </div>
       </DialogContent>

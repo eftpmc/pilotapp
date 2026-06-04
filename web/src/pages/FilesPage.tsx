@@ -187,7 +187,7 @@ export default function FilesPage() {
 
   return (
     <div className="flex-1 overflow-y-auto bg-background">
-      <div className="px-6 pt-6 pb-8">
+      <div className="max-w-[960px] px-6 pt-6 pb-8">
         {fileList.length > 0 && (
           <p className="text-xs text-muted-foreground/50 mb-4">{fileList.length} file{fileList.length !== 1 ? 's' : ''}</p>
         )}

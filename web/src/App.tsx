@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import LoginPage from './pages/LoginPage'
 import Layout from './components/Layout'
+import AdminLayout from './components/AdminLayout'
 import ProjectLayout from './components/ProjectLayout'
 import OverviewPage from './pages/OverviewPage'
 import AgentsPage from './pages/AgentsPage'
@@ -18,11 +19,25 @@ import ProjectSettingsPage from './pages/ProjectSettingsPage'
 import SessionPage from './pages/SessionPage'
 import SettingsPage from './pages/SettingsPage'
 import ToolsPage from './pages/ToolsPage'
+import AdminUsersPage from './pages/AdminUsersPage'
+import AdminServerPage from './pages/AdminServerPage'
 
 const qc = new QueryClient({ defaultOptions: { queries: { staleTime: 10_000 } } })
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   return localStorage.getItem('token') ? <>{children}</> : <Navigate to="/login" replace />
+}
+
+function RequireAdmin({ children }: { children: React.ReactNode }) {
+  if (!localStorage.getItem('token')) return <Navigate to="/login" replace />
+  if (localStorage.getItem('pilot.role') !== 'admin') return <Navigate to="/" replace />
+  return <>{children}</>
+}
+
+function RequireUser({ children }: { children: React.ReactNode }) {
+  if (!localStorage.getItem('token')) return <Navigate to="/login" replace />
+  if (localStorage.getItem('pilot.role') === 'admin') return <Navigate to="/admin" replace />
+  return <>{children}</>
 }
 
 export default function App() {
@@ -32,7 +47,16 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/" element={<RequireAuth><Layout /></RequireAuth>}>
+
+          {/* Admin shell */}
+          <Route path="/admin" element={<RequireAdmin><AdminLayout /></RequireAdmin>}>
+            <Route index                  element={<Navigate to="/admin/users" replace />} />
+            <Route path="users"           element={<AdminUsersPage />} />
+            <Route path="server"          element={<AdminServerPage />} />
+          </Route>
+
+          {/* User shell */}
+          <Route path="/" element={<RequireUser><Layout /></RequireUser>}>
             <Route index                element={<OverviewPage />} />
             <Route path="work"          element={<Navigate to="/" replace />} />
             <Route path="agents"        element={<AgentsPage />} />

@@ -1,30 +1,17 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { connections, agents } from '../api/client'
-import type { Connection, AgentProvider, Agent } from '../api/client'
+import QRCode from 'qrcode'
+import { connections, agents, me } from '../api/client'
+import type { Connection, AgentProvider, Agent, UserDevice } from '../api/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { ProviderBadge } from '@/components/ProviderBadge'
 import { cn } from '@/lib/utils'
-
-// ---------------------------------------------------------------------------
-// Provider badge
-// ---------------------------------------------------------------------------
-
-function ProviderBadge({ type }: { type: string }) {
-  return (
-    <Badge variant="outline" className={cn(
-      'font-mono text-[10px]',
-      type === 'claude' && 'text-orange-500 border-orange-500/30 bg-orange-500/10',
-      type === 'codex'  && 'text-blue-500 border-blue-500/30 bg-blue-500/10',
-    )}>
-      {type}
-    </Badge>
-  )
-}
+import { timeAgo } from '@/lib/time'
 
 // ---------------------------------------------------------------------------
 // Add Connection dialog
@@ -195,16 +182,133 @@ function ConnectionRow({ connection, agentCount, onUpdate, onDelete, onClearQuot
 }
 
 // ---------------------------------------------------------------------------
+// QR Pairing dialog
+// ---------------------------------------------------------------------------
+
+function PairingDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const canvasRef    = useRef<HTMLCanvasElement>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [expiresAt, setExpiresAt] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    setError(null)
+    setExpiresAt(null)
+
+    me.pairToken()
+      .then(({ token, expiresAt: exp }) => {
+        setExpiresAt(exp)
+        const payload = JSON.stringify({
+          serverUrl:  window.location.origin,
+          pairToken:  token,
+        })
+        if (canvasRef.current) {
+          QRCode.toCanvas(canvasRef.current, payload, {
+            width: 240,
+            margin: 2,
+            color: { dark: '#ffffff', light: '#00000000' },
+          }).catch(e => setError(String(e)))
+        }
+      })
+      .catch(e => setError(e.message ?? 'Failed to generate pairing token'))
+  }, [open])
+
+  return (
+    <Dialog open={open} onOpenChange={o => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Connect a device</DialogTitle></DialogHeader>
+        <div className="flex flex-col items-center gap-4 py-2">
+          <p className="text-xs text-muted-foreground text-center">
+            Scan this code with the Pilot mobile or desktop app to connect it to your server.
+            The code expires in 5 minutes and can only be used once.
+          </p>
+          {error ? (
+            <p className="text-sm text-destructive">{error}</p>
+          ) : (
+            <div className="bg-card rounded-xl p-3 border border-border">
+              <canvas ref={canvasRef} />
+            </div>
+          )}
+          {expiresAt && (
+            <p className="text-[11px] text-muted-foreground/50">
+              Expires {new Date(expiresAt).toLocaleTimeString()}
+            </p>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Device row
+// ---------------------------------------------------------------------------
+
+function DeviceRow({ device, onRevoke }: { device: UserDevice; onRevoke: () => void }) {
+  const [confirm, setConfirm] = useState(false)
+  const icon = device.deviceType === 'mobile' ? '📱' : device.deviceType === 'desktop' ? '💻' : '🌐'
+
+  if (confirm) {
+    return (
+      <div className="flex items-center gap-3 px-4 py-3 bg-destructive/5">
+        <p className="text-xs text-muted-foreground flex-1">Revoke access for {device.name}?</p>
+        <Button size="sm" variant="outline" onClick={() => setConfirm(false)}>Cancel</Button>
+        <Button size="sm" variant="destructive" onClick={() => { onRevoke(); setConfirm(false) }}>Revoke</Button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-3 px-4 py-3">
+      <span className="text-base shrink-0">{icon}</span>
+      <div className="min-w-0 flex-1">
+        <span className="block text-sm text-foreground truncate">{device.name}</span>
+        <span className="text-xs text-muted-foreground">
+          Added {timeAgo(device.createdAt)}
+          {device.lastSeenAt && <> · Last seen {timeAgo(device.lastSeenAt)}</>}
+        </span>
+      </div>
+      <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive shrink-0"
+        onClick={() => setConfirm(true)}>
+        Revoke
+      </Button>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
 export default function SettingsPage() {
-  const navigate = useNavigate()
-  const qc = useQueryClient()
-  const [showAddConnection, setShowAddBrain] = useState(false)
+  const navigate    = useNavigate()
+  const qc          = useQueryClient()
+  const [showAddConnection, setShowAddBrain]   = useState(false)
+  const [showPairing,       setShowPairing]    = useState(false)
+  const [confirmRevokeAll,  setConfirmRevokeAll] = useState(false)
 
-  const { data: connectionList    = [] } = useQuery({ queryKey: ['connections'],    queryFn: () => connections.list() })
-  const { data: agentList = [] } = useQuery({ queryKey: ['agents'], queryFn: () => agents.list() })
+  // Profile edit state
+  const [editingProfile,   setEditingProfile]   = useState(false)
+  const [profileName,      setProfileName]       = useState('')
+  const [profileEmail,     setProfileEmail]      = useState('')
+  const [changingPassword, setChangingPassword]  = useState(false)
+  const [currentPassword,  setCurrentPassword]   = useState('')
+  const [newPassword,      setNewPassword]       = useState('')
+  const [confirmPassword,  setConfirmPassword]   = useState('')
+  const [passwordError,    setPasswordError]     = useState('')
+
+  const { data: profile         } = useQuery({ queryKey: ['me'],           queryFn: () => me.profile() })
+  const { data: deviceList = [] } = useQuery({ queryKey: ['me/devices'],   queryFn: () => me.devices() })
+  const { data: connectionList = [] } = useQuery({ queryKey: ['connections'], queryFn: () => connections.list() })
+  const { data: agentList      = [] } = useQuery({ queryKey: ['agents'],      queryFn: () => agents.list() })
+
+  // Seed profile form when data loads
+  const seededProfile = useRef<string | null>(null)
+  if (profile && seededProfile.current !== profile.id) {
+    setProfileName(profile.name)
+    setProfileEmail(profile.email)
+    seededProfile.current = profile.id
+  }
 
   const createConnection = useMutation({
     mutationFn: (body: Parameters<typeof connections.create>[0]) => connections.create(body),
@@ -222,6 +326,29 @@ export default function SettingsPage() {
     mutationFn: (id: string) => connections.clearQuota(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['connections'] }),
   })
+  const updateProfile = useMutation({
+    mutationFn: (body: Parameters<typeof me.update>[0]) => me.update(body),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ['me'] })
+      setEditingProfile(false)
+      setChangingPassword(false)
+      setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); setPasswordError('')
+      if (data.token) {
+        localStorage.setItem('token', data.token)
+      }
+    },
+  })
+  const revokeDevice = useMutation({
+    mutationFn: (id: string) => me.revokeDevice(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['me/devices'] }),
+  })
+  const revokeAll = useMutation({
+    mutationFn: () => me.revokeAll(),
+    onSuccess: () => {
+      localStorage.removeItem('token')
+      navigate('/login')
+    },
+  })
 
   function agentCountForBrain(brainId: string): number {
     return (agentList as Agent[]).filter(e => e.connectionId === brainId).length
@@ -232,16 +359,180 @@ export default function SettingsPage() {
     navigate('/login')
   }
 
+  function handleSavePassword() {
+    setPasswordError('')
+    if (newPassword !== confirmPassword) { setPasswordError('Passwords do not match'); return }
+    if (newPassword.length < 8) { setPasswordError('Password must be at least 8 characters'); return }
+    updateProfile.mutate({ currentPassword, newPassword })
+  }
+
   return (
     <div className="flex-1 overflow-y-auto bg-background">
-      <div className="px-6 pt-10 pb-8 flex flex-col gap-8">
+      <div className="max-w-[960px] px-6 pt-10 pb-8 flex flex-col gap-8">
 
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-          <p className="text-sm text-muted-foreground mt-1">Connections, account, and workspace configuration.</p>
+          <p className="text-sm text-muted-foreground mt-1">Account, connections, and workspace configuration.</p>
         </div>
 
-        {/* Connections */}
+        {/* ── Account Profile ── */}
+        <section className="flex flex-col gap-3">
+          <p className="text-xs text-muted-foreground/50">Account</p>
+          <div className="bg-card rounded-xl border border-border overflow-hidden">
+
+            {/* Profile info / edit */}
+            {!editingProfile ? (
+              <div className="flex items-center gap-3 px-4 py-3">
+                <div className="w-9 h-9 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
+                  <span className="text-sm font-semibold text-primary">
+                    {(profile?.name || profile?.email || '?')[0].toUpperCase()}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">
+                    {profile?.name || profile?.email || '—'}
+                    {profile?.role === 'admin' && (
+                      <span className="ml-2 text-[10px] font-semibold text-amber-500 uppercase tracking-wide">Admin</span>
+                    )}
+                  </p>
+                  {profile?.name && (
+                    <p className="text-xs text-muted-foreground truncate">{profile.email}</p>
+                  )}
+                </div>
+                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs shrink-0"
+                  onClick={() => setEditingProfile(true)}>
+                  Edit
+                </Button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3 px-4 py-3.5 bg-muted/20">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-xs">Display name</Label>
+                    <Input value={profileName} onChange={e => setProfileName(e.target.value)}
+                      placeholder="Your name" className="h-8 text-xs" autoFocus />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-xs">Email</Label>
+                    <Input value={profileEmail} onChange={e => setProfileEmail(e.target.value)}
+                      type="email" className="h-8 text-xs" />
+                  </div>
+                </div>
+                {updateProfile.error && (
+                  <p className="text-xs text-destructive">{updateProfile.error.message}</p>
+                )}
+                <div className="flex gap-2 justify-end">
+                  <Button size="sm" variant="outline" onClick={() => {
+                    setEditingProfile(false)
+                    setProfileName(profile?.name ?? '')
+                    setProfileEmail(profile?.email ?? '')
+                  }}>Cancel</Button>
+                  <Button size="sm" disabled={updateProfile.isPending} onClick={() =>
+                    updateProfile.mutate({ name: profileName, email: profileEmail })
+                  }>Save</Button>
+                </div>
+              </div>
+            )}
+
+            {/* Divider */}
+            <div className="border-t border-border/40" />
+
+            {/* Change password */}
+            {!changingPassword ? (
+              <div className="flex items-center gap-3 px-4 py-3">
+                <span className="text-sm text-foreground flex-1">Password</span>
+                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => setChangingPassword(true)}>
+                  Change
+                </Button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3 px-4 py-3.5 bg-muted/20">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-xs">Current password</Label>
+                    <Input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)}
+                      className="h-8 text-xs" autoFocus />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-xs">New password</Label>
+                    <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)}
+                      className="h-8 text-xs" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-xs">Confirm</Label>
+                    <Input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
+                      className="h-8 text-xs"
+                      onKeyDown={e => { if (e.key === 'Enter') handleSavePassword() }} />
+                  </div>
+                </div>
+                {(passwordError || updateProfile.error) && (
+                  <p className="text-xs text-destructive">{passwordError || updateProfile.error?.message}</p>
+                )}
+                <div className="flex gap-2 justify-end">
+                  <Button size="sm" variant="outline" onClick={() => {
+                    setChangingPassword(false)
+                    setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); setPasswordError('')
+                  }}>Cancel</Button>
+                  <Button size="sm" disabled={updateProfile.isPending} onClick={handleSavePassword}>
+                    {updateProfile.isPending ? '…' : 'Update password'}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Divider */}
+            <div className="border-t border-border/40" />
+
+            {/* Sign out */}
+            <div className="flex items-center gap-3 px-4 py-3">
+              <span className="text-sm text-foreground flex-1">Sign out of pilot</span>
+              <Button size="sm" variant="destructive" onClick={signOut}>Sign out</Button>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Devices ── */}
+        <section className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground/50">Connected devices</p>
+            <div className="flex gap-2">
+              {deviceList.length > 0 && !confirmRevokeAll && (
+                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
+                  onClick={() => setConfirmRevokeAll(true)}>
+                  Sign out all
+                </Button>
+              )}
+              {confirmRevokeAll && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">Sign out everywhere?</span>
+                  <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => setConfirmRevokeAll(false)}>Cancel</Button>
+                  <Button size="sm" variant="destructive" className="h-7 px-2 text-xs"
+                    onClick={() => revokeAll.mutate()}>Confirm</Button>
+                </div>
+              )}
+              <Button size="sm" onClick={() => setShowPairing(true)}>+ Connect device</Button>
+            </div>
+          </div>
+          <div className="bg-card rounded-xl border border-border overflow-hidden">
+            {deviceList.length === 0 ? (
+              <div className="px-4 py-6 text-center">
+                <p className="text-sm text-muted-foreground">No registered devices.</p>
+                <p className="text-xs text-muted-foreground/60 mt-1">
+                  Connect the Pilot mobile or desktop app using the QR code.
+                </p>
+              </div>
+            ) : (
+              deviceList.map((device, i) => (
+                <div key={device.id} className={i > 0 ? 'border-t border-border/40' : ''}>
+                  <DeviceRow device={device} onRevoke={() => revokeDevice.mutate(device.id)} />
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+
+        {/* ── Connections ── */}
         <section className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground/50">Connections · API credentials agents use to run tasks</p>
@@ -266,17 +557,6 @@ export default function SettingsPage() {
           )}
         </section>
 
-        {/* Account */}
-        <section className="flex flex-col gap-3">
-          <p className="text-xs text-muted-foreground/50">Account</p>
-          <div className="bg-card rounded-xl border border-border overflow-hidden">
-            <div className="flex items-center gap-3 px-4 py-3">
-              <span className="text-sm text-foreground flex-1">Sign out of pilot</span>
-              <Button size="sm" variant="destructive" onClick={signOut}>Sign out</Button>
-            </div>
-          </div>
-        </section>
-
       </div>
 
       <AddConnectionDialog
@@ -287,6 +567,10 @@ export default function SettingsPage() {
         error={createConnection.error?.message}
       />
 
+      <PairingDialog
+        open={showPairing}
+        onClose={() => setShowPairing(false)}
+      />
     </div>
   )
 }

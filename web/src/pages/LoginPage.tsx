@@ -16,9 +16,10 @@ export default function LoginPage() {
     setLoading(true)
     try {
       const fn = mode === 'login' ? auth.login : auth.register
-      const { token } = await fn(email, password)
+      const { token, role } = await fn(email, password)
       localStorage.setItem('token', token)
-      navigate('/')
+      localStorage.setItem('pilot.role', role)
+      navigate(role === 'admin' ? '/admin' : '/')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {
@@ -150,9 +151,9 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            className="btn primary"
+            className="btn primary w-full justify-center mt-0.5 text-[14px]"
             disabled={loading}
-            style={{ width: '100%', justifyContent: 'center', padding: '11px', marginTop: 2, fontSize: 14, borderRadius: 9 }}
+            style={{ padding: '11px' }}
           >
             {loading ? '…' : mode === 'login' ? 'Sign in' : 'Create account'}
           </button>

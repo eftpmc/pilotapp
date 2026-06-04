@@ -247,6 +247,29 @@ migrate('024_clarifications', `
 migrate('025_tasks_depends_on',    'ALTER TABLE tasks ADD COLUMN depends_on TEXT');
 migrate('027_agents_avatar_seed',  'ALTER TABLE agents ADD COLUMN avatar_seed TEXT');
 migrate('028_agents_role_simplify', "UPDATE agents SET role = 'worker' WHERE role IN ('any', 'planner', 'reviewer')");
+migrate('029_users_name',          'ALTER TABLE users ADD COLUMN name TEXT');
+migrate('030_users_role',          "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user'");
+migrate('031_users_token_version', 'ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0');
+migrate('032_user_devices', `
+  CREATE TABLE IF NOT EXISTS user_devices (
+    id           TEXT PRIMARY KEY,
+    user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name         TEXT NOT NULL DEFAULT 'Unknown device',
+    device_type  TEXT NOT NULL DEFAULT 'web',
+    created_at   TEXT NOT NULL,
+    last_seen_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_user_devices_user_id ON user_devices (user_id);
+`);
+migrate('033_server_settings', `
+  CREATE TABLE IF NOT EXISTS server_settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+  INSERT OR IGNORE INTO server_settings (key, value) VALUES ('allow_registration', 'false');
+`);
+migrate('034_reset_user_roles',  "UPDATE users SET role = 'user'");
+migrate('035_users_disabled',    'ALTER TABLE users ADD COLUMN disabled INTEGER NOT NULL DEFAULT 0');
 migrate('026_sessions_tokens', `
   ALTER TABLE sessions ADD COLUMN input_tokens INTEGER;
   ALTER TABLE sessions ADD COLUMN output_tokens INTEGER;

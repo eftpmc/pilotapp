@@ -112,7 +112,7 @@ export default function AgentPage() {
 
   return (
     <div className="flex-1 overflow-y-auto bg-background">
-      <div className="px-6 pt-10 pb-16">
+      <div className="max-w-[960px] px-6 pt-10 pb-16">
 
         {/* Back */}
         <button

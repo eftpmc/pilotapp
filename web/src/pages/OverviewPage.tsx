@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { sessions, tasks, agents, projects, events } from '../api/client'
 import type { CompanyEvent } from '../api/client'
 import { AgentAvatar } from '@/components/AgentAvatar'
+import { StatusBadge } from '@/components/StatusBadge'
 import { useElapsed, fmtSecs, timeAgo } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
@@ -78,7 +79,7 @@ export default function OverviewPage() {
 
   return (
     <div className="flex-1 overflow-y-auto bg-background">
-      <div className="px-6 pt-10 pb-8 flex flex-col gap-8">
+      <div className="max-w-[960px] px-6 pt-10 pb-8 flex flex-col gap-8">
 
         {/* Header — same pattern as Knowledge / Tools */}
         <div>
@@ -139,21 +140,7 @@ export default function OverviewPage() {
                         <p className="text-sm font-semibold text-foreground truncate">{title ?? s.id.slice(0, 8)}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">{agent?.name ?? '—'} · {projectName(s.projectId)}</p>
                       </div>
-                      <span
-                        className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-semibold shrink-0"
-                        style={isError ? {
-                          borderColor: 'color-mix(in srgb, var(--red) 25%, transparent)',
-                          background:  'color-mix(in srgb, var(--red) 7%, transparent)',
-                          color: 'var(--red)',
-                        } : {
-                          borderColor: 'color-mix(in srgb, var(--amber) 25%, transparent)',
-                          background:  'color-mix(in srgb, var(--amber) 10%, transparent)',
-                          color: 'var(--amber)',
-                        }}
-                      >
-                        <span className={cn('dot', isError ? 'red' : 'amber')} />
-                        {isError ? 'Error' : 'Ready'}
-                      </span>
+                      <StatusBadge status={isError ? 'error' : 'done'} />
                       <svg className="w-3.5 h-3.5 text-muted-foreground/30 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
                     </button>
                   )

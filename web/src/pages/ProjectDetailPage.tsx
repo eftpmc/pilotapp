@@ -6,10 +6,11 @@ import type { Task, Agent, Session, TaskSize } from '../api/client'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { AgentAvatar } from '@/components/AgentAvatar'
 import { useElapsed, fmtSecs } from '@/lib/time'
-import { cn } from '@/lib/utils'
 import { Upload } from 'lucide-react'
 
 function CaretIcon() {
@@ -22,47 +23,20 @@ function ElapsedTimer({ createdAt }: { createdAt: string }) {
 }
 
 function AgentPickerDropdown({ agentList, onAssign }: { agentList: Agent[]; onAssign: (id: string) => void }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (!open) return
-    const down = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
-    document.addEventListener('mousedown', down)
-    return () => document.removeEventListener('mousedown', down)
-  }, [open])
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <button
-        className="btn sm"
-        onClick={e => { e.stopPropagation(); setOpen(o => !o) }}
-        style={{ color: 'var(--ember)', borderColor: 'var(--ember)', background: 'var(--ember-wash)' }}
-      >
-        Assign
-      </button>
-      {open && (
-        <div style={{
-          position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 30,
-          background: 'var(--bg)', border: '1px solid var(--rule)',
-          borderRadius: 10, overflow: 'hidden', minWidth: 140,
-          boxShadow: 'var(--shadow-dialog)',
-        }}>
-          {agentList.map(a => (
-            <button key={a.id} onClick={() => { onAssign(a.id); setOpen(false) }}
-              style={{
-                width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-                padding: '9px 14px', fontSize: 13, fontWeight: 500, color: 'var(--ink)',
-                background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left',
-              }}
-              onMouseOver={e => (e.currentTarget.style.background = 'var(--panel)')}
-              onMouseOut={e => (e.currentTarget.style.background = 'none')}
-            >
-              <AgentAvatar agent={a} size={22} />
-              {a.name}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button size="sm" variant="primary" onClick={e => e.stopPropagation()}>Assign</Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {agentList.map(a => (
+          <DropdownMenuItem key={a.id} onSelect={() => onAssign(a.id)} className="flex items-center gap-2">
+            <AgentAvatar agent={a} size={22} />
+            {a.name}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -183,18 +157,18 @@ export default function ProjectDetailPage() {
 
   return (
     <div className="flex-1 overflow-y-auto bg-background">
-      <div className="px-6 pt-6 pb-8" style={{ maxWidth: 1440, margin: '0 auto' }}>
+      <div className="px-6 pt-6 pb-8">
 
         {showBoardSummary && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24, minHeight: 30 }}>
+          <div className="flex items-center gap-4 mb-6">
             {working.length > 0 && <span className="stat green"><span className="dot green pulse" />{working.length} working</span>}
             {review.length  > 0 && <span className="stat amber">{review.length} in review</span>}
-            {queue.length   > 0 && <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>{queue.length} queued</span>}
-            <div style={{ flex: 1 }} />
+            {queue.length   > 0 && <span className="text-xs text-muted-foreground">{queue.length} queued</span>}
+            <div className="flex-1" />
             {queue.length > 0 && idleAgents.length > 0 && (
-              <button className="btn sm primary" onClick={() => runQueue.mutate()} disabled={runQueue.isPending}>
+              <Button size="sm" variant="primary" onClick={() => runQueue.mutate()} disabled={runQueue.isPending}>
                 {runQueue.isPending ? '…' : 'Run queue'}
-              </button>
+              </Button>
             )}
           </div>
         )}
@@ -231,11 +205,8 @@ export default function ProjectDetailPage() {
                       ? <AgentPickerDropdown agentList={idleAgents} onAssign={agentId => assignTask.mutate({ taskId: task.id, agentId })} />
                       : <span style={{ fontSize: 12, color: 'var(--faint)' }}>No agents</span>
                     }
-                    <button onClick={() => deleteTask.mutate(task.id)}
-                      style={{ fontSize: 16, lineHeight: 1, color: 'var(--faint)', background: 'none', border: 'none', cursor: 'pointer', padding: '10px 12px', margin: '-10px -4px -10px 0' }}
-                      onMouseOver={e => (e.currentTarget.style.color = 'var(--red)')}
-                      onMouseOut={e => (e.currentTarget.style.color = 'var(--faint)')}
-                    >×</button>
+                    <Button variant="ghost" size="icon" className="text-muted-foreground/40 hover:text-destructive shrink-0 h-8 w-8"
+                      onClick={() => deleteTask.mutate(task.id)}>×</Button>
                   </div>
                 </div>
               ))}
@@ -306,17 +277,17 @@ export default function ProjectDetailPage() {
                       )}
                       {canMerge && project?.remoteUrl ? (
                         <>
-                          <button className="btn sm" onClick={() => mergeSession.mutate(s.id)} disabled={isMerging}>
+                          <Button size="sm" variant="outline" onClick={() => mergeSession.mutate(s.id)} disabled={isMerging}>
                             {isMerging ? '…' : 'Merge'}
-                          </button>
-                          <button className="btn sm primary" onClick={() => mergePushSession.mutate(s.id)} disabled={isMerging}>
+                          </Button>
+                          <Button size="sm" variant="primary" onClick={() => mergePushSession.mutate(s.id)} disabled={isMerging}>
                             <Upload size={12} />{isMerging ? '…' : 'Push'}
-                          </button>
+                          </Button>
                         </>
                       ) : canMerge ? (
-                        <button className="btn sm primary" onClick={() => mergeSession.mutate(s.id)} disabled={isMerging}>
+                        <Button size="sm" variant="primary" onClick={() => mergeSession.mutate(s.id)} disabled={isMerging}>
                           {isMerging ? '…' : 'Merge ✓'}
-                        </button>
+                        </Button>
                       ) : null}
                     </div>
                   </div>
@@ -329,12 +300,12 @@ export default function ProjectDetailPage() {
 
         {/* Errors */}
         {(mergeSession.isError || mergePushSession.isError || assignTask.isError) && (
-          <div style={{ marginTop: 16, padding: '10px 14px', borderRadius: 8, border: '1px solid color-mix(in srgb, var(--red) 30%, transparent)', background: 'color-mix(in srgb, var(--red) 6%, transparent)', display: 'flex', gap: 12, alignItems: 'center' }}>
-            <span style={{ fontSize: 13, color: 'var(--red)', flex: 1 }}>
+          <div className="mt-4 flex items-center gap-3 px-4 py-2.5 rounded-lg border border-destructive/30 bg-destructive/5">
+            <span className="text-sm text-destructive flex-1">
               {(mergeSession.error ?? mergePushSession.error ?? assignTask.error)?.message}
             </span>
-            <button style={{ fontSize: 12, color: 'var(--muted)', background: 'none', border: 'none', cursor: 'pointer' }}
-              onClick={() => { mergeSession.reset(); mergePushSession.reset(); assignTask.reset() }}>Dismiss</button>
+            <Button size="sm" variant="ghost" className="text-muted-foreground"
+              onClick={() => { mergeSession.reset(); mergePushSession.reset(); assignTask.reset() }}>Dismiss</Button>
           </div>
         )}
 
@@ -354,33 +325,22 @@ export default function ProjectDetailPage() {
 }
 
 function ReviewerPickerButton({ agentList, onPick }: { agentList: Agent[]; onPick: (id: string) => void }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (!open) return
-    const down = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
-    document.addEventListener('mousedown', down)
-    return () => document.removeEventListener('mousedown', down)
-  }, [open])
   if (agentList.length === 0) return null
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <button className="btn sm" onClick={e => { e.stopPropagation(); setOpen(o => !o) }}>Request Review</button>
-      {open && (
-        <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 30, background: 'var(--bg)', border: '1px solid var(--rule)', borderRadius: 10, overflow: 'hidden', minWidth: 150, boxShadow: 'var(--shadow-dialog)' }}>
-          <p style={{ fontSize: 11, color: 'var(--muted)', padding: '8px 12px', borderBottom: '1px solid var(--rule-soft)', margin: 0 }}>Pick reviewer</p>
-          {agentList.map(a => (
-            <button key={a.id} onClick={() => { onPick(a.id); setOpen(false) }}
-              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', fontSize: 13, color: 'var(--ink)', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
-              onMouseOver={e => (e.currentTarget.style.background = 'var(--panel)')}
-              onMouseOut={e => (e.currentTarget.style.background = 'none')}
-            >
-              <AgentAvatar agent={a} size={20} />{a.name}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button size="sm" variant="outline" onClick={e => e.stopPropagation()}>Request Review</Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuLabel>Pick reviewer</DropdownMenuLabel>
+        {agentList.map(a => (
+          <DropdownMenuItem key={a.id} onSelect={() => onPick(a.id)} className="flex items-center gap-2">
+            <AgentAvatar agent={a} size={20} />
+            {a.name}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -415,7 +375,7 @@ function NewTaskDialog({ projectId, hasIdleAgent, onClose, onCreate, onCreateAnd
     <Dialog open onOpenChange={o => !o && onClose()}>
       <DialogContent>
         <DialogHeader><DialogTitle>New task</DialogTitle></DialogHeader>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div className="flex flex-col gap-4">
           <div className="field">
             <Label>Title</Label>
             <Input autoFocus value={title} onChange={e => setTitle(e.target.value)}
@@ -423,37 +383,37 @@ function NewTaskDialog({ projectId, hasIdleAgent, onClose, onCreate, onCreateAnd
               onKeyDown={e => { if (e.key === 'Enter' && isValid) void submit(onCreate) }} />
           </div>
           <div className="field">
-            <Label>Prompt <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(optional)</span></Label>
+            <Label>Prompt <span className="font-normal text-muted-foreground">(optional)</span></Label>
             <Textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={3}
               placeholder="Additional context, requirements, or constraints…" />
           </div>
-          <div style={{ display: 'flex', gap: 12 }}>
-            <div className="field" style={{ flex: 1 }}>
+          <div className="flex gap-3">
+            <div className="field flex-1">
               <Label>Base branch</Label>
-              <Input value={baseBranch} onChange={e => setBranch(e.target.value)} style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }} />
+              <Input value={baseBranch} onChange={e => setBranch(e.target.value)} className="font-mono text-xs" />
             </div>
             <div className="field">
               <Label>Size</Label>
-              <div style={{ display: 'flex', gap: 4 }}>
+              <div className="flex gap-1">
                 {SIZES.map(s => (
-                  <button key={s.value} type="button" onClick={() => setSize(s.value)}
-                    className={cn('btn sm', size === s.value ? 'primary' : 'ghost')}
-                    style={{ flexDirection: 'column', gap: 1, minWidth: 36, padding: '6px 8px' }}>
-                    <span style={{ fontSize: 12, fontWeight: 600 }}>{s.label}</span>
-                    <span style={{ fontSize: 9, opacity: 0.7 }}>{s.desc}</span>
-                  </button>
+                  <Button key={s.value} size="sm" variant={size === s.value ? 'primary' : 'ghost'}
+                    onClick={() => setSize(s.value)}
+                    className="flex-col gap-0 min-w-[36px] px-2 py-1.5 h-auto">
+                    <span className="text-xs font-semibold">{s.label}</span>
+                    <span className="text-[9px] opacity-70">{s.desc}</span>
+                  </Button>
                 ))}
               </div>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 8, paddingTop: 4 }}>
-            <button className="btn" onClick={onClose}>Cancel</button>
-            <button className="btn" style={{ flex: 1, justifyContent: 'center' }} disabled={!isValid || loading} onClick={() => void submit(onCreate)}>
+          <div className="flex gap-2 pt-1">
+            <Button variant="outline" onClick={onClose}>Cancel</Button>
+            <Button className="flex-1 justify-center" disabled={!isValid || loading} onClick={() => void submit(onCreate)}>
               {loading ? '…' : 'Queue'}
-            </button>
-            <button className="btn primary" style={{ flex: 1, justifyContent: 'center' }} disabled={!isValid || loading || !hasIdleAgent} onClick={() => void submit(onCreateAndRun)}>
+            </Button>
+            <Button variant="primary" className="flex-1 justify-center" disabled={!isValid || loading || !hasIdleAgent} onClick={() => void submit(onCreateAndRun)}>
               {loading ? '…' : 'Dispatch ↗'}
-            </button>
+            </Button>
           </div>
         </div>
       </DialogContent>

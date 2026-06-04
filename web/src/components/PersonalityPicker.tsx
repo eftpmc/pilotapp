@@ -2,7 +2,6 @@ import { useRef, useState } from 'react'
 import { PERSONALITY_PRESETS } from '@/lib/agent-constants'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { TooltipRoot, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
 const MAX_PRESETS = 3
@@ -54,6 +53,7 @@ export function PersonalityPicker({ value, onChange }: { value: string; onChange
   }
 
   const atMax = selected.length >= MAX_PRESETS
+  const selectedPresets = PERSONALITY_PRESETS.filter(p => selected.includes(p.label))
 
   return (
     <div className="flex flex-col gap-3">
@@ -62,35 +62,33 @@ export function PersonalityPicker({ value, onChange }: { value: string; onChange
           const Icon = preset.icon
           const active = selected.includes(preset.label)
           const disabled = atMax && !active
-          const firstSentence = preset.prompt.match(/^[^.!?]+[.!?]/)?.[0] ?? preset.prompt.slice(0, 80)
 
           return (
-            <TooltipRoot key={preset.label}>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={() => togglePreset(preset.label)}
-                  className={cn(
-                    'agent-choice-card',
-                    active && 'active',
-                    disabled && 'dimmed',
-                  )}
-                  aria-pressed={active}
-                >
-                  {active && <span className="agent-choice-check" aria-hidden>✓</span>}
-                  <Icon size={20} className="agent-choice-icon" />
-                  <span className="agent-choice-title">{preset.label}</span>
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom" className="agent-tooltip">
-                <p className="agent-tooltip-label">{preset.label}</p>
-                <p className="agent-tooltip-tag">{preset.tag}</p>
-                <p className="agent-tooltip-desc">{firstSentence}</p>
-              </TooltipContent>
-            </TooltipRoot>
+            <button
+              key={preset.label}
+              type="button"
+              onClick={() => togglePreset(preset.label)}
+              className={cn('agent-choice-card', active && 'active', disabled && 'dimmed')}
+              aria-pressed={active}
+            >
+              {active && <span className="agent-choice-check" aria-hidden>✓</span>}
+              <Icon size={20} className="agent-choice-icon" />
+              <span className="agent-choice-title">{preset.label}</span>
+              <span className="agent-choice-tag">{preset.tag}</span>
+            </button>
           )
         })}
       </div>
+      {selectedPresets.length > 0 && (
+        <div className="flex flex-col gap-1.5 px-3 py-2.5 rounded-lg bg-muted/30 border border-border/40">
+          {selectedPresets.map(p => (
+            <p key={p.label} className="text-xs text-muted-foreground leading-relaxed">
+              <span className="font-medium text-foreground">{p.label}. </span>
+              {p.prompt}
+            </p>
+          ))}
+        </div>
+      )}
       {atMax && (
         <p className="text-xs text-muted-foreground/60">Max {MAX_PRESETS} presets. Deselect one to change.</p>
       )}

@@ -4,6 +4,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { projects } from '../api/client'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Button } from '@/components/ui/button'
 
 
 export default function ProjectSettingsPage() {
@@ -43,16 +44,16 @@ export default function ProjectSettingsPage() {
 
   return (
     <div className="flex-1 overflow-y-auto bg-background">
-      <div className="px-6 pt-6 pb-8 flex flex-col gap-6">
+      <div className="max-w-[960px] px-6 pt-6 pb-8 flex flex-col gap-6">
 
         {/* Project info */}
         <section className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
             <p className="text-xs text-muted-foreground/50">Project</p>
             {!editing && project && (
-              <button onClick={startEdit} className="text-xs font-semibold text-primary bg-transparent border-none cursor-pointer">
+              <Button size="sm" variant="ghost" className="text-xs font-semibold text-primary h-auto py-0.5" onClick={startEdit}>
                 Edit
-              </button>
+              </Button>
             )}
           </div>
 
@@ -74,12 +75,12 @@ export default function ProjectSettingsPage() {
               </div>
               {updateProject.isError && <p className="text-sm text-destructive">{updateProject.error?.message}</p>}
               <div className="flex gap-2">
-                <button className="btn" onClick={() => setEditing(false)}>Cancel</button>
-                <button className="btn primary" style={{ flex: 1, justifyContent: 'center' }}
+                <Button variant="outline" onClick={() => setEditing(false)}>Cancel</Button>
+                <Button className="flex-1 justify-center"
                   disabled={!name.trim() || updateProject.isPending}
                   onClick={() => updateProject.mutate({ name: name.trim(), remoteUrl: remoteUrl.trim() || undefined, githubToken: githubToken.trim() || undefined })}>
                   {updateProject.isPending ? '…' : 'Save'}
-                </button>
+                </Button>
               </div>
             </div>
           ) : (
@@ -111,14 +112,14 @@ export default function ProjectSettingsPage() {
                   <p className="text-xs text-muted-foreground mt-0.5">Permanently deletes this project and all its tasks and sessions. This cannot be undone.</p>
                 </div>
                 {!confirming ? (
-                  <button className="btn sm danger shrink-0" onClick={() => setConfirming(true)}>Delete</button>
+                  <Button size="sm" variant="destructive" className="shrink-0" onClick={() => setConfirming(true)}>Delete</Button>
                 ) : (
                   <div className="flex items-center gap-2 shrink-0">
                     <span className="text-xs text-muted-foreground">Sure?</span>
-                    <button className="btn sm" onClick={() => setConfirming(false)}>Cancel</button>
-                    <button className="btn sm danger" onClick={() => deleteProject.mutate()} disabled={deleteProject.isPending}>
+                    <Button size="sm" variant="outline" onClick={() => setConfirming(false)}>Cancel</Button>
+                    <Button size="sm" variant="destructive" onClick={() => deleteProject.mutate()} disabled={deleteProject.isPending}>
                       {deleteProject.isPending ? 'Deleting…' : 'Yes, delete'}
-                    </button>
+                    </Button>
                   </div>
                 )}
               </div>

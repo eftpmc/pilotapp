@@ -4,63 +4,27 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { sessions, agents, tasks } from '../api/client'
 import type { Session, Agent, Task, SessionStatus } from '../api/client'
 import { AgentAvatar } from '@/components/AgentAvatar'
+import { StatusBadge } from '@/components/StatusBadge'
+import { timeAgo } from '@/lib/time'
 import { cn } from '@/lib/utils'
-
-function timeAgo(iso: string) {
-  const s = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
-  if (s < 60)  return 'just now'
-  const m = Math.floor(s / 60)
-  if (m < 60)  return `${m}m ago`
-  const h = Math.floor(m / 60)
-  if (h < 24)  return `${h}h ago`
-  return `${Math.floor(h / 24)}d ago`
-}
-
-const STATUS_CONFIG: Record<string, { dot: string; label: string; color: string; bg: string }> = {
-  running: { dot: 'green pulse', label: 'Running', color: 'var(--green)',  bg: 'color-mix(in srgb, var(--green) 12%, transparent)' },
-  idle:    { dot: 'idle',        label: 'Idle',    color: 'var(--faint)',  bg: 'var(--panel-2)' },
-  done:    { dot: 'idle',        label: 'Done',    color: 'var(--muted)',  bg: 'var(--panel-2)' },
-  merged:  { dot: 'indigo',      label: 'Merged',  color: 'var(--ember)',  bg: 'var(--ember-wash)' },
-  error:   { dot: 'red',         label: 'Error',   color: 'var(--red)',    bg: 'color-mix(in srgb, var(--red) 12%, transparent)' },
-}
 
 function SessionCard({ session, agent, task, onClick }: {
   session: Session; agent?: Agent; task?: Task; onClick: () => void
 }) {
-  const cfg = STATUS_CONFIG[session.status] ?? STATUS_CONFIG.idle
   const isSpec = !!session.specId
   const title = task?.title ?? (isSpec ? 'Planning session' : session.branch)
 
   return (
-    <button
-      onClick={onClick}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 14, width: '100%', textAlign: 'left',
-        padding: '14px 16px', background: 'var(--panel)', border: '1px solid var(--rule)',
-        borderRadius: 12, boxShadow: 'var(--shadow-sm)', cursor: 'pointer',
-        transition: 'background .1s, border-color .1s',
-      }}
-      onMouseOver={e => { e.currentTarget.style.background = 'var(--panel-2)' }}
-      onMouseOut={e => { e.currentTarget.style.background = 'var(--panel)' }}
-    >
+    <button onClick={onClick} className="card-row">
       <AgentAvatar agent={agent} size={40} running={session.status === 'running'} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)', margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {title}
-        </p>
-        <p style={{ fontSize: 11.5, color: 'var(--muted)', margin: '3px 0 0', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <div className="card-row-main">
+        <p className="card-row-title">{title}</p>
+        <p className="text-[11.5px] text-muted-foreground font-mono truncate mt-0.5">
           {session.branch}{isSpec && ' · plan'}
         </p>
       </div>
-      <span style={{ fontSize: 11, color: 'var(--faint)', fontFamily: 'var(--font-mono)', flexShrink: 0 }}>{timeAgo(session.createdAt)}</span>
-      <span style={{
-        fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, flexShrink: 0,
-        color: cfg.color, background: cfg.bg,
-        display: 'flex', alignItems: 'center', gap: 5,
-      }}>
-        <span className={`dot ${cfg.dot}`} style={{ width: 5, height: 5 }} />
-        {cfg.label}
-      </span>
+      <span className="text-[11px] text-muted-foreground/50 font-mono shrink-0">{timeAgo(session.createdAt)}</span>
+      <StatusBadge status={session.status} />
     </button>
   )
 }
@@ -105,7 +69,7 @@ export default function SessionsPage() {
 
   return (
     <div className="flex-1 overflow-y-auto bg-background">
-      <div className="px-6 pt-6 pb-8 flex flex-col gap-6">
+      <div className="max-w-[960px] px-6 pt-6 pb-8 flex flex-col gap-6">
 
         <div className="flex items-center justify-between">
           <p className="text-xs text-muted-foreground/50">{sessionList.length} session{sessionList.length !== 1 ? 's' : ''}</p>
