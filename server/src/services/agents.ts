@@ -8,7 +8,7 @@ import { db } from '../db';
 import { resolveApiKey } from '../routes/settings';
 import { markConnectionQuotaExceeded } from '../routes/connections';
 import { writeEvent } from './events';
-import { createWorktree, removeWorktree } from './git';
+import { createWorktree, removeWorktree, createWorkDir, removeWorkDir, getDiff, getWorkDirDiff, listFilesRecursive, copyTaskFilesToWorkDir, seedWorkDirFromWorkspace } from './git';
 import { assignTaskToSession, markSessionFinished, markSessionMerged, markSessionRunning, markTaskDone } from './lifecycle';
 
 const QUOTA_PATTERNS = [
@@ -38,6 +38,7 @@ export interface SessionRef {
   provider: AgentProvider;
   branch: string;
   worktreePath: string;
+  workspaceMode?: 'git' | 'workspace';
   status: string;
   createdAt: string;
 }
@@ -276,6 +277,7 @@ interface ParsedLine {
   runnerId?: string;
   usage?: { inputTokens: number; outputTokens: number; cacheReadTokens: number };
   costUsd?: number;
+  resultText?: string;
 }
 
 function parseOutputLine(provider: AgentProvider, line: string): ParsedLine {
@@ -290,7 +292,8 @@ function parseOutputLine(provider: AgentProvider, line: string): ParsedLine {
         outputTokens:   usage.output_tokens           ?? 0,
         cacheReadTokens: usage.cache_read_input_tokens ?? 0,
       } : undefined,
-      costUsd: obj.type === 'result' && typeof obj.total_cost_usd === 'number' ? obj.total_cost_usd : undefined,
+      costUsd:    obj.type === 'result' && typeof obj.total_cost_usd === 'number' ? obj.total_cost_usd : undefined,
+      resultText: obj.type === 'result' && typeof obj.result === 'string' && obj.result.trim() ? obj.result.trim() : undefined,
     };
   }
   // codex: thread.started carries thread_id; turn.completed carries usage
@@ -376,7 +379,7 @@ function captureReview(reviewSessionId: string, worktreePath: string): void {
 const SYNTHESIS_TITLE = '[Synthesis] Review results';
 
 interface TaskRowMin { id: string; prompt: string; base_branch: string; project_id: string; depends_on?: string | null }
-interface ProjectRowMin { id: string; name: string; repo_path: string; role: string; created_at: string }
+interface ProjectRowMin { id: string; name: string; repo_path: string; role: string; workspace_mode: string; created_at: string }
 interface AgentRowMin  { id: string; provider: string }
 
 
@@ -393,32 +396,42 @@ async function assignAndRunTask(
   const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(projectId) as ProjectRowMin | undefined;
   if (!task || !project) return;
 
-  const sessionId  = uuid();
-  const branch     = `agent/${sessionId}`;
-  const now        = new Date().toISOString();
-  const projectObj = { id: project.id, name: project.name, repoPath: project.repo_path, role: project.role as any, createdAt: project.created_at };
+  const sessionId    = uuid();
+  const isGit        = (project.workspace_mode ?? 'git') === 'git';
+  const branch       = isGit ? `agent/${sessionId}` : '';
+  const workspaceMode = isGit ? 'git' : 'workspace';
+  const now          = new Date().toISOString();
+  const projectObj   = { id: project.id, name: project.name, repoPath: project.repo_path, role: project.role as any, createdAt: project.created_at };
 
   let worktreePath: string | undefined;
   try {
-    worktreePath = await createWorktree(projectObj, sessionId, baseBranch);
-    // Re-check task is still pending — concurrent callers may have claimed it during the async worktree create
+    worktreePath = isGit
+      ? await createWorktree(projectObj, sessionId, baseBranch)
+      : await createWorkDir(sessionId);
+    // Re-check task is still pending — concurrent callers may have claimed it during the async setup
     const taskStatus = db.prepare("SELECT status FROM tasks WHERE id = ?").get(taskId) as { status: string } | undefined;
     if (taskStatus?.status !== 'pending') {
-      void removeWorktree(projectObj, worktreePath);
+      if (isGit) void removeWorktree(projectObj, worktreePath);
+      else void removeWorkDir(worktreePath);
       return;
     }
     db.prepare(
-      'INSERT INTO sessions (id, user_id, agent_id, project_id, work_task_id, provider, branch, worktree_path, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(sessionId, userId, agent.id, projectId, taskId, agent.provider, branch, worktreePath, 'idle', now);
+      'INSERT INTO sessions (id, user_id, agent_id, project_id, work_task_id, provider, branch, worktree_path, workspace_mode, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(sessionId, userId, agent.id, projectId, taskId, agent.provider, branch, worktreePath, workspaceMode, 'idle', now);
     assignTaskToSession(taskId, agent.id, sessionId, now);
+    if (!isGit) void seedWorkDirFromWorkspace(path.join(DATA_DIR, 'workspaces', projectId), worktreePath);
+    void copyTaskFilesToWorkDir(path.join(DATA_DIR, 'task-files', taskId), worktreePath);
     void runAgent(
       { id: sessionId, agentId: agent.id, projectId, workTaskId: taskId,
-        provider: agent.provider as AgentProvider, branch, worktreePath, status: 'idle', createdAt: now },
+        provider: agent.provider as AgentProvider, branch, worktreePath, workspaceMode, status: 'idle', createdAt: now },
       task.prompt, userId, agent.id,
     );
   } catch (err) {
     console.error('[auto-assign] Failed:', err);
-    if (worktreePath) void removeWorktree(projectObj, worktreePath);
+    if (worktreePath) {
+      if (isGit) void removeWorktree(projectObj, worktreePath);
+      else void removeWorkDir(worktreePath);
+    }
   }
 }
 
@@ -543,13 +556,42 @@ async function captureTasks(session: SessionRef, exitCode: number): Promise<void
 
   markSessionMerged(session.id);
   if (session.workTaskId) markTaskDone(session.workTaskId);
-  const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(session.projectId) as
-    { id: string; name: string; repo_path: string; role: string; created_at: string } | undefined;
-  if (project) {
-    void removeWorktree(
-      { id: project.id, name: project.name, repoPath: project.repo_path, role: project.role as any, createdAt: project.created_at },
-      session.worktreePath,
-    );
+  if ((session.workspaceMode ?? 'git') === 'workspace') {
+    void removeWorkDir(session.worktreePath);
+  } else {
+    const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(session.projectId) as
+      { id: string; name: string; repo_path: string; role: string; created_at: string } | undefined;
+    if (project) {
+      void removeWorktree(
+        { id: project.id, name: project.name, repoPath: project.repo_path, role: project.role as any, createdAt: project.created_at },
+        session.worktreePath,
+      );
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Result text fallback — if the agent produced no file changes, save its
+// final result text as the diff snapshot so the review tab shows something.
+// ---------------------------------------------------------------------------
+
+async function captureResultFallback(sessionId: string, worktreePath: string, resultText: string, isWorkspace: boolean): Promise<void> {
+  const existing = db.prepare('SELECT diff_snapshot FROM sessions WHERE id = ?').get(sessionId) as { diff_snapshot: string | null } | undefined;
+  if (existing?.diff_snapshot) return;
+
+  let hasChanges = false;
+  try {
+    if (isWorkspace) {
+      const entries = await listFilesRecursive(worktreePath);
+      hasChanges = entries.length > 0;
+    } else {
+      const diff = await getDiff(worktreePath, 'main').catch(() => '');
+      hasChanges = diff.trim().length > 0;
+    }
+  } catch { /* ignore */ }
+
+  if (!hasChanges) {
+    db.prepare('UPDATE sessions SET diff_snapshot = ? WHERE id = ?').run(resultText, sessionId);
   }
 }
 
@@ -630,9 +672,25 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
     } catch { /* not present */ }
   }
 
+  // Hard isolation constraint — always first so it can't be buried by other context
+  const isWorkspace = (session.workspaceMode ?? 'git') === 'workspace';
+  const workdirInstruction = isWorkspace
+    ? `**Working directory: ${session.worktreePath}**
+You are running in an isolated workspace directory. Rules:
+- Use relative paths only — NEVER absolute paths outside this directory
+- **Write your deliverable as one or more files** in this directory (e.g. \`report.md\`, \`analysis.md\`, \`output.json\`)
+- Do NOT just print the result to the terminal — the files you write ARE the output of this session
+- A good default: write a single well-structured \`report.md\` unless the task clearly calls for something else`
+    : `**Working directory: ${session.worktreePath}**
+You are running in an isolated work directory. ALL file operations must stay within it:
+- Use relative paths only (e.g. \`docs/output.md\`, not \`/Users/…/docs/output.md\`)
+- Never read from or write to any path outside your current working directory
+- Never navigate to other directories with \`cd\` before writing files
+- Your current directory is your entire sandbox`;
+
   // System prompt: stable context that doesn't change turn-to-turn (goes via --system-prompt flag for claude)
   // Task prompt: the actual work + handoff notes (goes via -p)
-  const systemPromptParts = [knowledgeCtx, projectCtx, personality, journalInstruction].filter(Boolean);
+  const systemPromptParts = [workdirInstruction, knowledgeCtx, projectCtx, personality, journalInstruction].filter(Boolean);
   const systemPrompt      = provider === 'claude' && systemPromptParts.length > 0
     ? systemPromptParts.join('\n\n---\n\n')
     : undefined;
@@ -663,6 +721,7 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
 
   let stderrAccum = '';
   let inputTokens = 0, outputTokens = 0, cacheReadTokens = 0, totalCostUsd: number | null = null;
+  let resultText = '';
 
   const broadcast = (type: string, data: string) => {
     const msg = JSON.stringify({ type, sessionId: session.id, data });
@@ -726,6 +785,7 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
           cacheReadTokens += parsed.usage.cacheReadTokens;
         }
         if (parsed.costUsd != null) totalCostUsd = parsed.costUsd;
+        if (parsed.resultText)     resultText   = parsed.resultText;
       } catch { /* not JSON — skip */ }
     }
   });
@@ -757,6 +817,11 @@ export async function runAgent(session: SessionRef, prompt: string, userId: stri
     writeEvent(userId, exitCode === 0 ? 'session.completed' : 'session.failed', { sessionId: session.id, taskId: session.workTaskId, projectId: session.projectId, agentId: session.agentId });
     if (mcpConfigPath) { try { fs.unlinkSync(mcpConfigPath); } catch { /* already gone */ } }
     if (codexConfigDir) { try { fs.rmSync(codexConfigDir, { recursive: true, force: true }); } catch { /* ok */ } }
+    // If the agent produced text output but wrote no files, save the result text as a snapshot
+    // so the diff/files tab shows something rather than being empty.
+    if (exitCode === 0 && resultText && !session.specId && !session.parentSessionId) {
+      void captureResultFallback(session.id, session.worktreePath, resultText, isWorkspace);
+    }
     if (session.specId) captureSpec(session.specId, session.worktreePath);
     if (session.parentSessionId) {
       captureReview(session.id, session.worktreePath);

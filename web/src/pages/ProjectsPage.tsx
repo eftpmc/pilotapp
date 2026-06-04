@@ -8,8 +8,10 @@ import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { timeAgo } from '@/lib/time'
 import { cn } from '@/lib/utils'
+import { GitBranch, Folder } from 'lucide-react'
 
-type ImportMode = 'github' | 'local' | 'empty'
+type ProjectType = 'code' | 'workspace'
+type CodeSource  = 'github' | 'local' | 'empty'
 
 function timeAgoOrDefault(iso?: string) {
   return iso ? timeAgo(iso) : 'No activity'
@@ -90,7 +92,7 @@ export default function ProjectsPage() {
         <div className="flex items-start justify-between mb-8">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
-            <p className="text-sm text-muted-foreground mt-1">{projectList.length} project{projectList.length !== 1 ? 's' : ''} · git repos your agents work in</p>
+            <p className="text-sm text-muted-foreground mt-1">{projectList.length} project{projectList.length !== 1 ? 's' : ''}</p>
           </div>
           <Button onClick={() => setShowNew(true)}>+ New</Button>
         </div>
@@ -98,9 +100,11 @@ export default function ProjectsPage() {
         <div className="project-card-grid">
           {projectList.map(p => {
             const { pending, running, review, latestAt } = statsFor(p.id)
-            const repo = p.remoteUrl
+            const repo = p.workspaceMode === 'workspace'
+              ? 'workspace'
+              : p.remoteUrl
               ? p.remoteUrl.replace(/^https?:\/\/(www\.)?github\.com\//, '').replace(/\.git$/, '')
-              : p.localPath ?? 'local'
+              : p.localPath ?? 'local repo'
             const total = pending + running + review
             return (
               <button
@@ -150,27 +154,29 @@ export default function ProjectsPage() {
 
 function NewProjectDialog({ open, onClose, onCreate, loading, error }: {
   open: boolean; onClose: () => void
-  onCreate: (body: { name: string; githubCloneUrl?: string; githubToken?: string; localPath?: string }) => void
+  onCreate: (body: Parameters<typeof projects.create>[0]) => void
   loading: boolean; error?: string
 }) {
-  const [name, setName]           = useState('')
-  const [mode, setMode]           = useState<ImportMode>('github')
-  const [githubUrl, setGithubUrl] = useState('')
-  const [githubToken, setToken]   = useState('')
-  const [localPath, setLocal]     = useState('')
+  const [name, setName]             = useState('')
+  const [type, setType]             = useState<ProjectType>('code')
+  const [source, setSource]         = useState<CodeSource>('github')
+  const [githubUrl, setGithubUrl]   = useState('')
+  const [githubToken, setToken]     = useState('')
+  const [localPath, setLocal]       = useState('')
 
   const isValid = name.trim().length > 0 && (
-    mode === 'empty' ||
-    (mode === 'github' && githubUrl.trim() && githubToken.trim()) ||
-    (mode === 'local'  && localPath.trim())
+    type === 'workspace' || source === 'empty' ||
+    (source === 'github' && githubUrl.trim() && githubToken.trim()) ||
+    (source === 'local'  && localPath.trim())
   )
 
   function submit() {
     if (!isValid) return
     onCreate({
       name: name.trim(),
-      ...(mode === 'github' ? { githubCloneUrl: githubUrl.trim(), githubToken: githubToken.trim() } : {}),
-      ...(mode === 'local'  ? { localPath: localPath.trim() } : {}),
+      workspaceMode: type === 'workspace' ? 'workspace' : 'git',
+      ...(source === 'github' && type === 'code' ? { githubCloneUrl: githubUrl.trim(), githubToken: githubToken.trim() } : {}),
+      ...(source === 'local'  && type === 'code' ? { localPath: localPath.trim() } : {}),
     })
   }
 
@@ -178,34 +184,65 @@ function NewProjectDialog({ open, onClose, onCreate, loading, error }: {
     <Dialog open={open} onOpenChange={o => !o && onClose()}>
       <DialogContent>
         <DialogHeader><DialogTitle>New project</DialogTitle></DialogHeader>
-        <div className="flex flex-col gap-4">
-          <div className="field">
-            <Label>Name</Label>
-            <Input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="my-project"
-              onKeyDown={e => { if (e.key === 'Enter' && isValid) submit() }} />
-          </div>
+        <div className="flex flex-col gap-5">
 
-          <div className="flex gap-1 bg-[var(--panel)] rounded-[10px] p-[3px]">
-            {(['github', 'local', 'empty'] as ImportMode[]).map(k => (
-              <button key={k} onClick={() => setMode(k)} className={cn(
-                'flex-1 text-[13px] font-medium rounded-lg py-1.5 border-none cursor-pointer transition-colors',
-                mode === k ? 'bg-background text-foreground shadow-sm' : 'bg-transparent text-muted-foreground'
-              )}>{k === 'github' ? 'GitHub' : k === 'local' ? 'Local path' : 'Empty'}</button>
+          {/* Type toggle */}
+          <div className="grid grid-cols-2 gap-2">
+            {([
+              { id: 'code' as ProjectType,      label: 'Code',      sub: 'Git versioned',               Icon: GitBranch },
+              { id: 'workspace' as ProjectType, label: 'Workspace', sub: 'Writing · research · design', Icon: Folder    },
+            ]).map(({ id: tid, label, sub, Icon }) => (
+              <button key={tid} onClick={() => setType(tid)} className={cn(
+                'flex flex-col items-start gap-1.5 px-4 py-3 rounded-xl border text-left transition-colors',
+                type === tid ? 'border-primary/50 bg-primary/5' : 'border-border hover:bg-muted/30'
+              )}>
+                <Icon size={16} className={type === tid ? 'text-primary' : 'text-muted-foreground'} />
+                <p className={cn('text-sm font-semibold', type === tid ? 'text-foreground' : 'text-muted-foreground')}>{label}</p>
+                <p className="text-[11px] text-muted-foreground leading-snug">{sub}</p>
+              </button>
             ))}
           </div>
 
-          {mode === 'github' && <>
-            <div className="field"><Label>Clone URL</Label><Input value={githubUrl} onChange={e => setGithubUrl(e.target.value)} placeholder="https://github.com/org/repo.git" /></div>
-            <div className="field"><Label>Access token</Label><Input type="password" value={githubToken} onChange={e => setToken(e.target.value)} placeholder="ghp_…" /></div>
-          </>}
-          {mode === 'local' && (
-            <div className="field">
-              <Label>Path on this machine</Label>
-              <Input value={localPath} onChange={e => setLocal(e.target.value)} placeholder="/Users/you/code/myproject" className="font-mono text-xs" />
-              <p className="text-xs text-muted-foreground">Pilot clones a bare copy. Your working tree stays untouched.</p>
-            </div>
+          <div className="field">
+            <Label>Name</Label>
+            <Input autoFocus value={name} onChange={e => setName(e.target.value)}
+              placeholder={type === 'workspace' ? 'brand-research' : 'my-project'}
+              onKeyDown={e => { if (e.key === 'Enter' && isValid) submit() }} />
+          </div>
+
+          {type === 'code' && (
+            <>
+              <div className="flex gap-1 bg-[var(--panel)] rounded-[10px] p-[3px]">
+                {([
+                  { id: 'github' as CodeSource, label: 'GitHub' },
+                  { id: 'local'  as CodeSource, label: 'Local'  },
+                  { id: 'empty'  as CodeSource, label: 'New'    },
+                ]).map(s => (
+                  <button key={s.id} onClick={() => setSource(s.id)} className={cn(
+                    'flex-1 text-[13px] font-medium rounded-lg py-1.5 transition-colors',
+                    source === s.id ? 'bg-background text-foreground shadow-sm' : 'bg-transparent text-muted-foreground'
+                  )}>{s.label}</button>
+                ))}
+              </div>
+
+              {source === 'github' && (
+                <div className="flex flex-col gap-3">
+                  <div className="field"><Label>Clone URL</Label><Input value={githubUrl} onChange={e => setGithubUrl(e.target.value)} placeholder="https://github.com/org/repo.git" /></div>
+                  <div className="field"><Label>Access token</Label><Input type="password" value={githubToken} onChange={e => setToken(e.target.value)} placeholder="ghp_…" /></div>
+                </div>
+              )}
+              {source === 'local' && (
+                <div className="field">
+                  <Label>Path</Label>
+                  <Input value={localPath} onChange={e => setLocal(e.target.value)} placeholder="/Users/you/code/myproject" className="font-mono text-xs" />
+                  <p className="text-xs text-muted-foreground mt-1">Pilot clones a bare copy. Your working tree stays untouched.</p>
+                </div>
+              )}
+              {source === 'empty' && (
+                <p className="text-sm text-muted-foreground -mt-2">Empty git repo — agents create files and commit from scratch.</p>
+              )}
+            </>
           )}
-          {mode === 'empty' && <p className="text-sm text-muted-foreground">Starts with an empty repo. Agents can create files and commit from scratch.</p>}
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 

@@ -3,7 +3,7 @@ import { AgentProvider } from '../types';
 export interface SessionRow {
   id: string; user_id: string; agent_id: string; project_id: string;
   work_task_id: string | null; spec_id: string | null; provider: string; branch: string;
-  worktree_path: string; status: string; created_at: string;
+  worktree_path: string; status: string; created_at: string; workspace_mode: string;
   journal: string | null; parent_session_id: string | null;
   review_verdict: string | null; runner_session_id: string | null;
   diff_snapshot: string | null;
@@ -24,7 +24,12 @@ export function toSession(r: SessionRow) {
     outputTokens:     r.output_tokens      ?? undefined,
     cacheReadTokens:  r.cache_read_tokens  ?? undefined,
     totalCostUsd:     r.total_cost_usd     ?? undefined,
-    provider: r.provider as AgentProvider,
-    branch: r.branch, worktreePath: r.worktree_path, status: r.status, createdAt: r.created_at,
+    provider:         r.provider as AgentProvider,
+    workspaceMode:    (r.workspace_mode ?? 'git') as 'git' | 'workspace',
+    workDir:          r.worktree_path,
+    // Kept for internal use by agents.ts / sessions.ts; not intended as public API
+    branch:           r.branch,
+    worktreePath:     r.worktree_path,
+    status: r.status, createdAt: r.created_at,
   };
 }

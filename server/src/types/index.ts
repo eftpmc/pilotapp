@@ -10,11 +10,14 @@ export interface Connection {
   createdAt: string;
 }
 
+export type WorkspaceMode = 'git' | 'workspace';
+
 export interface Project {
   id: string;
   name: string;
   repoPath: string;
   role: ProjectRole;
+  workspaceMode?: WorkspaceMode;
   remoteUrl?: string;
   localPath?: string;
   createdAt: string;

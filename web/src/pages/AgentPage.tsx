@@ -196,27 +196,8 @@ export default function AgentPage() {
         <div className="flex flex-col gap-10">
 
           {/* ── Identity ── */}
-          <section>
-            {!editing ? (
-              <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
-                {connection && (
-                  <span className="flex items-center gap-1.5">
-                    <ProviderBadge type={connection.type} />
-                    {connection.name}
-                  </span>
-                )}
-                {dept && (
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: dept.color }} />
-                    {dept.name}
-                  </span>
-                )}
-                {agent.role === 'lead' && (
-                  <span style={{ color: 'var(--ember)' }}>Lead agent</span>
-                )}
-              </div>
-            ) : (
-              <div className="flex flex-col gap-4">
+          {editing && <section>
+            <div className="flex flex-col gap-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1.5">
                     <Label>Name</Label>
@@ -270,9 +251,8 @@ export default function AgentPage() {
                 {updateAgent.isError && (
                   <p className="text-xs text-destructive">{updateAgent.error.message}</p>
                 )}
-              </div>
-            )}
-          </section>
+            </div>
+          </section>}
 
           {/* ── Personality ── */}
           <section>

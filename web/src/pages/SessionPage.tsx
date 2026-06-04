@@ -372,6 +372,7 @@ export default function SessionPage() {
 
   const [activeTab, setActiveTab]       = useState<'output' | 'diff' | 'journal'>('output')
   const [diff, setDiff]                 = useState<string | null>(null)
+  const [diffIsText, setDiffIsText]     = useState(false)
   const [diffLoading, setDiffLoad]      = useState(false)
   const [diffError, setDiffError]       = useState<string | null>(null)
   const [hint, setHint]                 = useState('')
@@ -595,15 +596,17 @@ export default function SessionPage() {
     if (diff !== null) { setActiveTab('diff'); return }
     setDiffLoad(true); setDiffError(null); setActiveTab('diff')
     try {
-      const { diff: d, unavailableReason } = await sessions.diff(id)
+      const { diff: d, unavailableReason, isResultText } = await sessions.diff(id) as { diff: string; unavailableReason?: string; isResultText?: boolean }
       setDiff(d)
+      setDiffIsText(!!isResultText)
       if (unavailableReason) setDiffError(unavailableReason)
     }
     catch (e) { setDiffError(e instanceof Error ? e.message : 'Could not load diff') }
     finally { setDiffLoad(false) }
   }
 
-  const branchShort = shortBranchName(session?.branch)
+  const isWorkspace = session?.workspaceMode === 'workspace'
+  const branchShort = shortBranchName(isWorkspace ? '' : (session?.branch ?? ''))
   const canContinue = isDone && !!session?.runnerSessionId && !isMerged && !session?.parentSessionId
   const isWaiting   = (session?.status as string) === 'waiting'
 
@@ -667,7 +670,7 @@ export default function SessionPage() {
             {session?.reviewVerdict === 'pending' && <span className="chip" style={{ color: 'var(--muted)' }}>Reviewing…</span>}
             {session?.reviewVerdict === 'approved' && <span className="chip" style={{ color: 'var(--green)', background: 'color-mix(in srgb, var(--green) 10%, transparent)' }}>Approved ✓</span>}
             {session?.reviewVerdict === 'changes_requested' && <span className="chip" style={{ color: 'var(--amber)', background: 'color-mix(in srgb, var(--amber) 10%, transparent)' }}>Changes Requested</span>}
-            {isDone && !isMerged && !session?.parentSessionId && <Button size="sm" onClick={() => merge.mutate()} disabled={merge.isPending}>{merge.isPending ? '…' : 'Merge ✓'}</Button>}
+            {isDone && !isMerged && !session?.parentSessionId && <Button size="sm" onClick={() => merge.mutate()} disabled={merge.isPending}>{merge.isPending ? '…' : isWorkspace ? 'Complete ✓' : 'Merge ✓'}</Button>}
             {!isMerged && (
               <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-destructive"
                 onClick={() => discard.mutate()} disabled={discard.isPending}
@@ -684,10 +687,7 @@ export default function SessionPage() {
               className={`proj-tab ${activeTab === t ? 'active' : ''}`}
               style={{ textTransform: 'capitalize' }}
             >
-              {t}
-              {t === 'diff' && diff && (
-                <span className="ml-1.5 text-[10px] font-mono text-primary bg-primary/10 rounded px-1 py-0.5">ready</span>
-              )}
+              {t === 'diff' && isWorkspace ? 'files' : t}
             </button>
           ))}
           {(session?.journal || isLiveStatus(session?.status)) && (
@@ -697,11 +697,6 @@ export default function SessionPage() {
               style={{ textTransform: 'capitalize' }}
             >
               {session?.parentSessionId ? 'review' : 'journal'}
-              {isLiveStatus(session?.status) && session?.journal && (
-                <span className="ml-1.5 inline-flex items-center gap-1 text-[10px] font-mono" style={{ color: 'var(--green)' }}>
-                  <span className="dot green pulse" style={{ width: 5, height: 5 }} />live
-                </span>
-              )}
             </button>
           )}
         </div>
@@ -766,7 +761,7 @@ export default function SessionPage() {
               : <p className="text-xs font-mono text-muted-foreground">Agent hasn't written anything yet…</p>
           ) : activeTab === 'diff' ? (
             diffLoading
-              ? <p className="text-xs font-mono text-muted-foreground">loading diff…</p>
+              ? <p className="text-xs font-mono text-muted-foreground">loading…</p>
               : diffError
               ? (
                 <div className="rounded-lg border border-border/60 bg-card px-4 py-3">
@@ -774,6 +769,8 @@ export default function SessionPage() {
                   <p className="text-xs text-muted-foreground mt-1">{diffError}</p>
                 </div>
               )
+              : diffIsText
+              ? <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, lineHeight: 1.8, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'var(--ink-2)' }}>{diff}</div>
               : <ColoredDiff raw={diff ?? ''} />
           ) : hasTurns ? (
             /* Turn timeline */
@@ -805,14 +802,14 @@ export default function SessionPage() {
         </div>
       </div>
 
-      {/* Merged banner */}
+      {/* Merged / Completed banner */}
       {isMerged && (
         <div className="border-t border-green-500/20 bg-green-500/5 px-6 py-3.5 flex items-center gap-3 flex-wrap">
-          <span className="text-sm font-semibold text-green-500">Merged ✓</span>
+          <span className="text-sm font-semibold text-green-500">{isWorkspace ? 'Completed ✓' : 'Merged ✓'}</span>
           <div className="flex-1" />
-          {project?.remoteUrl && !pushed && <Button size="sm" onClick={() => push.mutate()} disabled={push.isPending}>{push.isPending ? '…' : 'Push to remote'}</Button>}
-          {project?.remoteUrl && pushed && <span className="text-sm font-semibold text-primary">Pushed ✓</span>}
-          {project?.localPath && <CopyCommand text={`git -C ${project.localPath} pull ${project.repoPath} main`} />}
+          {!isWorkspace && project?.remoteUrl && !pushed && <Button size="sm" onClick={() => push.mutate()} disabled={push.isPending}>{push.isPending ? '…' : 'Push to remote'}</Button>}
+          {!isWorkspace && project?.remoteUrl && pushed && <span className="text-sm font-semibold text-primary">Pushed ✓</span>}
+          {!isWorkspace && project?.localPath && <CopyCommand text={`git -C ${project.localPath} pull ${project.repoPath} main`} />}
           {push.isError && <span className="text-sm text-destructive">{push.error?.message}</span>}
           <Button size="sm" variant="outline" onClick={() => navigate(`/projects/${project?.id ?? ''}`)}>← Board</Button>
         </div>

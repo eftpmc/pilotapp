@@ -6,7 +6,7 @@ import fsSync from 'fs';
 import { spawn, type ChildProcess } from 'child_process';
 import { z } from 'zod';
 import { db } from '../db';
-import { initRepo, cloneRepo, importLocalRepo, pushToRemote } from '../services/git';
+import { initRepo, cloneRepo, importLocalRepo, pushToRemote, listFilesRecursive } from '../services/git';
 import simpleGit from 'simple-git';
 import { authMiddleware, userId } from '../middleware/auth';
 
@@ -55,18 +55,19 @@ const URL_RE = /(https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0):\d+[^\s]*)/i;
 interface Row {
   id: string; user_id: string; name: string; repo_path: string; role: string;
   remote_url: string | null; github_token: string | null; local_path: string | null;
-  created_at: string;
+  workspace_mode: string; created_at: string;
 }
 
 function toProject(row: Row | Record<string, unknown>) {
   return {
-    id:         row.id,
-    name:       row.name,
-    repoPath:   row.repo_path,
-    role:       row.role,
-    remoteUrl:  row.remote_url  ?? undefined,
-    localPath:  row.local_path  ?? undefined,
-    createdAt:  row.created_at,
+    id:            row.id,
+    name:          row.name,
+    repoPath:      row.repo_path,
+    role:          row.role,
+    workspaceMode: (row.workspace_mode ?? 'git') as 'git' | 'workspace',
+    remoteUrl:     row.remote_url  ?? undefined,
+    localPath:     row.local_path  ?? undefined,
+    createdAt:     row.created_at,
   };
 }
 
@@ -222,46 +223,53 @@ const CreateSchema = z.object({
   githubCloneUrl: z.string().url().optional(),
   githubToken:    z.string().optional(),
   localPath:      z.string().optional(),
+  workspaceMode:  z.enum(['git', 'workspace']).default('git'),
 });
 
 router.post('/', async (req: Request, res: Response) => {
   const parsed = CreateSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
 
-  const { name, githubCloneUrl, githubToken, localPath } = parsed.data;
+  const { name, githubCloneUrl, githubToken, localPath, workspaceMode } = parsed.data;
   const id       = uuid();
   const repoPath = path.join(DATA_DIR, 'repos', userId(req), id);
 
   const row = {
     id,
-    user_id:      userId(req),
+    user_id:        userId(req),
     name,
-    repo_path:    repoPath,
-    role:         'any',
-    remote_url:   githubCloneUrl ?? null,
-    github_token: githubToken    ?? null,
-    local_path:   localPath      ?? null,
-    created_at:   new Date().toISOString(),
+    repo_path:      repoPath,
+    role:           'any',
+    workspace_mode: workspaceMode,
+    remote_url:     githubCloneUrl ?? null,
+    github_token:   githubToken    ?? null,
+    local_path:     localPath      ?? null,
+    created_at:     new Date().toISOString(),
   };
 
-  const projectObj = { id, name, repoPath, role: 'any' as any, createdAt: row.created_at };
+  const projectObj = { id, name, repoPath, role: 'any' as any, workspaceMode, createdAt: row.created_at };
 
   try {
-    if (githubCloneUrl && githubToken) {
-      await cloneRepo(projectObj, githubCloneUrl, githubToken);
-    } else if (localPath) {
-      await importLocalRepo(projectObj, localPath);
+    if (workspaceMode === 'git') {
+      if (githubCloneUrl && githubToken) {
+        await cloneRepo(projectObj, githubCloneUrl, githubToken);
+      } else if (localPath) {
+        await importLocalRepo(projectObj, localPath);
+      } else {
+        await initRepo(projectObj);
+      }
     } else {
-      await initRepo(projectObj);
+      // Workspace projects: just create a directory — no git repo
+      await fs.mkdir(repoPath, { recursive: true });
     }
   } catch (err: any) {
-    res.status(400).json({ error: err.message ?? 'Failed to set up repository' });
+    res.status(400).json({ error: err.message ?? 'Failed to set up project' });
     return;
   }
 
   db.prepare(
-    'INSERT INTO projects (id, user_id, name, repo_path, role, remote_url, github_token, local_path, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(row.id, row.user_id, row.name, row.repo_path, row.role, row.remote_url, row.github_token, row.local_path, row.created_at);
+    'INSERT INTO projects (id, user_id, name, repo_path, role, workspace_mode, remote_url, github_token, local_path, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(row.id, row.user_id, row.name, row.repo_path, row.role, row.workspace_mode, row.remote_url, row.github_token, row.local_path, row.created_at);
 
   res.status(201).json(toProject(row));
 });
@@ -430,12 +438,20 @@ router.post('/:id/app/stop', (req: Request, res: Response) => {
 });
 
 // ---------------------------------------------------------------------------
-// GET /projects/:id/files — list files from main branch
+// GET /projects/:id/files — list files from main branch (git) or merged sessions (workspace)
 // ---------------------------------------------------------------------------
 
 router.get('/:id/files', async (req: Request, res: Response) => {
-  const row = db.prepare('SELECT repo_path FROM projects WHERE id = ? AND user_id = ?').get(req.params.id, userId(req)) as { repo_path: string } | undefined;
+  const row = db.prepare('SELECT repo_path, workspace_mode FROM projects WHERE id = ? AND user_id = ?').get(req.params.id, userId(req)) as { repo_path: string; workspace_mode: string } | undefined;
   if (!row) { res.status(404).json({ error: 'Not found' }); return; }
+
+  if ((row.workspace_mode ?? 'git') === 'workspace') {
+    const wsDir = path.join(DATA_DIR, 'workspaces', String(req.params.id));
+    const files = await listFilesRecursive(wsDir).catch(() => [] as string[]);
+    res.json({ files });
+    return;
+  }
+
   try {
     const out = await simpleGit(row.repo_path).raw(['ls-tree', '-r', '--name-only', 'main']);
     res.json({ files: out.trim().split('\n').filter(Boolean) });
@@ -450,8 +466,19 @@ router.get('/:id/files', async (req: Request, res: Response) => {
 
 router.get('/:id/file', async (req: Request, res: Response) => {
   const filePath = req.query.path as string | undefined;
-  const row = db.prepare('SELECT repo_path FROM projects WHERE id = ? AND user_id = ?').get(req.params.id, userId(req)) as { repo_path: string } | undefined;
+  const row = db.prepare('SELECT repo_path, workspace_mode FROM projects WHERE id = ? AND user_id = ?').get(req.params.id, userId(req)) as { repo_path: string; workspace_mode: string } | undefined;
   if (!row || !filePath) { res.status(400).json({ error: 'Missing path' }); return; }
+
+  if ((row.workspace_mode ?? 'git') === 'workspace') {
+    try {
+      const content = await fs.readFile(path.join(DATA_DIR, 'workspaces', String(req.params.id), filePath), 'utf-8');
+      res.json({ content });
+    } catch {
+      res.status(404).json({ error: 'File not found' });
+    }
+    return;
+  }
+
   try {
     const content = await simpleGit(row.repo_path).raw(['show', `main:${filePath}`]);
     res.json({ content });

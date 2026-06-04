@@ -65,12 +65,6 @@ router.post('/', (req: Request, res: Response) => {
     | { id: string; type: string } | undefined;
   if (!connection) { res.status(404).json({ error: 'Connection not found' }); return; }
 
-  // Lead agents must use Claude
-  if (parsed.data.role === 'lead' && connection.type !== 'claude') {
-    res.status(400).json({ error: 'Lead agents must use a Claude connection (MCP requires Claude Code)' });
-    return;
-  }
-
   // One lead per department
   if (parsed.data.role === 'lead' && parsed.data.departmentId) {
     const existing = db.prepare(
@@ -129,16 +123,8 @@ router.patch('/:id', (req: Request, res: Response) => {
     : undefined;
   if (parsed.data.connectionId && !connection) { res.status(404).json({ error: 'Connection not found' }); return; }
 
-  // Lead requires Claude
-  const newRole = parsed.data.role;
-  const effectiveProvider = connection?.type ?? row.provider;
-  if ((newRole ?? row.role) === 'lead' && effectiveProvider !== 'claude') {
-    res.status(400).json({ error: 'Lead agents must use a Claude connection' });
-    return;
-  }
-
   // One lead per department (check when promoting to lead or moving to a new department)
-  const effectiveRole  = newRole ?? row.role;
+  const effectiveRole  = parsed.data.role ?? row.role;
   const effectiveDept  = parsed.data.departmentId !== undefined ? parsed.data.departmentId : row.department_id;
   if (effectiveRole === 'lead' && effectiveDept) {
     const existing = db.prepare(

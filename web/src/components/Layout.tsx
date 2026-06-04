@@ -380,11 +380,8 @@ export default function Layout() {
         <div className="sidebar-brand">
           <button className="wordmark" onClick={() => navigate('/')}>
             <span className="pilot-mark">p</span>
-            {workspaceName || 'pilot'}
+            pilot
           </button>
-          {workspaceName && (
-            <span className="sidebar-workspace-label">pilot</span>
-          )}
         </div>
 
         <nav className="sidebar-nav">

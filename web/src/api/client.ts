@@ -15,8 +15,11 @@ export interface Connection {
   hasKey: boolean; quotaStatus: 'ok' | 'exceeded';
   createdAt: string;
 }
+export type WorkspaceMode = 'git' | 'workspace';
+
 export interface Project {
   id: string; name: string; repoPath: string; role: ProjectRole;
+  workspaceMode: WorkspaceMode;
   remoteUrl?: string; localPath?: string; createdAt: string;
 }
 export interface Agent {
@@ -26,8 +29,8 @@ export interface Agent {
 }
 export interface Task {
   id: string; projectId: string; title: string; prompt: string;
-  baseBranch: string; status: TaskStatus; priority: number;
-  size: TaskSize; agentId?: string; sessionId?: string;
+  status: TaskStatus; priority: number;
+  size: TaskSize; attachedFiles: string[]; agentId?: string; sessionId?: string;
   leadSessionId?: string; dependsOn?: string[];
   createdAt: string; startedAt?: string; completedAt?: string;
 }
@@ -36,7 +39,9 @@ export interface Session {
   parentSessionId?: string; reviewVerdict?: string; journal?: string;
   runnerSessionId?: string;
   inputTokens?: number; outputTokens?: number; cacheReadTokens?: number; totalCostUsd?: number;
-  provider: AgentProvider; branch: string; worktreePath: string;
+  provider: AgentProvider; workspaceMode: WorkspaceMode; workDir: string;
+  /** @deprecated internal — use workDir */
+  branch?: string;
   status: SessionStatus; createdAt: string;
 }
 
@@ -215,7 +220,7 @@ export const auth = {
 
 export const projects = {
   list:   () => req<Project[]>('/projects'),
-  create: (body: { name: string; githubCloneUrl?: string; githubToken?: string; localPath?: string }) =>
+  create: (body: { name: string; githubCloneUrl?: string; githubToken?: string; localPath?: string; workspaceMode?: WorkspaceMode }) =>
     req<Project>('/projects', { method: 'POST', body: JSON.stringify(body) }),
   update: (id: string, body: { name?: string; remoteUrl?: string; githubToken?: string }) =>
     req<Project>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
@@ -261,10 +266,21 @@ export const tasks = {
     const qs = new URLSearchParams(params as Record<string, string>).toString();
     return req<Task[]>(`/tasks${qs ? `?${qs}` : ''}`);
   },
-  create: (body: { projectId: string; title: string; prompt: string; baseBranch?: string; size?: TaskSize }) =>
+  create: (body: { projectId: string; title: string; prompt: string; size?: TaskSize }) =>
     req<Task>('/tasks', { method: 'POST', body: JSON.stringify(body) }),
-  update: (id: string, body: { title?: string; prompt?: string; baseBranch?: string; priority?: number; size?: TaskSize }) =>
+  update: (id: string, body: { title?: string; prompt?: string; priority?: number; size?: TaskSize }) =>
     req<Task>(`/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  uploadFiles: (id: string, files: File[]) => {
+    const token = localStorage.getItem('token');
+    const form = new FormData();
+    files.forEach(f => form.append('files', f));
+    return fetch(`/tasks/${id}/files`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: form,
+    }).then(r => r.json() as Promise<{ files: string[] }>);
+  },
+  removeFile: (id: string, filename: string) => req<{ files: string[] }>(`/tasks/${id}/files/${encodeURIComponent(filename)}`, { method: 'DELETE' }),
   delete: (id: string) => req<void>(`/tasks/${id}`, { method: 'DELETE' }),
   assign: (taskId: string, agentId: string) =>
     req<{ task: Task; session: Session }>(`/tasks/${taskId}/assign`, { method: 'POST', body: JSON.stringify({ agentId }) }),
@@ -281,7 +297,7 @@ export const sessions = {
     return req<Session[]>(`/sessions${qs ? `?${qs}` : ''}`);
   },
   get:    (id: string) => req<Session>(`/sessions/${id}`),
-  create: (body: { agentId: string; projectId: string; baseBranch?: string }) =>
+  create: (body: { agentId: string; projectId: string }) =>
     req<Session>('/sessions', { method: 'POST', body: JSON.stringify(body) }),
   diff:          (id: string) => req<{ diff: string; unavailableReason?: string }>(`/sessions/${id}/diff`),
   merge:         (id: string) => req<{ merged: boolean }>(`/sessions/${id}/merge`, { method: 'POST' }),

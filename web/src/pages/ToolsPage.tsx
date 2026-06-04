@@ -10,8 +10,8 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import {
-  Globe, GitBranch, Brain, Wrench, Zap, Plus, Pencil, Trash2, Users,
-  Search, Monitor, BookMarked, MessageSquare, Database, AlertCircle, Code2,
+  Globe, Brain, Wrench, Plus, Pencil, Trash2, Users,
+  BookMarked, Server,
 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -21,7 +21,7 @@ import {
 interface Preset {
   id:          string
   name:        string
-  icon:        React.ElementType
+  icon?:       React.ElementType
   tagline:     string
   description: string
   mcpConfig:   Record<string, unknown>
@@ -41,7 +41,6 @@ const PRESETS: Preset[] = [
   {
     id: 'brave-search',
     name: 'Brave Search',
-    icon: Search,
     tagline: 'Web search',
     description: 'Search the web via Brave Search API. Better than fetch for discovery tasks.',
     mcpConfig: {
@@ -56,7 +55,6 @@ const PRESETS: Preset[] = [
   {
     id: 'github',
     name: 'GitHub',
-    icon: GitBranch,
     tagline: 'Issues, PRs, repos',
     description: 'Read and write issues, pull requests, and repository content.',
     mcpConfig: {
@@ -71,7 +69,6 @@ const PRESETS: Preset[] = [
   {
     id: 'gitlab',
     name: 'GitLab',
-    icon: Code2,
     tagline: 'Issues, MRs, repos',
     description: 'Read and write GitLab issues, merge requests, and repository content.',
     mcpConfig: {
@@ -104,7 +101,6 @@ const PRESETS: Preset[] = [
   {
     id: 'postgres',
     name: 'PostgreSQL',
-    icon: Database,
     tagline: 'Database queries',
     description: 'Read-only access to a Postgres database. Agents can query schema and run SELECTs.',
     mcpConfig: {
@@ -119,7 +115,6 @@ const PRESETS: Preset[] = [
   {
     id: 'puppeteer',
     name: 'Puppeteer',
-    icon: Monitor,
     tagline: 'Browser automation',
     description: 'Control a real browser — navigate pages, click, fill forms, take screenshots.',
     mcpConfig: { puppeteer: { command: 'npx', args: ['-y', '@modelcontextprotocol/server-puppeteer'] } },
@@ -128,7 +123,6 @@ const PRESETS: Preset[] = [
   {
     id: 'slack',
     name: 'Slack',
-    icon: MessageSquare,
     tagline: 'Messaging',
     description: 'Read channels and post messages to Slack workspaces.',
     mcpConfig: {
@@ -146,7 +140,6 @@ const PRESETS: Preset[] = [
   {
     id: 'sentry',
     name: 'Sentry',
-    icon: AlertCircle,
     tagline: 'Error monitoring',
     description: 'Query Sentry for errors, issues, and stack traces to help agents debug.',
     mcpConfig: {
@@ -160,7 +153,6 @@ const PRESETS: Preset[] = [
   {
     id: 'linear',
     name: 'Linear',
-    icon: Zap,
     tagline: 'Issues & projects',
     description: 'Read and create Linear issues, projects, and cycles.',
     mcpConfig: {
@@ -171,6 +163,74 @@ const PRESETS: Preset[] = [
       },
     },
     envVars: [{ key: 'LINEAR_API_KEY', label: 'API Key', placeholder: 'lin_api_...' }],
+  },
+  {
+    id: 'playwright',
+    name: 'Playwright',
+    tagline: 'Browser automation',
+    description: 'Automate browsers with Playwright — navigate, click, fill forms, take screenshots. More reliable than Puppeteer for modern sites.',
+    mcpConfig: { playwright: { command: 'npx', args: ['-y', '@executeautomation/playwright-mcp-server'] } },
+    envVars: [],
+  },
+  {
+    id: 'cloudflare',
+    name: 'Cloudflare',
+    tagline: 'Edge & workers',
+    description: 'Manage Workers, KV, D1 databases, R2, and DNS. Lets agents deploy and inspect edge resources.',
+    mcpConfig: {
+      cloudflare: {
+        command: 'npx',
+        args: ['-y', '@cloudflare/mcp-server-cloudflare'],
+        env: { CLOUDFLARE_API_TOKEN: '__TOKEN__', CLOUDFLARE_ACCOUNT_ID: '__TOKEN__' },
+      },
+    },
+    envVars: [
+      { key: 'CLOUDFLARE_API_TOKEN', label: 'API Token', placeholder: 'cf...' },
+      { key: 'CLOUDFLARE_ACCOUNT_ID', label: 'Account ID', placeholder: 'abc123...' },
+    ],
+  },
+  {
+    id: 'stripe',
+    name: 'Stripe',
+    tagline: 'Payments & billing',
+    description: 'Query customers, subscriptions, invoices, and payment intents. Useful for debugging billing issues.',
+    mcpConfig: {
+      stripe: {
+        command: 'npx',
+        args: ['-y', '@stripe/mcp-server'],
+        env: { STRIPE_SECRET_KEY: '__TOKEN__' },
+      },
+    },
+    envVars: [{ key: 'STRIPE_SECRET_KEY', label: 'Secret Key', placeholder: 'sk_...' }],
+  },
+  {
+    id: 'resend',
+    name: 'Resend',
+    tagline: 'Transactional email',
+    description: 'Send and manage transactional emails. Lets agents notify or communicate during workflows.',
+    mcpConfig: {
+      resend: {
+        command: 'npx',
+        args: ['-y', 'resend-mcp'],
+        env: { RESEND_API_KEY: '__TOKEN__' },
+      },
+    },
+    envVars: [{ key: 'RESEND_API_KEY', label: 'API Key', placeholder: 're_...' }],
+  },
+  {
+    id: 'supabase',
+    name: 'Supabase',
+    icon: Server,
+    tagline: 'Database & backend',
+    description: 'Query and manage your Supabase project — tables, auth, storage, and edge functions.',
+    mcpConfig: {
+      supabase: {
+        command: 'npx',
+        args: ['-y', '@supabase/mcp-server-supabase'],
+        env: { SUPABASE_ACCESS_TOKEN: '__TOKEN__' },
+      },
+    },
+    envVars: [{ key: 'SUPABASE_ACCESS_TOKEN', label: 'Access Token', placeholder: 'sbp_...' }],
   },
 ]
 
@@ -420,9 +480,11 @@ function PresetRow({ preset, installedTool, onAdd }: { preset: Preset; installed
       'flex items-center gap-4 px-4 py-3.5 rounded-xl border transition-colors group',
       installed ? 'border-border/40 bg-muted/20 opacity-75' : 'border-transparent hover:border-border/60 hover:bg-muted/30'
     )}>
-      <div className="w-8 h-8 rounded-lg bg-muted/70 flex items-center justify-center shrink-0">
-        <Icon className="h-4 w-4 text-foreground/70" />
-      </div>
+      {Icon && (
+        <div className="w-8 h-8 rounded-lg bg-muted/70 flex items-center justify-center shrink-0">
+          <Icon className="h-4 w-4 text-foreground/70" />
+        </div>
+      )}
       <div className="flex-1 min-w-0">
         <div className="flex items-baseline gap-2">
           <span className="text-sm font-medium text-foreground">{preset.name}</span>

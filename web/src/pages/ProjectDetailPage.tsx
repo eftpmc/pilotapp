@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { tasks, agents, sessions, projects, connections } from '../api/client'
+import { FileDropzone } from '@/components/FileDropzone'
 import type { Task, Agent, Session, TaskSize } from '../api/client'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -62,7 +63,7 @@ export default function ProjectDetailPage() {
   const { data: agentList      = [] } = useQuery({ queryKey: ['agents'],            queryFn: () => agents.list() })
   const { data: sessionList    = [] } = useQuery({ queryKey: ['sessions', projectId], queryFn: () => sessions.list({ projectId }), refetchInterval: 4000 })
   const { data: projectList    = [] } = useQuery({ queryKey: ['projects'],             queryFn: () => projects.list() })
-  const { data: connectionList = [] } = useQuery({ queryKey: ['connections'],               queryFn: () => connections.list() })
+  const { data: connectionList = [] } = useQuery({ queryKey: ['connections'], queryFn: () => connections.list(), refetchInterval: 10000 })
 
   const project   = projectList.find(p => p.id === projectId)
 
@@ -197,6 +198,9 @@ export default function ProjectDetailPage() {
                       </div>
                     )}
                   </div>
+                  {task.attachedFiles?.length > 0 && (
+                    <span className="chip mono" title={task.attachedFiles.join(', ')}>📎 {task.attachedFiles.length}</span>
+                  )}
                   {task.size && (
                     <span className="chip mono">{task.size}</span>
                   )}
@@ -229,7 +233,7 @@ export default function ProjectDetailPage() {
                     <span className="dot green pulse" />
                     <AgentAvatar agent={agent} size={26} running />
                     <div className="row-main">
-                      <div className="row-title">{task?.title ?? s.branch}</div>
+                      <div className="row-title">{task?.title ?? 'Session'}</div>
                       <div className="row-meta"><span>{agent?.name ?? '—'}</span></div>
                     </div>
                     {s.status === 'running' && <ElapsedTimer createdAt={s.createdAt} />}
@@ -263,7 +267,7 @@ export default function ProjectDetailPage() {
                     <AgentAvatar agent={agent} size={28} />
                     <button className="row-main" style={{ textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', padding: 0, minWidth: 0 }}
                       onClick={() => navigate(`/sessions/${s.id}`)}>
-                      <div className="row-title">{task?.title ?? s.branch}</div>
+                      <div className="row-title">{task?.title ?? 'Session'}</div>
                       <div className="row-meta">
                         <span>{agent?.name ?? '—'}</span>
                         <span className="sep">·</span>
@@ -275,7 +279,11 @@ export default function ProjectDetailPage() {
                         <ReviewerPickerButton agentList={agentList.filter(a => a.id !== s.agentId)}
                           onPick={agentId => requestReview.mutate({ sessionId: s.id, agentId })} />
                       )}
-                      {canMerge && project?.remoteUrl ? (
+                      {canMerge && project?.workspaceMode === 'workspace' ? (
+                        <Button size="sm" variant="primary" onClick={() => mergeSession.mutate(s.id)} disabled={isMerging}>
+                          {isMerging ? '…' : 'Complete ✓'}
+                        </Button>
+                      ) : canMerge && project?.remoteUrl ? (
                         <>
                           <Button size="sm" variant="outline" onClick={() => mergeSession.mutate(s.id)} disabled={isMerging}>
                             {isMerging ? '…' : 'Merge'}
@@ -316,8 +324,11 @@ export default function ProjectDetailPage() {
           projectId={projectId}
           hasIdleAgent={idleAgents.length > 0}
           onClose={() => setShowNew(false)}
-          onCreate={async body => { await tasks.create(body); qc.invalidateQueries({ queryKey: ['tasks', projectId] }); setShowNew(false) }}
-          onCreateAndRun={async body => { await tasks.create(body); await tasks.runQueue(); qc.invalidateQueries({ queryKey: ['tasks', projectId] }); qc.invalidateQueries({ queryKey: ['sessions', projectId] }); setShowNew(false) }}
+          onDone={() => {
+            qc.invalidateQueries({ queryKey: ['tasks', projectId] })
+            qc.invalidateQueries({ queryKey: ['sessions', projectId] })
+            setShowNew(false)
+          }}
         />
       )}
     </div>
@@ -352,23 +363,35 @@ const SIZES: { value: TaskSize; label: string; desc: string }[] = [
   { value: 'xl', label: 'XL', desc: '1d+'  },
 ]
 
-function NewTaskDialog({ projectId, hasIdleAgent, onClose, onCreate, onCreateAndRun }: {
+function NewTaskDialog({ projectId, hasIdleAgent, onClose, onDone }: {
   projectId: string; hasIdleAgent: boolean; onClose: () => void
-  onCreate: (body: { projectId: string; title: string; prompt: string; baseBranch: string; size: TaskSize }) => Promise<void>
-  onCreateAndRun: (body: { projectId: string; title: string; prompt: string; baseBranch: string; size: TaskSize }) => Promise<void>
+  onDone: () => void
 }) {
-  const [title, setTitle]           = useState('')
-  const [prompt, setPrompt]         = useState('')
-  const [baseBranch, setBranch]     = useState('main')
-  const [size, setSize]             = useState<TaskSize>('m')
-  const [loading, setLoading]       = useState(false)
+  const [title, setTitle]          = useState('')
+  const [prompt, setPrompt]        = useState('')
+  const [size, setSize]            = useState<TaskSize>('m')
+  const [pendingFiles, setPending] = useState<File[]>([])
+  const [loading, setLoading]      = useState(false)
   const isValid = title.trim().length > 2
 
-  async function submit(fn: typeof onCreate) {
-    if (!isValid) return
+  function addFiles(incoming: File[]) {
+    setPending(prev => {
+      const names = new Set(prev.map(f => f.name))
+      return [...prev, ...incoming.filter(f => !names.has(f.name))]
+    })
+  }
+
+  async function submit(andRun: boolean) {
+    if (!isValid || loading) return
     setLoading(true)
-    try { await fn({ projectId, title: title.trim(), prompt, baseBranch, size }) }
-    finally { setLoading(false) }
+    try {
+      const task = await tasks.create({ projectId, title: title.trim(), prompt, size })
+      if (pendingFiles.length > 0) {
+        await tasks.uploadFiles(task.id, pendingFiles).catch(() => {})
+      }
+      if (andRun) await tasks.runQueue().catch(() => {})
+      onDone()
+    } finally { setLoading(false) }
   }
 
   return (
@@ -380,38 +403,40 @@ function NewTaskDialog({ projectId, hasIdleAgent, onClose, onCreate, onCreateAnd
             <Label>Title</Label>
             <Input autoFocus value={title} onChange={e => setTitle(e.target.value)}
               placeholder="What should the agent do?"
-              onKeyDown={e => { if (e.key === 'Enter' && isValid) void submit(onCreate) }} />
+              onKeyDown={e => { if (e.key === 'Enter' && isValid) void submit(false) }} />
           </div>
           <div className="field">
             <Label>Prompt <span className="font-normal text-muted-foreground">(optional)</span></Label>
             <Textarea value={prompt} onChange={e => setPrompt(e.target.value)} rows={3}
               placeholder="Additional context, requirements, or constraints…" />
           </div>
-          <div className="flex gap-3">
-            <div className="field flex-1">
-              <Label>Base branch</Label>
-              <Input value={baseBranch} onChange={e => setBranch(e.target.value)} className="font-mono text-xs" />
+          <div className="field">
+            <Label>Size</Label>
+            <div className="flex gap-1">
+              {SIZES.map(s => (
+                <Button key={s.value} size="sm" variant={size === s.value ? 'primary' : 'ghost'}
+                  onClick={() => setSize(s.value)}
+                  className="flex-col gap-0 min-w-[36px] px-2 py-1.5 h-auto">
+                  <span className="text-xs font-semibold">{s.label}</span>
+                  <span className="text-[9px] opacity-70">{s.desc}</span>
+                </Button>
+              ))}
             </div>
-            <div className="field">
-              <Label>Size</Label>
-              <div className="flex gap-1">
-                {SIZES.map(s => (
-                  <Button key={s.value} size="sm" variant={size === s.value ? 'primary' : 'ghost'}
-                    onClick={() => setSize(s.value)}
-                    className="flex-col gap-0 min-w-[36px] px-2 py-1.5 h-auto">
-                    <span className="text-xs font-semibold">{s.label}</span>
-                    <span className="text-[9px] opacity-70">{s.desc}</span>
-                  </Button>
-                ))}
-              </div>
-            </div>
+          </div>
+          <div className="field">
+            <FileDropzone
+              files={pendingFiles.map(f => f.name)}
+              onAdd={addFiles}
+              onRemove={name => setPending(prev => prev.filter(f => f.name !== name))}
+              disabled={loading}
+            />
           </div>
           <div className="flex gap-2 pt-1">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button className="flex-1 justify-center" disabled={!isValid || loading} onClick={() => void submit(onCreate)}>
+            <Button className="flex-1 justify-center" disabled={!isValid || loading} onClick={() => void submit(false)}>
               {loading ? '…' : 'Queue'}
             </Button>
-            <Button variant="primary" className="flex-1 justify-center" disabled={!isValid || loading || !hasIdleAgent} onClick={() => void submit(onCreateAndRun)}>
+            <Button variant="primary" className="flex-1 justify-center" disabled={!isValid || loading || !hasIdleAgent} onClick={() => void submit(true)}>
               {loading ? '…' : 'Dispatch ↗'}
             </Button>
           </div>

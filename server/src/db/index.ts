@@ -279,3 +279,6 @@ migrate('038_character_settings', `
     PRIMARY KEY (part, variant)
   );
 `);
+migrate('039_projects_workspace_mode', "ALTER TABLE projects ADD COLUMN workspace_mode TEXT NOT NULL DEFAULT 'git'");
+migrate('040_sessions_workspace_mode', "ALTER TABLE sessions ADD COLUMN workspace_mode TEXT NOT NULL DEFAULT 'git'");
+migrate('041_tasks_attached_files',    "ALTER TABLE tasks ADD COLUMN attached_files TEXT NOT NULL DEFAULT '[]'");
