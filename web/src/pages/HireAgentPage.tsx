@@ -6,12 +6,13 @@ import { AgentAvatar } from '@/components/AgentAvatar'
 import { ProviderBadge } from '@/components/ProviderBadge'
 import { PersonalityPicker } from '@/components/PersonalityPicker'
 import { Button } from '@/components/ui/button'
+import { ArrowLeft } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ROSTER, PERSONALITY_PRESETS } from '@/lib/agent-constants'
 import { cn } from '@/lib/utils'
-import { ArrowLeft, Dices } from 'lucide-react'
+import { Dices } from 'lucide-react'
 
 function randomSeed() { return Math.random().toString(36).slice(2, 10) }
 
@@ -75,13 +76,10 @@ export default function HireAgentPage() {
       <div className="max-w-[720px] px-6 pt-10 pb-16">
 
         {/* Back */}
-        <button
-          onClick={() => navigate('/agents/hire')}
-          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-8"
-        >
+        <Button variant="ghost" size="sm" onClick={() => navigate('/agents/hire')} className="mb-8 -ml-2 text-muted-foreground">
           <ArrowLeft size={13} />
           Hire an agent
-        </button>
+        </Button>
 
         {/* Hero */}
         <div className="flex items-end gap-5 mb-10">

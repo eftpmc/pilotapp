@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { projects, sessions } from '../api/client'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { ArrowLeft } from 'lucide-react'
 
@@ -34,10 +35,10 @@ export default function ProjectLayout() {
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div className="proj-header">
-        <button className="proj-back" onClick={() => navigate('/projects')}>
+        <Button variant="ghost" size="sm" onClick={() => navigate('/projects')} className="-ml-2 text-muted-foreground">
           <ArrowLeft size={13} />
           Projects
-        </button>
+        </Button>
         <div className="proj-title-row">
           <h1 className="proj-name">{project?.name ?? '…'}</h1>
         </div>

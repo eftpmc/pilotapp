@@ -389,9 +389,10 @@ export default function SessionPage() {
     enabled: !!id,
     refetchInterval: (q) => isLiveStatus(q.state.data?.status) ? 2000 : 3000,
   })
-  const { data: agentList   = [] } = useQuery({ queryKey: ['agents'], queryFn: () => agents.list() })
-  const { data: projectList = [] } = useQuery({ queryKey: ['projects'],  queryFn: () => projects.list() })
-  const { data: taskList    = [] } = useQuery({ queryKey: ['tasks', session?.projectId], queryFn: () => tasks.list({ projectId: session!.projectId }), enabled: !!session?.projectId })
+  const { data: agentList     = [] } = useQuery({ queryKey: ['agents'],   queryFn: () => agents.list() })
+  const { data: projectList   = [] } = useQuery({ queryKey: ['projects'], queryFn: () => projects.list() })
+  const { data: taskList      = [] } = useQuery({ queryKey: ['tasks', session?.projectId], queryFn: () => tasks.list({ projectId: session!.projectId }), enabled: !!session?.projectId })
+  const { data: projectSessions = [] } = useQuery({ queryKey: ['sessions', 'project', session?.projectId], queryFn: () => sessions.list({ projectId: session!.projectId }), enabled: !!session?.projectId, refetchInterval: 5000 })
 
   const agent   = agentList.find(a => a.id === session?.agentId)
   const project = projectList.find(p => p.id === session?.projectId)
@@ -606,6 +607,11 @@ export default function SessionPage() {
   const canContinue = isDone && !!session?.runnerSessionId && !isMerged && !session?.parentSessionId
   const isWaiting   = (session?.status as string) === 'waiting'
 
+  // Lead orchestration
+  const runnerSession  = session?.runnerSessionId ? projectSessions.find(s => s.id === session.runnerSessionId) : undefined
+  const runnerAgent    = runnerSession ? agentList.find(a => a.id === runnerSession.agentId) : undefined
+  const workerSessions = projectSessions.filter(s => s.runnerSessionId === id && s.id !== id)
+
   function submitClarification(clarificationId: string, response: string) {
     if (!response.trim()) return
     const token = localStorage.getItem('token')
@@ -621,10 +627,10 @@ export default function SessionPage() {
 
       {/* Header */}
       <div className="bg-background border-b border-border px-6 pt-5 pb-0">
-        <button onClick={() => navigate(session?.projectId ? `/projects/${session.projectId}` : -1 as never)} className="proj-back mb-4">
+        <Button variant="ghost" size="sm" onClick={() => navigate(session?.projectId ? `/projects/${session.projectId}` : -1 as never)} className="mb-4 -ml-2 text-muted-foreground">
           <ArrowLeft size={13} />
           {project?.name ?? 'Back'}
-        </button>
+        </Button>
 
         <div className="flex items-start gap-3 mb-4 flex-wrap">
           <AgentAvatar agent={agent} size={44} running={activeRunning} />
@@ -700,6 +706,56 @@ export default function SessionPage() {
           )}
         </div>
       </div>
+
+      {/* Orchestration banner — dispatched by a lead */}
+      {runnerSession && runnerAgent && (
+        <div className="border-b border-border/60 bg-muted/20 px-6 py-2.5 flex items-center gap-3">
+          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50 shrink-0">Dispatched by</span>
+          <button
+            onClick={() => navigate(`/sessions/${runnerSession.id}`)}
+            className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+          >
+            <AgentAvatar agent={runnerAgent} size={20} running={runnerSession.status === 'running'} animated={false} />
+            <span className="text-xs font-medium text-foreground">{runnerAgent.name}</span>
+            <span className="text-[10px] font-semibold px-1 py-0.5 rounded" style={{ color: 'var(--ember)', background: 'var(--ember-wash)' }}>Lead</span>
+          </button>
+        </div>
+      )}
+
+      {/* Worker sessions — this is a lead session */}
+      {workerSessions.length > 0 && (
+        <div className="border-b border-border/60 bg-muted/20 px-6 py-3 flex flex-col gap-2">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">
+            Dispatched · {workerSessions.length} worker{workerSessions.length !== 1 ? 's' : ''}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {workerSessions.map(ws => {
+              const wa = agentList.find(a => a.id === ws.agentId)
+              const wt = taskList.find(t => t.id === ws.workTaskId)
+              const isLive = ws.status === 'running'
+              const isDoneWs = ws.status === 'done'
+              const isErrWs = ws.status === 'error'
+              return (
+                <button
+                  key={ws.id}
+                  onClick={() => navigate(`/sessions/${ws.id}`)}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-card border border-border rounded-lg hover:bg-muted/40 transition-colors text-left"
+                >
+                  {isLive && <span className="dot green pulse shrink-0" style={{ width: 6, height: 6 }} />}
+                  <AgentAvatar agent={wa} size={20} running={isLive} animated={false} />
+                  <span className="text-xs font-medium text-foreground max-w-[140px] truncate">
+                    {wa?.name ?? '—'}{wt ? ` · ${wt.title}` : ''}
+                  </span>
+                  <span className={cn(
+                    'text-[10px] font-medium capitalize shrink-0',
+                    isLive ? 'text-[var(--green)]' : isErrWs ? 'text-destructive' : isDoneWs ? 'text-primary' : 'text-muted-foreground'
+                  )}>{ws.status}</span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto bg-muted/30" style={{ minHeight: 0 }}>

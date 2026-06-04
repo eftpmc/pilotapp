@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { agents } from '../api/client'
 import { AgentAvatar } from '@/components/AgentAvatar'
+import { Button } from '@/components/ui/button'
 import { ROSTER } from '@/lib/agent-constants'
 import { ArrowLeft } from 'lucide-react'
 
@@ -16,13 +17,10 @@ export default function HireRosterPage() {
     <div className="flex-1 overflow-y-auto bg-background">
       <div className="max-w-[960px] px-6 pt-10 pb-16">
 
-        <button
-          onClick={() => navigate('/agents')}
-          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-8"
-        >
+        <Button variant="ghost" size="sm" onClick={() => navigate('/agents')} className="mb-8 -ml-2 text-muted-foreground">
           <ArrowLeft size={13} />
           Agents
-        </button>
+        </Button>
 
         <div className="mb-8">
           <h1 className="text-2xl font-semibold tracking-tight">Hire an agent</h1>

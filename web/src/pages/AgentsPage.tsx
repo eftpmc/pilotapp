@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { agents, departments, sessions, tasks } from '../api/client'
-import type { Agent, Department } from '../api/client'
+import type { Agent, Department, Session } from '../api/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -63,10 +63,12 @@ function DepartmentDialog({ open, dept, onClose, onSave, loading, error }: {
 // Agent card
 // ---------------------------------------------------------------------------
 
-function AgentCard({ employee, activeSession, activeTaskTitle, onDelete }: {
+function AgentCard({ employee, activeSession, activeTaskTitle, sessionCount, totalCost, onDelete }: {
   employee: Agent
   activeSession?: { id: string; createdAt: string } | null
   activeTaskTitle?: string
+  sessionCount?: number
+  totalCost?: number
   onDelete: () => void
 }) {
   const navigate = useNavigate()
@@ -97,6 +99,12 @@ function AgentCard({ employee, activeSession, activeTaskTitle, onDelete }: {
             {isActive && activeTaskTitle && (
               <><span className="sep">·</span><span className="text-[var(--green)]">{activeTaskTitle}</span></>
             )}
+            {!isActive && (sessionCount ?? 0) > 0 && (
+              <><span className="sep">·</span><span className="text-xs text-muted-foreground/50">
+                {sessionCount} session{sessionCount !== 1 ? 's' : ''}
+                {(totalCost ?? 0) > 0 && ` · $${totalCost!.toFixed(2)}`}
+              </span></>
+            )}
           </p>
         </div>
         {isActive
@@ -109,8 +117,8 @@ function AgentCard({ employee, activeSession, activeTaskTitle, onDelete }: {
       {confirmDelete && (
         <div className="agent-confirm-panel">
           <span>Delete {employee.name}?</span>
-          <button onClick={() => setConfDel(false)}>Cancel</button>
-          <button onClick={() => { onDelete(); setConfDel(false) }} className="danger">Delete</button>
+          <Button size="sm" variant="ghost" onClick={() => setConfDel(false)}>Cancel</Button>
+          <Button size="sm" variant="destructive" onClick={() => { onDelete(); setConfDel(false) }}>Delete</Button>
         </div>
       )}
     </article>
@@ -124,17 +132,14 @@ function AgentCard({ employee, activeSession, activeTaskTitle, onDelete }: {
 function DepartmentSection({ dept, agentsInDept, sessionList, taskList, mutations, onAddAgent }: {
   dept: Department | null
   agentsInDept: Agent[]
-  sessionList: { agentId: string; status: string; id: string; createdAt: string; workTaskId?: string }[]
+  sessionList: Session[]
   taskList: { id: string; title: string }[]
   mutations: {
     deleteAgent: (id: string) => void
-    editDept: (dept: Department) => void
-    deleteDept: (id: string) => void
   }
   onAddAgent: (deptId?: string) => void
 }) {
-  const [confirmDelDept, setConfirmDelDept] = useState(false)
-
+  const navigate = useNavigate()
   function activeSessionFor(empId: string) {
     return sessionList.find(s => s.agentId === empId && s.status === 'running') ?? null
   }
@@ -142,9 +147,18 @@ function DepartmentSection({ dept, agentsInDept, sessionList, taskList, mutation
     const s = activeSessionFor(empId)
     return s?.workTaskId ? taskList.find(t => t.id === s.workTaskId)?.title : undefined
   }
+  function agentStats(empId: string) {
+    const empSessions = sessionList.filter(s => s.agentId === empId)
+    const cost = empSessions.reduce((sum, s) => sum + (s.totalCostUsd ?? 0), 0)
+    return { count: empSessions.length, cost }
+  }
 
   const isUnassigned = dept === null
   const runningCount = agentsInDept.filter(emp => activeSessionFor(emp.id)).length
+
+  // For named depts: show lead first in a hero slot, then workers
+  const lead    = !isUnassigned ? agentsInDept.find(a => a.role === 'lead')    : undefined
+  const workers = !isUnassigned ? agentsInDept.filter(a => a.role !== 'lead')  : agentsInDept
 
   return (
     <section className="agent-department-section">
@@ -152,7 +166,16 @@ function DepartmentSection({ dept, agentsInDept, sessionList, taskList, mutation
         <div className="agent-department-title">
           {!isUnassigned && <span className="agent-department-dot" style={{ background: dept.color }} />}
           <div className="min-w-0">
-            <h2>{isUnassigned ? 'Unassigned' : dept.name}</h2>
+            {!isUnassigned ? (
+              <button
+                className="text-sm font-semibold text-foreground hover:text-primary transition-colors"
+                onClick={() => navigate(`/departments/${dept.id}`)}
+              >
+                {dept.name}
+              </button>
+            ) : (
+              <h2>Unassigned</h2>
+            )}
             <p>
               {agentsInDept.length} agent{agentsInDept.length !== 1 ? 's' : ''}
               {runningCount > 0 && <> · {runningCount} working</>}
@@ -160,22 +183,15 @@ function DepartmentSection({ dept, agentsInDept, sessionList, taskList, mutation
           </div>
         </div>
         <div className="agent-department-actions">
-          {!isUnassigned && !confirmDelDept && (
-            <>
-              <button onClick={() => mutations.editDept(dept)} className="agent-department-action">Edit</button>
-              <button onClick={() => setConfirmDelDept(true)} className="agent-department-action danger">Delete team</button>
-            </>
+          {!isUnassigned && (
+            <Button size="sm" variant="ghost" onClick={() => navigate(`/departments/${dept.id}`)}>
+              Manage
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            </Button>
           )}
-          {confirmDelDept && (
-            <div className="agent-department-confirm">
-              <span>Delete {dept?.name}?</span>
-              <button onClick={() => setConfirmDelDept(false)}>Cancel</button>
-              <button onClick={() => { mutations.deleteDept(dept!.id); setConfirmDelDept(false) }} className="danger">Delete</button>
-            </div>
+          {isUnassigned && (
+            <Button size="sm" variant="outline" onClick={() => onAddAgent(undefined)}>+ Agent</Button>
           )}
-          <button onClick={() => onAddAgent(dept?.id)} className="agent-add-inline">
-            + Agent{!isUnassigned && dept ? ` to ${dept.name}` : ''}
-          </button>
         </div>
       </div>
 
@@ -185,15 +201,34 @@ function DepartmentSection({ dept, agentsInDept, sessionList, taskList, mutation
             Add the first agent{!isUnassigned && dept ? ` to ${dept.name}` : ''}
           </button>
         ) : (
-          agentsInDept.map(emp => (
-            <AgentCard
-              key={emp.id}
-              employee={emp}
-              activeSession={activeSessionFor(emp.id)}
-              activeTaskTitle={activeTaskFor(emp.id)}
-              onDelete={() => mutations.deleteAgent(emp.id)}
-            />
-          ))
+          <>
+            {/* Lead — full width */}
+            {lead && (
+              <div className="agent-lead-slot">
+                <AgentCard
+                  key={lead.id}
+                  employee={lead}
+                  activeSession={activeSessionFor(lead.id)}
+                  activeTaskTitle={activeTaskFor(lead.id)}
+                  sessionCount={agentStats(lead.id).count}
+                  totalCost={agentStats(lead.id).cost}
+                  onDelete={() => mutations.deleteAgent(lead.id)}
+                />
+              </div>
+            )}
+            {/* Workers — flow in the same grid */}
+            {workers.map(emp => (
+              <AgentCard
+                key={emp.id}
+                employee={emp}
+                activeSession={activeSessionFor(emp.id)}
+                activeTaskTitle={activeTaskFor(emp.id)}
+                sessionCount={agentStats(emp.id).count}
+                totalCost={agentStats(emp.id).cost}
+                onDelete={() => mutations.deleteAgent(emp.id)}
+              />
+            ))}
+          </>
         )}
       </div>
     </section>
@@ -227,15 +262,9 @@ export default function AgentsPage() {
     mutationFn: ({ id, body }: { id: string; body: Parameters<typeof departments.update>[1] }) => departments.update(id, body),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['departments'] }); setDeptDialog({ open: false }) },
   })
-  const deleteDept = useMutation({
-    mutationFn: (id: string) => departments.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['departments'] }),
-  })
 
   const mutations = {
     deleteAgent: (id: string) => deleteAgent.mutate(id),
-    editDept:    (dept: Department) => setDeptDialog({ open: true, dept }),
-    deleteDept:  (id: string) => deleteDept.mutate(id),
   }
 
   const busyCount = employeeList.filter(e => sessionList.some(s => s.agentId === e.id && s.status === 'running')).length

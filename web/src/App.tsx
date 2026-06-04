@@ -24,6 +24,7 @@ import ToolsPage from './pages/ToolsPage'
 import AdminUsersPage from './pages/AdminUsersPage'
 import AdminServerPage from './pages/AdminServerPage'
 import AdminCharactersPage from './pages/AdminCharactersPage'
+import DepartmentPage from './pages/DepartmentPage'
 
 const qc = new QueryClient({ defaultOptions: { queries: { staleTime: 10_000 } } })
 
@@ -63,6 +64,7 @@ export default function App() {
             <Route path="agents/hire"         element={<HireRosterPage />} />
             <Route path="agents/hire/:presetId" element={<HireAgentPage />} />
             <Route path="agents/:id"          element={<AgentPage />} />
+            <Route path="departments/:id"     element={<DepartmentPage />} />
             <Route path="projects"      element={<ProjectsPage />} />
             <Route path="knowledge"     element={<KnowledgePage />} />
             <Route path="tools"         element={<ToolsPage />} />

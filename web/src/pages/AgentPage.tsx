@@ -137,13 +137,10 @@ export default function AgentPage() {
       <div className="max-w-[960px] px-6 pt-10 pb-16">
 
         {/* Back */}
-        <button
-          onClick={() => navigate('/agents')}
-          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-8"
-        >
+        <Button variant="ghost" size="sm" onClick={() => navigate('/agents')} className="mb-8 -ml-2 text-muted-foreground">
           <ArrowLeft size={13} />
           Agents
-        </button>
+        </Button>
 
         {/* ── Hero ── */}
         <div className="flex items-end gap-5 mb-10">
@@ -184,20 +181,14 @@ export default function AgentPage() {
               : <span className="text-xs text-muted-foreground">Idle</span>
             }
             {!editing ? (
-              <button
-                onClick={() => setEditing(true)}
-                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-md hover:bg-muted/40"
-              >
+              <Button variant="ghost" size="sm" onClick={() => setEditing(true)} className="text-muted-foreground">
                 <Pencil size={12} />
                 Edit
-              </button>
+              </Button>
             ) : (
-              <button
-                onClick={cancelEdit}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-md hover:bg-muted/40"
-              >
+              <Button variant="ghost" size="sm" onClick={cancelEdit} className="text-muted-foreground">
                 Done
-              </button>
+              </Button>
             )}
           </div>
         </div>
@@ -409,10 +400,7 @@ export default function AgentPage() {
           <section>
             <div className="flex items-center justify-between mb-4">
               <p className="text-xs font-medium text-muted-foreground/50">Knowledge</p>
-              <button
-                onClick={() => setKnDialog({ open: true, doc: undefined })}
-                className="text-xs text-primary hover:underline cursor-pointer"
-              >+ Add</button>
+              <Button variant="ghost" size="sm" onClick={() => setKnDialog({ open: true, doc: undefined })}>+ Add</Button>
             </div>
             {agentDocs.length === 0 ? (
               <p className="text-xs text-muted-foreground">No personal knowledge yet.</p>
@@ -428,10 +416,8 @@ export default function AgentPage() {
                         </span>
                       )}
                     </div>
-                    <button onClick={() => setKnDialog({ open: true, doc })}
-                      className="text-xs text-muted-foreground hover:text-foreground px-1 cursor-pointer shrink-0">edit</button>
-                    <button onClick={() => deleteKnowledge.mutate(doc.id)}
-                      className="text-sm text-muted-foreground hover:text-destructive px-1 cursor-pointer leading-none shrink-0">×</button>
+                    <Button variant="ghost" size="sm" onClick={() => setKnDialog({ open: true, doc })} className="text-muted-foreground h-7 px-2">edit</Button>
+                    <Button variant="ghost" size="icon" onClick={() => deleteKnowledge.mutate(doc.id)} className="text-muted-foreground hover:text-destructive h-7 w-7">×</Button>
                   </div>
                 ))}
               </div>
@@ -480,18 +466,15 @@ export default function AgentPage() {
           {/* ── Danger zone ── */}
           <section className="pt-2 border-t border-border/40">
             {!confirmDelete ? (
-              <button
-                onClick={() => setConfirmDel(true)}
-                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
-              >
+              <Button variant="ghost" size="sm" onClick={() => setConfirmDel(true)} className="text-muted-foreground hover:text-destructive -ml-2">
                 <Trash2 size={12} />
                 Delete {agent.name}
-              </button>
+              </Button>
             ) : (
               <div className="flex flex-wrap items-center gap-3">
-                <span className="text-xs text-foreground">Delete {agent.name}? This can't be undone.</span>
-                <button onClick={() => setConfirmDel(false)} className="text-xs text-muted-foreground hover:text-foreground cursor-pointer">Cancel</button>
-                <button onClick={() => deleteAgent.mutate()} className="text-xs text-destructive font-medium hover:underline cursor-pointer">Delete</button>
+                <span className="text-sm text-foreground">Delete {agent.name}? This can't be undone.</span>
+                <Button variant="ghost" size="sm" onClick={() => setConfirmDel(false)}>Cancel</Button>
+                <Button variant="destructive" size="sm" onClick={() => deleteAgent.mutate()}>Delete</Button>
               </div>
             )}
           </section>

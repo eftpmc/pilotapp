@@ -167,12 +167,12 @@ function ConnectionRow({ connection, agentCount, onUpdate, onDelete, onClearQuot
       </div>
       <div className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2">
         {connection.quotaStatus === 'exceeded' && (
-          <button onClick={onClearQuota} className="flex items-center gap-1 cursor-pointer bg-transparent border-none p-0">
+          <Button variant="ghost" size="sm" onClick={onClearQuota} className="p-0 h-auto hover:bg-transparent">
             <Badge variant="warning" className="text-[10px] gap-1 hover:opacity-80 transition-opacity">
               <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
               Rate limited · clear
             </Badge>
-          </button>
+          </Button>
         )}
         <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground" onClick={() => setEditing(true)}>Edit</Button>
         <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive" onClick={() => setConfirmDelete(true)}>Delete</Button>

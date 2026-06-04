@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { sessions, agents, projects, tasks } from '../api/client'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { sessions, agents, projects, tasks, me } from '../api/client'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useEffect, useRef, useState, useCallback } from 'react'
 import {
@@ -233,6 +234,62 @@ function CommandPalette({ onClose }: { onClose: () => void }) {
   )
 }
 
+// ── Company onboarding ─────────────────────────────────────────────────────────
+
+function CompanyOnboarding({ onDone }: { onDone: (name: string) => void }) {
+  const [name, setName] = useState('')
+  const [loading, setLoading] = useState(false)
+  const qc = useQueryClient()
+
+  const save = useMutation({
+    mutationFn: (n: string) => me.update({ name: n }),
+    onSuccess: (profile) => {
+      qc.setQueryData(['me'], profile)
+      onDone(profile.name)
+    },
+  })
+
+  function submit() {
+    const trimmed = name.trim()
+    if (!trimmed || loading) return
+    save.mutate(trimmed)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background">
+      <div className="w-full max-w-sm px-6 flex flex-col gap-8">
+        <div>
+          <div className="flex items-center gap-2 mb-6">
+            <span className="pilot-mark text-base">p</span>
+            <span className="text-sm font-medium text-muted-foreground">pilot</span>
+          </div>
+          <h1 className="text-2xl font-semibold tracking-tight mb-2">Welcome.</h1>
+          <p className="text-sm text-muted-foreground">What should we call your office?</p>
+        </div>
+        <div className="flex flex-col gap-3">
+          <input
+            autoFocus
+            className="w-full bg-card border border-border rounded-xl px-4 py-3 text-lg font-semibold text-foreground placeholder:text-muted-foreground/40 outline-none focus:border-primary transition-colors"
+            placeholder="e.g. Acme Labs"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') submit() }}
+          />
+          {save.isError && <p className="text-xs text-destructive">{save.error.message}</p>}
+          <Button
+            onClick={submit}
+            disabled={!name.trim() || save.isPending}
+            className="w-full"
+            size="lg"
+          >
+            {save.isPending ? 'Saving…' : 'Get started →'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Layout ─────────────────────────────────────────────────────────────────────
 export default function Layout() {
   const navigate = useNavigate()
@@ -241,6 +298,7 @@ export default function Layout() {
   const [theme, setTheme]     = useState<'light' | 'dark'>(getTheme)
   const [paletteOpen, setPalette] = useState(false)
   const [projectsOpen, setProjectsOpen] = useState(() => localStorage.getItem('pilot.sidebar.projects') !== 'closed')
+  const [onboardingDone, setOnboardingDone] = useState(false)
 
   function toggleTheme() {
     const next = theme === 'dark' ? 'light' : 'dark'
@@ -265,6 +323,8 @@ export default function Layout() {
 
   // Apply saved theme on mount
   useEffect(() => { applyTheme(theme) }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const { data: userProfile } = useQuery({ queryKey: ['me'], queryFn: () => me.profile() })
 
   const { data: sessionList = [] } = useQuery({
     queryKey: ['sessions'],
@@ -307,14 +367,24 @@ export default function Layout() {
     navigate('/login')
   }
 
+  const workspaceName = userProfile?.name ?? ''
+  const showOnboarding = userProfile !== undefined && !workspaceName && !onboardingDone
+
+  if (showOnboarding) {
+    return <CompanyOnboarding onDone={() => setOnboardingDone(true)} />
+  }
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <div className="sidebar-brand">
           <button className="wordmark" onClick={() => navigate('/')}>
             <span className="pilot-mark">p</span>
-            pilot
+            {workspaceName || 'pilot'}
           </button>
+          {workspaceName && (
+            <span className="sidebar-workspace-label">pilot</span>
+          )}
         </div>
 
         <nav className="sidebar-nav">

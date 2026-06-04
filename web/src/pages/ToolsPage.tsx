@@ -345,18 +345,12 @@ function ToolCard({ tool, deptList, deptToolIds, employeeToolIds, onEdit, onDele
           )}
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <button
-            onClick={onEdit}
-            className="h-7 w-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer bg-transparent border-none"
-          >
+          <Button variant="ghost" size="icon" onClick={onEdit} className="h-7 w-7 text-muted-foreground">
             <Pencil className="h-3.5 w-3.5" />
-          </button>
-          <button
-            onClick={() => setConfirmDelete(true)}
-            className="h-7 w-7 flex items-center justify-center rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer bg-transparent border-none"
-          >
+          </Button>
+          <Button variant="ghost" size="icon" onClick={() => setConfirmDelete(true)} className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10">
             <Trash2 className="h-3.5 w-3.5" />
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -438,19 +432,16 @@ function PresetRow({ preset, installedTool, onAdd }: { preset: Preset; installed
           {installed ? `Installed · ${serverCount} server${serverCount !== 1 ? 's' : ''}` : preset.description}
         </p>
       </div>
-      <button
+      <Button
+        variant="outline"
+        size="sm"
         onClick={onAdd}
         disabled={installed}
         title={installed ? `${preset.name} is already installed.` : `Add ${preset.name}`}
-        className={cn(
-          'shrink-0 h-7 px-3 rounded-lg text-xs border transition-colors',
-          installed
-            ? 'text-muted-foreground/60 border-border/40 bg-muted/30 cursor-default'
-            : 'text-muted-foreground border-border/60 hover:border-border hover:text-foreground bg-background cursor-pointer'
-        )}
+        className="shrink-0"
       >
         {installed ? 'Installed' : 'Add'}
-      </button>
+      </Button>
     </div>
   )
 }
