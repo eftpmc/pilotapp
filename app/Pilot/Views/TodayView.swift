@@ -21,13 +21,17 @@ struct TodayView: View {
             .map { $0 }
     }
 
+    private static let isoFull: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter(); f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]; return f
+    }()
+    private static let isoBasic = ISO8601DateFormatter()
+
     private var todayCost: Double {
-        sessions.reduce(0) { sum, s in
+        let now = Date()
+        return sessions.reduce(0) { sum, s in
             guard let cost = s.totalCostUsd else { return sum }
-            let iso = ISO8601DateFormatter()
-            iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            guard let date = iso.date(from: s.createdAt) ?? ISO8601DateFormatter().date(from: s.createdAt) else { return sum }
-            return Date().timeIntervalSince(date) < 86_400 ? sum + cost : sum
+            guard let date = Self.isoFull.date(from: s.createdAt) ?? Self.isoBasic.date(from: s.createdAt) else { return sum }
+            return now.timeIntervalSince(date) < 86_400 ? sum + cost : sum
         }
     }
 
@@ -53,7 +57,7 @@ struct TodayView: View {
                             Text(subtitle)
                                 .font(.system(size: 14))
                                 .foregroundStyle(Color.muted)
-                                .padding(.horizontal, 20)
+                                .padding(.horizontal, 24)
                                 .padding(.top, 4)
 
                             // Onboarding
@@ -117,20 +121,8 @@ struct TodayView: View {
 
     private func sessionSection(title: String, count: Int?, sessions: [Session], accentColor: Color) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 6) {
-                Text(title)
-                    .font(.label)
-                    .foregroundStyle(Color.muted)
-                if let count {
-                    Text("\(count)")
-                        .font(.caption2)
-                        .foregroundStyle(Color.muted)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
-                        .background(Color.panel2, in: Capsule())
-                }
-            }
-            .padding(.horizontal, 20)
+            PilotSectionHeader(title: title, count: count)
+                .padding(.horizontal, 24)
 
             VStack(spacing: 8) {
                 ForEach(sessions) { session in
@@ -144,7 +136,7 @@ struct TodayView: View {
                         )
                     }
                     .buttonStyle(.plain)
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 24)
                 }
             }
         }
@@ -152,47 +144,49 @@ struct TodayView: View {
 
     private var activitySection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Activity")
-                .font(.label)
-                .foregroundStyle(Color.muted)
-                .padding(.horizontal, 20)
+            PilotSectionHeader(title: "Activity")
+                .padding(.horizontal, 24)
 
             VStack(spacing: 0) {
                 ForEach(events.prefix(12)) { event in
                     ActivityRow(event: event)
                 }
             }
-            .background(Color.panel, in: RoundedRectangle(cornerRadius: 12))
-            .padding(.horizontal, 16)
+            .pilotCard(radius: 12)
+            .padding(.horizontal, 24)
         }
     }
 
     private var onboardingSection: some View {
-        VStack(spacing: 8) {
-            ForEach(onboardingSteps, id: \.title) { step in
-                HStack(spacing: 14) {
-                    Text(step.number)
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(Color.ember)
-                        .frame(width: 22, height: 22)
-                        .background(Color.ember.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(step.title)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(Color.ink)
-                        Text(step.desc)
-                            .font(.caption2)
-                            .foregroundStyle(Color.muted)
+        VStack(alignment: .leading, spacing: 10) {
+            PilotSectionHeader(title: "Get started")
+
+            VStack(spacing: 0) {
+                ForEach(Array(onboardingSteps.enumerated()), id: \.element.title) { index, step in
+                    HStack(spacing: 14) {
+                        Text(step.number)
+                            .font(.system(size: 11, weight: .bold))
+                            .foregroundStyle(Color.ember)
+                            .frame(width: 22, height: 22)
+                            .background(Color.ember.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(step.title)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(Color.ink)
+                            Text(step.desc)
+                                .font(.caption2)
+                                .foregroundStyle(Color.muted)
+                        }
+                        Spacer()
                     }
-                    Spacer()
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    if index < onboardingSteps.count - 1 { Divider().background(Color.rule) }
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
-                .background(Color.panel, in: RoundedRectangle(cornerRadius: 10))
-                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.rule, lineWidth: 1))
-                .padding(.horizontal, 16)
             }
+            .pilotCard(radius: 12)
         }
+        .padding(.horizontal, 24)
     }
 
     private let onboardingSteps = [
@@ -271,15 +265,11 @@ private struct SessionCard: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
-        .background(Color.panel, in: RoundedRectangle(cornerRadius: 12))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(
-                    session.statusEnum == .done ? Color(hex: "#C8A04B").opacity(0.25) :
-                    session.statusEnum == .error ? Color.pilotRed.opacity(0.2) :
-                    Color.rule,
-                    lineWidth: 1
-                )
+        .pilotCard(
+            radius: 12,
+            stroke: session.statusEnum == .done ? Color(hex: "#C8A04B").opacity(0.25) :
+                session.statusEnum == .error ? Color.pilotRed.opacity(0.2) :
+                Color.rule
         )
     }
 

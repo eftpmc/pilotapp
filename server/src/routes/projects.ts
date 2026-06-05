@@ -42,6 +42,7 @@ interface ProjectCommand {
   id: string;
   label: string;
   command: string;
+  argv: string[];
   source: string;
 }
 
@@ -75,15 +76,25 @@ function projectWorktreePath(projectId: string) {
   return path.join(DATA_DIR, 'projects', projectId, 'app');
 }
 
+async function getDefaultBranch(repoPath: string): Promise<string> {
+  try {
+    const ref = await simpleGit(repoPath).raw(['symbolic-ref', 'HEAD']);
+    return ref.trim().replace('refs/heads/', '');
+  } catch {
+    return 'main';
+  }
+}
+
 async function ensureProjectWorktree(row: Pick<Row, 'id' | 'repo_path'>): Promise<string> {
   const worktreePath = projectWorktreePath(row.id);
   await fs.mkdir(path.dirname(worktreePath), { recursive: true });
+  const branch = await getDefaultBranch(row.repo_path);
   if (fsSync.existsSync(worktreePath)) {
-    await simpleGit(worktreePath).raw(['reset', '--hard', 'main']).catch(() => undefined);
+    await simpleGit(worktreePath).raw(['reset', '--hard', branch]).catch(() => undefined);
     await simpleGit(worktreePath).raw(['clean', '-fd']).catch(() => undefined);
     return worktreePath;
   }
-  await simpleGit(row.repo_path).raw(['worktree', 'add', '--force', worktreePath, 'main']);
+  await simpleGit(row.repo_path).raw(['worktree', 'add', '--force', worktreePath, branch]);
   return worktreePath;
 }
 
@@ -91,7 +102,11 @@ async function readMainFile(repoPath: string, filePath: string): Promise<string 
   try {
     return await simpleGit(repoPath).raw(['show', `main:${filePath}`]);
   } catch {
-    return null;
+    try {
+      return await fs.readFile(path.join(repoPath, filePath), 'utf-8');
+    } catch {
+      return null;
+    }
   }
 }
 
@@ -118,7 +133,7 @@ function parseMakeTargets(raw: string | null): ProjectCommand[] {
     const target = match?.[1];
     if (!target || target.startsWith('.') || target.includes('%') || seen.has(target)) continue;
     seen.add(target);
-    commands.push({ id: makeCommandId('make', target), label: target, command: `make ${target}`, source: 'Makefile' });
+    commands.push({ id: makeCommandId('make', target), label: target, command: `make ${target}`, argv: ['make', target], source: 'Makefile' });
   }
   return commands;
 }
@@ -132,7 +147,7 @@ function parseJustRecipes(raw: string | null): ProjectCommand[] {
     const recipe = match?.[1];
     if (!recipe || line.startsWith(' ') || line.startsWith('\t') || seen.has(recipe)) continue;
     seen.add(recipe);
-    commands.push({ id: makeCommandId('just', recipe), label: recipe, command: `just ${recipe}`, source: 'justfile' });
+    commands.push({ id: makeCommandId('just', recipe), label: recipe, command: `just ${recipe}`, argv: ['just', recipe], source: 'justfile' });
   }
   return commands;
 }
@@ -147,7 +162,7 @@ function parseTaskfileTasks(raw: string | null): ProjectCommand[] {
     const match = lines[i].match(/^  ([A-Za-z0-9][\w-]*):\s*$/);
     if (match?.[1]) {
       const task = match[1];
-      commands.push({ id: makeCommandId('task', task), label: task, command: `task ${task}`, source: 'Taskfile' });
+      commands.push({ id: makeCommandId('task', task), label: task, command: `task ${task}`, argv: ['task', task], source: 'Taskfile' });
     } else if (/^\S/.test(lines[i])) {
       break;
     }
@@ -161,6 +176,7 @@ async function detectProjectCommands(repoPath: string, files: string[]) {
     id: makeCommandId('npm', label),
     label,
     command: `npm run ${label}`,
+    argv: ['npm', 'run', label],
     source: 'package.json',
   }));
 
@@ -172,10 +188,13 @@ async function detectProjectCommands(repoPath: string, files: string[]) {
   commands.push(...parseTaskfileTasks(await readMainFile(repoPath, 'Taskfile.yaml')));
 
   for (const file of files) {
-    if (/^scripts\/[^/]+\.(sh|bash|zsh|js|ts|py)$/i.test(file)) {
+    if (/^scripts\/[\w.-]+\.(sh|bash|zsh|js|ts|py)$/i.test(file)) {
       const label = file.replace(/^scripts\//, '');
-      const runner = file.endsWith('.py') ? 'python' : file.endsWith('.js') ? 'node' : file.endsWith('.ts') ? 'npx tsx' : 'bash';
-      commands.push({ id: makeCommandId('script', label), label, command: `${runner} ${file}`, source: 'scripts/' });
+      const argv: string[] = file.endsWith('.py') ? ['python', file]
+        : file.endsWith('.js') ? ['node', file]
+        : file.endsWith('.ts') ? ['npx', 'tsx', file]
+        : ['bash', file];
+      commands.push({ id: makeCommandId('script', label), label, command: `${argv[0]} ${file}`, argv, source: 'scripts/' });
     }
   }
 
@@ -223,14 +242,16 @@ const CreateSchema = z.object({
   githubCloneUrl: z.string().url().optional(),
   githubToken:    z.string().optional(),
   localPath:      z.string().optional(),
-  workspaceMode:  z.enum(['git', 'workspace']).default('git'),
+  initGit:        z.boolean().optional(),
 });
 
 router.post('/', async (req: Request, res: Response) => {
   const parsed = CreateSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
 
-  const { name, githubCloneUrl, githubToken, localPath, workspaceMode } = parsed.data;
+  const { name, githubCloneUrl, githubToken, localPath, initGit } = parsed.data;
+  const gitEnabled    = !!(githubCloneUrl || localPath || initGit);
+  const workspaceMode = gitEnabled ? 'git' : 'workspace';
   const id       = uuid();
   const repoPath = path.join(DATA_DIR, 'repos', userId(req), id);
 
@@ -247,10 +268,10 @@ router.post('/', async (req: Request, res: Response) => {
     created_at:     new Date().toISOString(),
   };
 
-  const projectObj = { id, name, repoPath, role: 'any' as any, workspaceMode, createdAt: row.created_at };
+  const projectObj = { id, name, repoPath, role: 'any' as any, workspaceMode: workspaceMode as 'git' | 'workspace', createdAt: row.created_at };
 
   try {
-    if (workspaceMode === 'git') {
+    if (gitEnabled) {
       if (githubCloneUrl && githubToken) {
         await cloneRepo(projectObj, githubCloneUrl, githubToken);
       } else if (localPath) {
@@ -259,7 +280,6 @@ router.post('/', async (req: Request, res: Response) => {
         await initRepo(projectObj);
       }
     } else {
-      // Workspace projects: just create a directory — no git repo
       await fs.mkdir(repoPath, { recursive: true });
     }
   } catch (err: any) {
@@ -334,7 +354,9 @@ router.get('/:id/app-info', async (req: Request, res: Response) => {
   try {
     const out = await simpleGit(row.repo_path).raw(['ls-tree', '-r', '--name-only', 'main']);
     files = out.trim().split('\n').filter(Boolean);
-  } catch { /* empty repo */ }
+  } catch {
+    files = await listFilesRecursive(row.repo_path).catch(() => []);
+  }
 
   const { scripts, commands } = await detectProjectCommands(row.repo_path, files);
   const htmlEntries = files.filter(f => /\.html?$/i.test(f)).sort((a, b) => {
@@ -366,7 +388,9 @@ router.post('/:id/app/start', async (req: Request, res: Response) => {
   try {
     const out = await simpleGit(row.repo_path).raw(['ls-tree', '-r', '--name-only', 'main']);
     files = out.trim().split('\n').filter(Boolean);
-  } catch { /* empty repo */ }
+  } catch {
+    files = await listFilesRecursive(row.repo_path).catch(() => []);
+  }
   const { commands } = await detectProjectCommands(row.repo_path, files);
   const command = commands.find(c => c.id === parsed.data.script) ??
     commands.find(c => c.id === makeCommandId('npm', parsed.data.script));
@@ -383,10 +407,11 @@ router.post('/:id/app/start', async (req: Request, res: Response) => {
   lastApps.delete(row.id);
 
   const cwd = await ensureProjectWorktree(row);
-  const proc = spawn(command.command, [], {
+  const [exe, ...args] = command.argv;
+  const proc = spawn(exe, args, {
     cwd,
     env: { ...process.env, FORCE_COLOR: '0' },
-    shell: true,
+    shell: false,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   const run: ProjectRun = {
@@ -471,7 +496,12 @@ router.get('/:id/file', async (req: Request, res: Response) => {
 
   if ((row.workspace_mode ?? 'git') === 'workspace') {
     try {
-      const content = await fs.readFile(path.join(DATA_DIR, 'workspaces', String(req.params.id), filePath), 'utf-8');
+      const base    = path.resolve(DATA_DIR, 'workspaces', String(req.params.id));
+      const full    = path.resolve(base, filePath);
+      if (!full.startsWith(base + path.sep) && full !== base) {
+        res.status(400).json({ error: 'Invalid path' }); return;
+      }
+      const content = await fs.readFile(full, 'utf-8');
       res.json({ content });
     } catch {
       res.status(404).json({ error: 'File not found' });

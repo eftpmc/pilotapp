@@ -14,25 +14,30 @@ struct AgentAvatar: View {
 
     private var displayName: String { (name ?? agent?.name ?? "").trimmingCharacters(in: .whitespaces) }
     private var hashKey: String { seed ?? agent?.avatarSeed ?? displayName }
+    private var hash: UInt32 { Self.hash(hashKey.isEmpty ? displayName : hashKey) }
 
     private var bg: Color {
         guard !hashKey.isEmpty else { return .panel2 }
-        var h: UInt32 = 5381
-        for s in hashKey.unicodeScalars { h = ((h &<< 5) &+ h) ^ s.value }
-        return Self.palette[Int(h % UInt32(Self.palette.count))]
+        return Self.palette[Int(hash % UInt32(Self.palette.count))]
     }
 
-    private var initial: String { String(displayName.prefix(1)).uppercased() }
     private var cornerRadius: CGFloat { size <= 24 ? 6 : size <= 36 ? 8 : 10 }
+
+    private static func hash(_ str: String) -> UInt32 {
+        var h: UInt32 = 5381
+        for s in str.unicodeScalars { h = ((h &<< 5) &+ h) ^ s.value }
+        return h
+    }
 
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: cornerRadius)
                 .fill(bg)
                 .frame(width: size, height: size)
-            Text(initial)
-                .font(.system(size: size * 0.44, weight: .semibold, design: .rounded))
-                .foregroundStyle(.white)
+
+            SpineAgentAvatarView(seed: hashKey.isEmpty ? displayName : hashKey, size: size, animated: running)
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+                .id(hashKey.isEmpty ? displayName : hashKey)
         }
         .overlay(
             RoundedRectangle(cornerRadius: cornerRadius + 2)

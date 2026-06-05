@@ -34,12 +34,13 @@ interface TaskRow    { id: string; prompt: string; status: string; base_branch: 
 // ---------------------------------------------------------------------------
 
 router.get('/', (req: Request, res: Response) => {
-  const { projectId, agentId } = req.query;
+  const { projectId, agentId, limit: limitParam } = req.query;
+  const limit = Math.min(Number(limitParam) || 200, 500);
   let sql = 'SELECT * FROM sessions WHERE user_id = ?';
   const params: unknown[] = [userId(req)];
   if (projectId) { sql += ' AND project_id = ?'; params.push(projectId); }
   if (agentId)   { sql += ' AND agent_id = ?';   params.push(agentId); }
-  sql += ' ORDER BY created_at DESC';
+  sql += ` ORDER BY created_at DESC LIMIT ${limit}`;
   const rows = db.prepare(sql).all(...params) as SessionRow[];
   res.json(rows.map(toSession));
 });

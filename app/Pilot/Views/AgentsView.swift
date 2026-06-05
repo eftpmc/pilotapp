@@ -14,27 +14,21 @@ struct AgentsView: View {
                 if isLoading && agents.isEmpty {
                     ProgressView().tint(Color.ember)
                 } else if agents.isEmpty {
-                    VStack(spacing: 10) {
-                        Image(systemName: "person.2.slash")
-                            .font(.system(size: 36))
-                            .foregroundStyle(Color.muted)
-                        Text("No agents yet")
-                            .font(.footnote)
-                            .foregroundStyle(Color.muted)
-                        Text("Add agents in the web UI under Settings.")
-                            .font(.caption2)
-                            .foregroundStyle(Color.muted.opacity(0.7))
-                            .multilineTextAlignment(.center)
-                    }
-                    .padding(40)
+                    EmptyPanel(text: "No agents yet.")
+                        .padding(.horizontal, 24)
                 } else {
-                    List(agents) { agent in
-                        AgentRow(agent: agent, sessions: sessions.filter { $0.agentId == agent.id })
-                            .listRowBackground(Color.panel)
-                            .listRowSeparatorTint(Color.rule)
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 28) {
+                            Text(summary)
+                                .font(.system(size: 14))
+                                .foregroundStyle(Color.muted)
+                                .padding(.top, 4)
+
+                            agentSection(title: "Roster", agents: agents)
+                        }
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 32)
                     }
-                    .listStyle(.plain)
-                    .scrollContentBackground(.hidden)
                     .refreshable { await load() }
                 }
             }
@@ -47,6 +41,30 @@ struct AgentsView: View {
         .task(id: appState.socket?.refreshTick) {
             guard (appState.socket?.refreshTick ?? 0) > 0 else { return }
             await load()
+        }
+    }
+
+    private var summary: String {
+        let running = sessions.filter { $0.statusEnum == .running }.count
+        let review = sessions.filter { $0.statusEnum == .done || $0.statusEnum == .error }.count
+        var parts: [String] = ["\(agents.count) agent\(agents.count == 1 ? "" : "s")"]
+        if running > 0 { parts.append("\(running) working") }
+        if review > 0 { parts.append("\(review) to review") }
+        return parts.joined(separator: " · ")
+    }
+
+    private func agentSection(title: String, agents: [Agent]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            PilotSectionHeader(title: title, count: agents.count)
+            VStack(spacing: 0) {
+                ForEach(Array(agents.enumerated()), id: \.element.id) { index, agent in
+                    AgentRow(agent: agent, sessions: sessions.filter { $0.agentId == agent.id })
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                    if index < agents.count - 1 { Divider().background(Color.rule) }
+                }
+            }
+            .pilotCard(radius: 12)
         }
     }
 
@@ -116,6 +134,5 @@ private struct AgentRow: View {
                 }
             }
         }
-        .padding(.vertical, 6)
     }
 }

@@ -272,10 +272,20 @@ struct SessionDetailView: View {
     private var tabBar: some View {
         VStack(spacing: 0) {
             // Agent + status header
-            HStack(spacing: 12) {
-                AgentAvatar(agent: vm.agent, size: 40, running: vm.isActive)
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 8) {
+            HStack(alignment: .top, spacing: 12) {
+                AgentAvatar(agent: vm.agent, size: 44, running: vm.isActive)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(task?.title ?? vm.agent?.name ?? vm.session.shortBranch)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(Color.ink)
+                        .lineLimit(2)
+
+                    HStack(spacing: 7) {
+                        if let agentName = vm.agent?.name {
+                            Text(agentName)
+                                .font(.system(size: 13))
+                                .foregroundStyle(Color.ink2)
+                        }
                         StatusBadge(status: vm.session.statusEnum)
                         if vm.isActive {
                             ElapsedChip(createdAt: task?.startedAt ?? vm.session.createdAt)
@@ -285,7 +295,9 @@ struct SessionDetailView: View {
                                 .font(.caption2)
                                 .foregroundStyle(Color.muted)
                         }
+
                     }
+
                     if !vm.session.shortBranch.isEmpty {
                         Text(vm.session.shortBranch)
                             .font(.mono)
@@ -306,16 +318,16 @@ struct SessionDetailView: View {
                     }
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 14)
-            .padding(.bottom, 10)
+            .padding(.horizontal, 24)
+            .padding(.top, 18)
+            .padding(.bottom, 14)
 
             if let err = vm.actionError {
                 Text(err)
                     .font(.footnote)
                     .foregroundStyle(Color.pilotRed)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 24)
                     .padding(.bottom, 8)
             }
 
@@ -327,11 +339,11 @@ struct SessionDetailView: View {
                     tabButton(vm.session.parentSessionId != nil ? "Review" : "Journal", tab: .journal)
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 24)
 
             Divider().background(Color.rule)
         }
-        .background(Color.panel)
+        .background(Color.bg)
     }
 
     private func tabButton(_ label: String, tab: SessionTab) -> some View {
@@ -366,7 +378,7 @@ struct SessionDetailView: View {
                         }
                         ForEach(Array(vm.turns.enumerated()), id: \.element.id) { i, turn in
                             TurnCard(turn: turn, isActive: i == vm.turns.count - 1)
-                                .padding(.horizontal, 12)
+                                .padding(.horizontal, 24)
                                 .padding(.vertical, 4)
                         }
                     } else {
@@ -388,14 +400,14 @@ struct SessionDetailView: View {
                 Text(vm.isActive ? "starting…" : "No output")
                     .font(.mono)
                     .foregroundStyle(Color.muted)
-                    .padding(16)
+                    .padding(24)
             }
             ForEach(vm.legacyLines) { line in
                 outputLine(line)
             }
             if vm.isActive && !vm.legacyDone {
                 cursorBlink
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 24)
                     .padding(.top, 4)
             }
             if vm.legacyDone {
@@ -524,19 +536,19 @@ struct SessionDetailView: View {
             }
             .disabled(vm.isDiscarding)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(Color.panel)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 14)
+        .background(Color.bg)
         .overlay(alignment: .top) { Divider().background(Color.rule) }
     }
 
     private var continueBar: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Continue")
+            Text("Add a follow-up")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Color.ink)
             HStack(spacing: 10) {
-                TextField("Add context, fix something, or continue the work…", text: $vm.continuePrompt, axis: .vertical)
+                TextField("Continue where it left off, fix something, or add to the work...", text: $vm.continuePrompt, axis: .vertical)
                     .font(.system(size: 14))
                     .foregroundStyle(Color.ink)
                     .lineLimit(1...4)
@@ -544,22 +556,27 @@ struct SessionDetailView: View {
                     .padding(.vertical, 10)
                     .background(Color.panel2)
                     .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.rule, lineWidth: 1))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.ember.opacity(0.9), lineWidth: 1))
                 Button { sendContinue() } label: {
                     ZStack {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.system(size: 28))
-                            .foregroundStyle(vm.continuePrompt.trimmingCharacters(in: .whitespaces).isEmpty ? Color.muted : Color.ember)
+                        Text("Send")
+                            .font(.system(size: 13, weight: .semibold))
                             .opacity(vm.isSendingContinue ? 0 : 1)
                         if vm.isSendingContinue { ProgressView().tint(Color.ember) }
                     }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Color.panel)
+                    .foregroundStyle(vm.continuePrompt.trimmingCharacters(in: .whitespaces).isEmpty ? Color.muted : Color.ink)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.rule, lineWidth: 1))
                 }
                 .disabled(vm.continuePrompt.trimmingCharacters(in: .whitespaces).isEmpty || vm.isSendingContinue)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(Color.panel)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 14)
+        .background(Color.bg)
         .overlay(alignment: .top) { Divider().background(Color.rule) }
     }
 
@@ -586,9 +603,9 @@ struct SessionDetailView: View {
                 .disabled(vm.idlePrompt.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(Color.panel)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 14)
+        .background(Color.bg)
         .overlay(alignment: .top) { Divider().background(Color.rule) }
     }
 
@@ -616,8 +633,8 @@ struct SessionDetailView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8))
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 14)
         .background(Color.pilotRed.opacity(0.05))
         .overlay(alignment: .top) { Divider().background(Color.pilotRed.opacity(0.2)) }
     }
@@ -745,7 +762,7 @@ struct SessionDetailView: View {
             .opacity(line.kind == .toolResult || line.kind == .thinking ? 0.7 : 1)
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 24)
             .padding(.vertical, 1)
     }
 

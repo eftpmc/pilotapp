@@ -220,7 +220,7 @@ export const auth = {
 
 export const projects = {
   list:   () => req<Project[]>('/projects'),
-  create: (body: { name: string; githubCloneUrl?: string; githubToken?: string; localPath?: string; workspaceMode?: WorkspaceMode }) =>
+  create: (body: { name: string; githubCloneUrl?: string; githubToken?: string; localPath?: string; initGit?: boolean }) =>
     req<Project>('/projects', { method: 'POST', body: JSON.stringify(body) }),
   update: (id: string, body: { name?: string; remoteUrl?: string; githubToken?: string }) =>
     req<Project>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),

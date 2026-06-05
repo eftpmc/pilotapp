@@ -8,10 +8,8 @@ import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { timeAgo } from '@/lib/time'
 import { cn } from '@/lib/utils'
-import { GitBranch, Folder } from 'lucide-react'
 
-type ProjectType = 'code' | 'workspace'
-type CodeSource  = 'github' | 'local' | 'empty'
+type GitSource = 'none' | 'github' | 'local' | 'empty'
 
 function timeAgoOrDefault(iso?: string) {
   return iso ? timeAgo(iso) : 'No activity'
@@ -60,9 +58,9 @@ export default function ProjectsPage() {
 
           <div className="flex flex-col gap-2">
             {[
-              { n: '1', label: 'Add a project',  desc: 'Connect a GitHub repo or local path.' },
+              { n: '1', label: 'Add a project',  desc: 'Any folder — optionally connect a git repo.' },
               { n: '2', label: 'Add an agent',   desc: 'Configure an API key in Settings.' },
-              { n: '3', label: 'Dispatch tasks', desc: 'Agents run in parallel on separate branches.' },
+              { n: '3', label: 'Dispatch tasks', desc: 'Agents work in parallel, you review and accept.' },
             ].map(({ n, label, desc }) => (
               <div key={n} className="flex items-start gap-3.5 px-4 py-3.5 bg-card border border-border rounded-xl">
                 <span className="w-5 h-5 rounded-md bg-primary/10 text-primary text-[11px] font-bold grid place-items-center shrink-0 mt-0.5">{n}</span>
@@ -75,7 +73,7 @@ export default function ProjectsPage() {
           </div>
 
           <Button className="w-full justify-center" onClick={() => setShowNew(true)}>
-            Add first project
+            New project
           </Button>
         </div>
         <NewProjectDialog open={showNew} onClose={() => setShowNew(false)}
@@ -100,11 +98,9 @@ export default function ProjectsPage() {
         <div className="project-card-grid">
           {projectList.map(p => {
             const { pending, running, review, latestAt } = statsFor(p.id)
-            const repo = p.workspaceMode === 'workspace'
-              ? 'workspace'
-              : p.remoteUrl
+            const repo = p.remoteUrl
               ? p.remoteUrl.replace(/^https?:\/\/(www\.)?github\.com\//, '').replace(/\.git$/, '')
-              : p.localPath ?? 'local repo'
+              : p.localPath ?? undefined
             const total = pending + running + review
             return (
               <button
@@ -121,7 +117,7 @@ export default function ProjectsPage() {
                     </span>
                   )}
                 </div>
-                <p className="project-card-repo">{repo}</p>
+                {repo && <p className="project-card-repo">{repo}</p>}
                 <div className="project-card-lanes" aria-hidden="true">
                   <span className={cn('lane green', running > 0 && 'active')} />
                   <span className={cn('lane amber', review > 0 && 'active')} />
@@ -157,15 +153,14 @@ function NewProjectDialog({ open, onClose, onCreate, loading, error }: {
   onCreate: (body: Parameters<typeof projects.create>[0]) => void
   loading: boolean; error?: string
 }) {
-  const [name, setName]             = useState('')
-  const [type, setType]             = useState<ProjectType>('code')
-  const [source, setSource]         = useState<CodeSource>('github')
-  const [githubUrl, setGithubUrl]   = useState('')
-  const [githubToken, setToken]     = useState('')
-  const [localPath, setLocal]       = useState('')
+  const [name, setName]           = useState('')
+  const [source, setSource]       = useState<GitSource>('none')
+  const [githubUrl, setGithubUrl] = useState('')
+  const [githubToken, setToken]   = useState('')
+  const [localPath, setLocal]     = useState('')
 
   const isValid = name.trim().length > 0 && (
-    type === 'workspace' || source === 'empty' ||
+    source === 'none'  || source === 'empty' ||
     (source === 'github' && githubUrl.trim() && githubToken.trim()) ||
     (source === 'local'  && localPath.trim())
   )
@@ -174,9 +169,9 @@ function NewProjectDialog({ open, onClose, onCreate, loading, error }: {
     if (!isValid) return
     onCreate({
       name: name.trim(),
-      workspaceMode: type === 'workspace' ? 'workspace' : 'git',
-      ...(source === 'github' && type === 'code' ? { githubCloneUrl: githubUrl.trim(), githubToken: githubToken.trim() } : {}),
-      ...(source === 'local'  && type === 'code' ? { localPath: localPath.trim() } : {}),
+      ...(source === 'github' ? { githubCloneUrl: githubUrl.trim(), githubToken: githubToken.trim() } : {}),
+      ...(source === 'local'  ? { localPath: localPath.trim() } : {}),
+      ...(source === 'empty'  ? { initGit: true } : {}),
     })
   }
 
@@ -186,63 +181,49 @@ function NewProjectDialog({ open, onClose, onCreate, loading, error }: {
         <DialogHeader><DialogTitle>New project</DialogTitle></DialogHeader>
         <div className="flex flex-col gap-5">
 
-          {/* Type toggle */}
-          <div className="grid grid-cols-2 gap-2">
-            {([
-              { id: 'code' as ProjectType,      label: 'Code',      sub: 'Git versioned',               Icon: GitBranch },
-              { id: 'workspace' as ProjectType, label: 'Workspace', sub: 'Writing · research · design', Icon: Folder    },
-            ]).map(({ id: tid, label, sub, Icon }) => (
-              <button key={tid} onClick={() => setType(tid)} className={cn(
-                'flex flex-col items-start gap-1.5 px-4 py-3 rounded-xl border text-left transition-colors',
-                type === tid ? 'border-primary/50 bg-primary/5' : 'border-border hover:bg-muted/30'
-              )}>
-                <Icon size={16} className={type === tid ? 'text-primary' : 'text-muted-foreground'} />
-                <p className={cn('text-sm font-semibold', type === tid ? 'text-foreground' : 'text-muted-foreground')}>{label}</p>
-                <p className="text-[11px] text-muted-foreground leading-snug">{sub}</p>
-              </button>
-            ))}
-          </div>
-
           <div className="field">
             <Label>Name</Label>
             <Input autoFocus value={name} onChange={e => setName(e.target.value)}
-              placeholder={type === 'workspace' ? 'brand-research' : 'my-project'}
+              placeholder="my-project"
               onKeyDown={e => { if (e.key === 'Enter' && isValid) submit() }} />
           </div>
 
-          {type === 'code' && (
-            <>
-              <div className="flex gap-1 bg-[var(--panel)] rounded-[10px] p-[3px]">
-                {([
-                  { id: 'github' as CodeSource, label: 'GitHub' },
-                  { id: 'local'  as CodeSource, label: 'Local'  },
-                  { id: 'empty'  as CodeSource, label: 'New'    },
-                ]).map(s => (
-                  <button key={s.id} onClick={() => setSource(s.id)} className={cn(
-                    'flex-1 text-[13px] font-medium rounded-lg py-1.5 transition-colors',
-                    source === s.id ? 'bg-background text-foreground shadow-sm' : 'bg-transparent text-muted-foreground'
-                  )}>{s.label}</button>
-                ))}
-              </div>
+          <div className="flex flex-col gap-3">
+            <Label className="text-muted-foreground">Repository <span className="text-[11px]">(optional)</span></Label>
+            <div className="flex gap-1 bg-[var(--panel)] rounded-[10px] p-[3px]">
+              {([
+                { id: 'none'   as GitSource, label: 'None'   },
+                { id: 'github' as GitSource, label: 'GitHub' },
+                { id: 'local'  as GitSource, label: 'Local'  },
+                { id: 'empty'  as GitSource, label: 'New'    },
+              ]).map(s => (
+                <button key={s.id} onClick={() => setSource(s.id)} className={cn(
+                  'flex-1 text-[13px] font-medium rounded-lg py-1.5 transition-colors',
+                  source === s.id ? 'bg-background text-foreground shadow-sm' : 'bg-transparent text-muted-foreground'
+                )}>{s.label}</button>
+              ))}
+            </div>
 
-              {source === 'github' && (
-                <div className="flex flex-col gap-3">
-                  <div className="field"><Label>Clone URL</Label><Input value={githubUrl} onChange={e => setGithubUrl(e.target.value)} placeholder="https://github.com/org/repo.git" /></div>
-                  <div className="field"><Label>Access token</Label><Input type="password" value={githubToken} onChange={e => setToken(e.target.value)} placeholder="ghp_…" /></div>
-                </div>
-              )}
-              {source === 'local' && (
-                <div className="field">
-                  <Label>Path</Label>
-                  <Input value={localPath} onChange={e => setLocal(e.target.value)} placeholder="/Users/you/code/myproject" className="font-mono text-xs" />
-                  <p className="text-xs text-muted-foreground mt-1">Pilot clones a bare copy. Your working tree stays untouched.</p>
-                </div>
-              )}
-              {source === 'empty' && (
-                <p className="text-sm text-muted-foreground -mt-2">Empty git repo — agents create files and commit from scratch.</p>
-              )}
-            </>
-          )}
+            {source === 'github' && (
+              <div className="flex flex-col gap-3">
+                <div className="field"><Label>Clone URL</Label><Input value={githubUrl} onChange={e => setGithubUrl(e.target.value)} placeholder="https://github.com/org/repo.git" /></div>
+                <div className="field"><Label>Access token</Label><Input type="password" value={githubToken} onChange={e => setToken(e.target.value)} placeholder="ghp_…" /></div>
+              </div>
+            )}
+            {source === 'local' && (
+              <div className="field">
+                <Label>Path</Label>
+                <Input value={localPath} onChange={e => setLocal(e.target.value)} placeholder="/Users/you/code/myproject" className="font-mono text-xs" />
+                <p className="text-xs text-muted-foreground mt-1">Pilot clones a bare copy. Your working tree stays untouched.</p>
+              </div>
+            )}
+            {source === 'empty' && (
+              <p className="text-sm text-muted-foreground">Empty git repo — agents create files and commit from scratch.</p>
+            )}
+            {source === 'none' && (
+              <p className="text-sm text-muted-foreground">Plain folder — no git. Agents write files directly; you accept their output.</p>
+            )}
+          </div>
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 

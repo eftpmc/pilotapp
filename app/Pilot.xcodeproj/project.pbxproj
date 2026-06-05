@@ -16,8 +16,10 @@
 		46EE3F1DE308115725A70E79 /* SocketClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE4CB567B234500AE58688DD /* SocketClient.swift */; };
 		4F74F653C2BCA750BDA4BC38 /* ProjectsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA067AF99091DE59C155FB5D /* ProjectsView.swift */; };
 		7903018231BE934682C1A2D8 /* ManualConnectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 468D7E0E6C33A934EDFD6C00 /* ManualConnectView.swift */; };
+		797797C4360DDFDC857F2B86 /* Casual Character.png in Resources */ = {isa = PBXBuildFile; fileRef = 1668CA1149E4E6A572C178BB /* Casual Character.png */; };
 		86255D8BDD43005D390F3F71 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 667184B329FABF8C36393883 /* SettingsView.swift */; };
 		93570751D7B731E10026294F /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = B0403CF9AD9A373A5C4ECA2C /* Models.swift */; };
+		9753FA044940254B32BD8EAC /* Casual Character.atlas in Resources */ = {isa = PBXBuildFile; fileRef = 394A8A91061FEB06DA697438 /* Casual Character.atlas */; };
 		97F37C5429573FF690866414 /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51B576C5E0B29E89A3750700 /* AppState.swift */; };
 		98D3BA55639CB9FCD3A6BF16 /* StatusBadge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13B11892465CE8E32235DB42 /* StatusBadge.swift */; };
 		9F76EEA6476A0092D8E3F362 /* NewTaskSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C63C1774ED4B87EBBEC434E /* NewTaskSheet.swift */; };
@@ -25,7 +27,10 @@
 		B75853C522AD5F812009D044 /* ProjectDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4824A3F8C9402141881FD8B9 /* ProjectDetailView.swift */; };
 		BB77DF7DAB4BD7E6B39DBF2C /* TodayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8155462AEF6724FE5B6760D5 /* TodayView.swift */; };
 		CAE88F2CD8C1A966F6864248 /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9AFE4F4206A5BF175FA4FABF /* DesignTokens.swift */; };
+		DC010B149538E5680F0B0023 /* Casual Character.json in Resources */ = {isa = PBXBuildFile; fileRef = 8F050E05A1D2975E2F532EE4 /* Casual Character.json */; };
 		DC5ABE91BB690B885675637B /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FA5053EFDD0A2627263E781 /* APIClient.swift */; };
+		E595E82A0DB4A31B025E3D3E /* SpineAgentAvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C1496501BB7B072F4F81F22 /* SpineAgentAvatarView.swift */; };
+		EA55D9ED71D7341C0E991893 /* Spine in Frameworks */ = {isa = PBXBuildFile; productRef = FB08C334D1688B1D59C3B81D /* Spine */; };
 		F1D9C21F86E27295DA5AA39F /* PilotApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88E48CEE1B3F4DF8D6EDB216 /* PilotApp.swift */; };
 		F28E536A85BAAAA10E236628 /* ConnectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F64367624283D4CD1C30D90 /* ConnectView.swift */; };
 		F982C9B1AB078E0DDFA12839 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3DDC32BDC776AACBDE27E87 /* ContentView.swift */; };
@@ -35,7 +40,10 @@
 		033B7B0DFB321D06AF6959AE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		0FA5053EFDD0A2627263E781 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		13B11892465CE8E32235DB42 /* StatusBadge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBadge.swift; sourceTree = "<group>"; };
+		1668CA1149E4E6A572C178BB /* Casual Character.png */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = image.png; path = "Casual Character.png"; sourceTree = "<group>"; };
 		233F63E930B1392A147EECD2 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		394A8A91061FEB06DA697438 /* Casual Character.atlas */ = {isa = PBXFileReference; includeInIndex = 1; path = "Casual Character.atlas"; sourceTree = "<group>"; };
+		3C1496501BB7B072F4F81F22 /* SpineAgentAvatarView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SpineAgentAvatarView.swift; sourceTree = "<group>"; };
 		3F64367624283D4CD1C30D90 /* ConnectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectView.swift; sourceTree = "<group>"; };
 		466D34DCA850D3800B2DDE5C /* SessionDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionDetailView.swift; sourceTree = "<group>"; };
 		468D7E0E6C33A934EDFD6C00 /* ManualConnectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManualConnectView.swift; sourceTree = "<group>"; };
@@ -48,8 +56,9 @@
 		8155462AEF6724FE5B6760D5 /* TodayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TodayView.swift; sourceTree = "<group>"; };
 		88E48CEE1B3F4DF8D6EDB216 /* PilotApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PilotApp.swift; sourceTree = "<group>"; };
 		8C86F73F8A8553FF5C6CDA96 /* ColoredDiff.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ColoredDiff.swift; sourceTree = "<group>"; };
+		8F050E05A1D2975E2F532EE4 /* Casual Character.json */ = {isa = PBXFileReference; includeInIndex = 1; path = "Casual Character.json"; sourceTree = "<group>"; };
 		9AFE4F4206A5BF175FA4FABF /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
-		AB85CEC11BD665F9FF73BE7E /* Pilot.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Pilot.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AB85CEC11BD665F9FF73BE7E /* Pilot.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Pilot.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AE5B9BB535F61E4A2E6A4730 /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
 		B0403CF9AD9A373A5C4ECA2C /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		BA067AF99091DE59C155FB5D /* ProjectsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectsView.swift; sourceTree = "<group>"; };
@@ -58,7 +67,29 @@
 		E3DDC32BDC776AACBDE27E87 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFrameworksBuildPhase section */
+		73B56306CF3A6DC6CF1D1059 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EA55D9ED71D7341C0E991893 /* Spine in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
 /* Begin PBXGroup section */
+		57304FDF7FB6BA1B55B5AAB2 /* Spine */ = {
+			isa = PBXGroup;
+			children = (
+				394A8A91061FEB06DA697438 /* Casual Character.atlas */,
+				8F050E05A1D2975E2F532EE4 /* Casual Character.json */,
+				1668CA1149E4E6A572C178BB /* Casual Character.png */,
+			);
+			name = Spine;
+			path = Spine;
+			sourceTree = "<group>";
+		};
 		5DCCA06A0E104DBA6E91894C = {
 			isa = PBXGroup;
 			children = (
@@ -99,6 +130,7 @@
 				534B7702871886A07FA65FA5 /* AgentAvatar.swift */,
 				8C86F73F8A8553FF5C6CDA96 /* ColoredDiff.swift */,
 				13B11892465CE8E32235DB42 /* StatusBadge.swift */,
+				3C1496501BB7B072F4F81F22 /* SpineAgentAvatarView.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -125,6 +157,7 @@
 				233F63E930B1392A147EECD2 /* Theme.swift */,
 				842872E73FBA2385D92D357C /* Generated */,
 				6F727223C0E599BCC42AF324 /* Views */,
+				57304FDF7FB6BA1B55B5AAB2 /* Spine */,
 			);
 			path = Pilot;
 			sourceTree = "<group>";
@@ -137,6 +170,8 @@
 			buildConfigurationList = C88E1BB78C3D84A1284783C0 /* Build configuration list for PBXNativeTarget "Pilot" */;
 			buildPhases = (
 				103AA9C78E34D6CDE3EA0B73 /* Sources */,
+				096002B8413525984EE4CC93 /* Resources */,
+				73B56306CF3A6DC6CF1D1059 /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -144,6 +179,7 @@
 			);
 			name = Pilot;
 			packageProductDependencies = (
+				FB08C334D1688B1D59C3B81D /* Spine */,
 			);
 			productName = Pilot;
 			productReference = AB85CEC11BD665F9FF73BE7E /* Pilot.app */;
@@ -157,11 +193,6 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1600;
-				TargetAttributes = {
-					FE8ED209D7643DC0791F345F = {
-						DevelopmentTeam = "";
-					};
-				};
 			};
 			buildConfigurationList = 79B4DC32867D528FEEA13573 /* Build configuration list for PBXProject "Pilot" */;
 			developmentRegion = en;
@@ -172,6 +203,9 @@
 			);
 			mainGroup = 5DCCA06A0E104DBA6E91894C;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				20572847C1145FACDBDF60F7 /* XCRemoteSwiftPackageReference "spine-runtimes" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DC7D82CC69762577B57556DA /* Products */;
 			projectDirPath = "";
@@ -181,6 +215,19 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		096002B8413525984EE4CC93 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9753FA044940254B32BD8EAC /* Casual Character.atlas in Resources */,
+				DC010B149538E5680F0B0023 /* Casual Character.json in Resources */,
+				797797C4360DDFDC857F2B86 /* Casual Character.png in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		103AA9C78E34D6CDE3EA0B73 /* Sources */ = {
@@ -209,6 +256,7 @@
 				0888082472635662764B34B8 /* Theme.swift in Sources */,
 				CAE88F2CD8C1A966F6864248 /* DesignTokens.swift in Sources */,
 				BB77DF7DAB4BD7E6B39DBF2C /* TodayView.swift in Sources */,
+				E595E82A0DB4A31B025E3D3E /* SpineAgentAvatarView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -284,7 +332,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				DEVELOPMENT_TEAM = "";
+				COMPRESS_PNG_FILES = NO;
+				DEVELOPMENT_TEAM = Y6YJ4P25H9;
 				INFOPLIST_FILE = Pilot/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -358,7 +407,8 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
-				DEVELOPMENT_TEAM = "";
+				COMPRESS_PNG_FILES = NO;
+				DEVELOPMENT_TEAM = Y6YJ4P25H9;
 				INFOPLIST_FILE = Pilot/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -392,6 +442,25 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		20572847C1145FACDBDF60F7 /* XCRemoteSwiftPackageReference "spine-runtimes" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/esotericsoftware/spine-runtimes.git";
+			requirement = {
+				branch = 4.2;
+				kind = branch;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		FB08C334D1688B1D59C3B81D /* Spine */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 20572847C1145FACDBDF60F7 /* XCRemoteSwiftPackageReference "spine-runtimes" */;
+			productName = Spine;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A7605EA25E9B512DD73FBB4B /* Project object */;
 }
