@@ -52,32 +52,40 @@ export function buildCampaigns(taskList: Task[]): Campaign[] {
 
 function campaignStage(c: Campaign, sessionList: Session[]): 'queued' | 'working' | 'review' | 'done' {
   const taskIds = new Set(c.allTasks.map(t => t.id))
-  const allWorkSessions = sessionList.filter(s => s.workTaskId && taskIds.has(s.workTaskId) && !s.specId)
+  const allWorkSessions = sessionList.filter(s => s.workTaskId && taskIds.has(s.workTaskId) && !s.specId && !s.parentSessionId)
   const reviewSessions = sessionList.filter(s =>
     s.parentSessionId && allWorkSessions.some(w => w.id === s.parentSessionId)
   )
-  const all = [...allWorkSessions, ...reviewSessions]
 
-  // All sessions ever created are merged — campaign is complete, remove from board
-  if (all.length > 0 && all.every(s => s.status === 'merged')) return 'done'
+  // No sessions visible (session aged out of query window, or still loading) — fall back to task status
+  if (allWorkSessions.length === 0) {
+    if (c.root.status === 'pending') return 'queued'
+    if (c.root.status === 'done')    return 'done'
+    // running/failed: session should be visible; show as working until sessions load
+    return c.root.status === 'running' ? 'working' : 'review'
+  }
+
+  // All work sessions merged — campaign is complete, remove from board
+  if (allWorkSessions.every(s => s.status === 'merged')) return 'done'
 
   // Multi-agent: base stage on subtask sessions only (lead may still be running synthesis)
   if (c.subtasks.length > 0) {
     const subtaskIds = new Set(c.subtasks.map(t => t.id))
     const subtaskSessions = allWorkSessions.filter(s => s.workTaskId && subtaskIds.has(s.workTaskId))
-    if (subtaskSessions.some(s => s.status === 'running' || s.status === 'idle')) return 'working'
+    if (subtaskSessions.some(s => s.status === 'running' || s.status === 'waiting' || s.status === 'idle')) return 'working'
     if (subtaskSessions.some(s => s.status === 'done' || s.status === 'error')) return 'review'
     return 'working'  // lead still planning, subtasks not created yet
   }
 
-  if (all.some(s => s.status === 'running' || s.status === 'idle')) return 'working'
+  const all = [...allWorkSessions, ...reviewSessions]
+  if (all.some(s => s.status === 'running' || s.status === 'waiting' || s.status === 'idle')) return 'working'
   if (all.some(s => s.status === 'done' || s.status === 'error'))   return 'review'
   return 'queued'
 }
 
 function campaignAgents(c: Campaign, sessionList: Session[], agentList: Agent[]): Agent[] {
   const taskIds = new Set(c.allTasks.map(t => t.id))
-  const workSessions = sessionList.filter(s => s.workTaskId && taskIds.has(s.workTaskId) && !s.specId)
+  const workSessions = sessionList.filter(s => s.workTaskId && taskIds.has(s.workTaskId) && !s.specId && !s.parentSessionId)
   const reviewSessions = sessionList.filter(s =>
     s.parentSessionId && workSessions.some(w => w.id === s.parentSessionId)
   )
@@ -169,8 +177,8 @@ function WorkingCard({
   const { root } = campaign
   const taskIds = new Set(campaign.allTasks.map(t => t.id))
   const activeSession = sessionList.find(s =>
-    s.workTaskId && taskIds.has(s.workTaskId) && !s.specId &&
-    (s.status === 'running' || s.status === 'idle')
+    s.workTaskId && taskIds.has(s.workTaskId) && !s.specId && !s.parentSessionId &&
+    (s.status === 'running' || s.status === 'waiting' || s.status === 'idle')
   )
   const subtaskCount = campaign.subtasks.length
 
@@ -215,7 +223,7 @@ function ReviewCard({
   // Find the primary review target — prefer tasks in error/done without a verdict yet
   const taskIds = new Set(campaign.allTasks.map(t => t.id))
   const workSessions = sessionList.filter(s =>
-    s.workTaskId && taskIds.has(s.workTaskId) && !s.specId &&
+    s.workTaskId && taskIds.has(s.workTaskId) && !s.specId && !s.parentSessionId &&
     (s.status === 'done' || s.status === 'error')
   )
   const primarySession = workSessions[0]
@@ -355,19 +363,19 @@ export default function ProjectDetailPage() {
   const deleteTask   = useMutation({ mutationFn: (id: string) => tasks.delete(id), onSuccess: () => qc.invalidateQueries({ queryKey: ['tasks', projectId] }) })
   const assignTask   = useMutation({
     mutationFn: ({ taskId, agentId }: { taskId: string; agentId: string }) => tasks.assign(taskId, agentId),
-    onSuccess: ({ session }) => {
+    onSuccess: (_data, { taskId }) => {
       qc.invalidateQueries({ queryKey: ['tasks', projectId] })
       qc.invalidateQueries({ queryKey: ['sessions', projectId] })
-      navigate(`/sessions/${session.id}`)
+      navigate(`/projects/${projectId}/tasks/${taskId}`)
     },
   })
   const mergeSession = useMutation({
     mutationFn: (id: string) => sessions.merge(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['sessions', projectId] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sessions', projectId] }); qc.invalidateQueries({ queryKey: ['tasks', projectId] }) },
   })
   const mergePushSession = useMutation({
     mutationFn: async (id: string) => { await sessions.merge(id); await projects.push(projectId!) },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['sessions', projectId] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sessions', projectId] }); qc.invalidateQueries({ queryKey: ['tasks', projectId] }) },
   })
   const requestReview = useMutation({
     mutationFn: ({ sessionId, agentId }: { sessionId: string; agentId: string }) => sessions.requestReview(sessionId, agentId),
@@ -382,7 +390,7 @@ export default function ProjectDetailPage() {
   }
   const wsRef = useRef<WebSocket | null>(null)
   const subscribedRef = useRef(new Set<string>())
-  const activeIds = sessionList.filter(s => s.status === 'running' || s.status === 'idle').map(s => s.id)
+  const activeIds = sessionList.filter(s => s.status === 'running' || s.status === 'waiting' || s.status === 'idle').map(s => s.id)
   const activeIdsRef = useRef<string[]>([])
   activeIdsRef.current = activeIds
 

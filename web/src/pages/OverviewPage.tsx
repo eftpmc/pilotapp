@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils'
 const EVENT_VERB: Record<string, [string, string]> = {
   'session.completed': ['finished',  'text-[var(--green)]'],
   'session.failed':    ['failed',    'text-destructive'],
-  'session.merged':    ['merged',    'text-primary'],
+  'session.merged':    ['accepted',  'text-primary'],
 }
 
 function ElapsedTimer({ createdAt }: { createdAt: string }) {
@@ -154,7 +154,7 @@ export default function OverviewPage() {
 
   // Running: root task where any campaign session is active
   const runningTasks = rootTasks.filter(t =>
-    allCampaignSessions(t).some(s => s.status === 'running' || s.status === 'idle')
+    allCampaignSessions(t).some(s => s.status === 'running' || s.status === 'waiting' || s.status === 'idle')
   )
   const runningRootIds = new Set(runningTasks.map(t => t.id))
 
@@ -289,7 +289,8 @@ export default function OverviewPage() {
 
         {/* Activity feed — one entry per task, significant events only */}
         {(() => {
-          const significant = (eventList as CompanyEvent[]).filter(ev => ev.type in EVENT_VERB)
+          // Only show task-linked events — spec/review sessions have no taskId and are noise
+          const significant = (eventList as CompanyEvent[]).filter(ev => ev.type in EVENT_VERB && (ev.taskId || ev.data.taskTitle))
           // Deduplicate: one entry per taskId (most recent), fall back to sessionId for no-task events
           const seen = new Set<string>()
           const deduped = significant.filter(ev => {

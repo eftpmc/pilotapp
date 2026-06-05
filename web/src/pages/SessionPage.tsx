@@ -181,15 +181,6 @@ function CopyCommand({ text }: { text: string }) {
   )
 }
 
-function shortBranchName(branch?: string) {
-  if (!branch) return ''
-  const trimmed = branch.replace(/^agent\//, '')
-  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(trimmed)) {
-    return `agent/${trimmed.slice(0, 8)}`
-  }
-  return branch.length > 34 ? `${branch.slice(0, 31)}...` : branch
-}
-
 // ---------------------------------------------------------------------------
 // Output line renderer
 // ---------------------------------------------------------------------------
@@ -416,7 +407,7 @@ export default function SessionPage() {
 
   const elapsedSecs = useElapsed(task?.startedAt ?? session?.createdAt, activeRunning)
 
-  const merge         = useMutation({ mutationFn: () => sessions.merge(id!),   onSuccess: () => { qc.invalidateQueries({ queryKey: ['sessions'] }); refetchSession() } })
+  const merge         = useMutation({ mutationFn: () => sessions.merge(id!),   onSuccess: () => { qc.invalidateQueries({ queryKey: ['sessions'] }); qc.invalidateQueries({ queryKey: ['tasks'] }); refetchSession() } })
   const push          = useMutation({ mutationFn: () => projects.push(project!.id), onSuccess: () => setPushed(true) })
   const stop          = useMutation({ mutationFn: () => sessions.stop(id!),   onSuccess: () => refetchSession() })
   const discard       = useMutation({ mutationFn: () => sessions.delete(id!), onSuccess: () => { qc.invalidateQueries({ queryKey: ['sessions'] }); navigate(session?.projectId ? `/projects/${session.projectId}` : -1 as never) } })
@@ -607,7 +598,7 @@ export default function SessionPage() {
   }
 
   const isWorkspace = session?.workspaceMode === 'workspace'
-  const branchShort = shortBranchName(isWorkspace ? '' : (session?.branch ?? ''))
+
   const canContinue = isDone && !!session?.runnerSessionId && !isMerged && !session?.parentSessionId
   const isWaiting   = (session?.status as string) === 'waiting'
 
@@ -631,28 +622,26 @@ export default function SessionPage() {
 
       {/* Header */}
       <div className="bg-background border-b border-border px-6 pt-5 pb-0">
-        <Button variant="ghost" size="sm" onClick={() => navigate(session?.projectId ? `/projects/${session.projectId}` : -1 as never)} className="mb-4 -ml-2 text-muted-foreground">
+        <Button variant="ghost" size="sm" onClick={() => {
+          if (task && session?.projectId) navigate(`/projects/${session.projectId}/tasks/${task.id}`)
+          else if (session?.projectId) navigate(`/projects/${session.projectId}`)
+          else navigate(-1 as never)
+        }} className="mb-4 -ml-2 text-muted-foreground">
           <ArrowLeft size={13} />
-          {project?.name ?? 'Back'}
+          {task?.title ?? project?.name ?? 'Back'}
         </Button>
 
         <div className="flex items-start gap-3 mb-4 flex-wrap">
           <AgentAvatar agent={agent} size={44} running={activeRunning} />
           <div className="flex-1 min-w-0">
             <h1 className="text-lg font-semibold tracking-tight text-foreground leading-snug">
-              {task?.title ?? (session?.specId ? 'Planning session' : branchShort || session?.branch) ?? 'Session'}
+              {task?.title ?? (session?.specId ? 'Planning session' : 'Session')}
             </h1>
             <div className="flex items-center gap-2.5 mt-1 flex-wrap">
               {agent && <span className="text-sm text-muted-foreground font-medium">{agent.name}</span>}
               {agent && session && <span className="text-muted-foreground/30">·</span>}
               {session && <StatusBadge status={session.status} />}
               {activeRunning && <span className="text-xs font-mono text-green-500 tabular-nums">{fmtSecs(elapsedSecs)}</span>}
-              {branchShort && (
-                <>
-                  <span className="text-muted-foreground/30">·</span>
-                  <span className="text-xs font-mono text-muted-foreground/60 truncate max-w-[200px]" title={session?.branch}>{branchShort}</span>
-                </>
-              )}
               {hasTurns && (
                 <>
                   <span className="text-muted-foreground/30">·</span>
@@ -671,7 +660,7 @@ export default function SessionPage() {
             {session?.reviewVerdict === 'pending' && <span className="chip" style={{ color: 'var(--muted)' }}>Reviewing…</span>}
             {session?.reviewVerdict === 'approved' && <span className="chip" style={{ color: 'var(--green)', background: 'color-mix(in srgb, var(--green) 10%, transparent)' }}>Approved ✓</span>}
             {session?.reviewVerdict === 'changes_requested' && <span className="chip" style={{ color: 'var(--amber)', background: 'color-mix(in srgb, var(--amber) 10%, transparent)' }}>Changes Requested</span>}
-            {(isDone || isError) && !isMerged && !session?.parentSessionId && <Button size="sm" onClick={() => merge.mutate()} disabled={merge.isPending}>{merge.isPending ? '…' : isError ? 'Merge anyway' : isWorkspace ? 'Complete ✓' : 'Merge ✓'}</Button>}
+            {(isDone || isError) && !isMerged && !session?.parentSessionId && <Button size="sm" onClick={() => merge.mutate()} disabled={merge.isPending}>{merge.isPending ? '…' : isError ? 'Accept anyway' : isWorkspace ? 'Complete ✓' : 'Accept ✓'}</Button>}
             {!isMerged && (
               <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-destructive"
                 onClick={() => discard.mutate()} disabled={discard.isPending}
@@ -806,7 +795,7 @@ export default function SessionPage() {
       {/* Merged / Completed banner */}
       {isMerged && (
         <div className="border-t border-green-500/20 bg-green-500/5 px-6 py-3.5 flex items-center gap-3 flex-wrap">
-          <span className="text-sm font-semibold text-green-500">{isWorkspace ? 'Completed ✓' : 'Merged ✓'}</span>
+          <span className="text-sm font-semibold text-green-500">{isWorkspace ? 'Completed ✓' : 'Accepted ✓'}</span>
           <div className="flex-1" />
           {!isWorkspace && project?.remoteUrl && !pushed && <Button size="sm" onClick={() => push.mutate()} disabled={push.isPending}>{push.isPending ? '…' : 'Push to remote'}</Button>}
           {!isWorkspace && project?.remoteUrl && pushed && <span className="text-sm font-semibold text-primary">Pushed ✓</span>}

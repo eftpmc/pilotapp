@@ -23,7 +23,7 @@ function taskOverallStatus(task: Task, workSessions: Session[], leadSessionId?: 
   if (checkMerged.length > 0 && checkMerged.every(s => s.status === 'merged')) return { label: 'Accepted', color: 'idle' }
   if (task.status === 'pending') return { label: 'Queued', color: 'idle' }
   if (task.status === 'running') {
-    const live = workSessions.some(s => s.status === 'running' || s.status === 'idle')
+    const live = workSessions.some(s => s.status === 'running' || s.status === 'waiting' || s.status === 'idle')
     return { label: 'Working', color: 'green', pulse: live }
   }
   if (task.status === 'failed') return { label: 'Failed', color: 'red' }
@@ -104,7 +104,7 @@ function JournalSummary({ text }: { text: string }) {
 // ---------------------------------------------------------------------------
 
 function PlanCard({ session, agent, onView }: { session: Session; agent?: Agent; onView: () => void }) {
-  const isActive = session.status === 'running' || session.status === 'idle'
+  const isActive = session.status === 'running' || session.status === 'waiting' || session.status === 'idle'
   return (
     <div className="flex flex-col gap-3 p-4 rounded-xl border border-border/60 bg-card/60">
       <div className="flex items-center gap-3">
@@ -227,7 +227,7 @@ function SubtaskRow({
   const workAgent     = workSession ? agentList.find(a => a.id === workSession.agentId) : undefined
   const reviewAgent   = reviewSession ? agentList.find(a => a.id === reviewSession.agentId) : undefined
   const isSynthesis   = task.title.startsWith('[Synthesis]')
-  const isActive      = workSession && (workSession.status === 'running' || workSession.status === 'idle')
+  const isActive      = workSession && (workSession.status === 'running' || workSession.status === 'waiting' || workSession.status === 'idle')
   const isDone        = workSession?.status === 'done'
   const isError       = workSession?.status === 'error'
   const isMerged      = workSession?.status === 'merged'
@@ -307,7 +307,7 @@ function SubtaskRow({
 // ---------------------------------------------------------------------------
 
 function ReviewCard({ session, agent, onView }: { session: Session; agent?: Agent; onView: () => void }) {
-  const isActive = session.status === 'running' || session.status === 'idle'
+  const isActive = session.status === 'running' || session.status === 'waiting' || session.status === 'idle'
   const verdict  = session.reviewVerdict
   const isDone   = session.status === 'done'
 
@@ -355,7 +355,7 @@ function WorkSessionCard({
   onRequestReview: (sessionId: string, agentId: string) => void
   onView: () => void
 }) {
-  const isActive = session.status === 'running' || session.status === 'idle'
+  const isActive = session.status === 'running' || session.status === 'waiting' || session.status === 'idle'
   const isDone   = session.status === 'done'
   const isError  = session.status === 'error'
   const isMerged = session.status === 'merged'
@@ -424,11 +424,11 @@ export default function TaskPage() {
 
   const mergeSession = useMutation({
     mutationFn: (id: string) => sessions.merge(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['sessions', projectId] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sessions', projectId] }); qc.invalidateQueries({ queryKey: ['tasks', projectId] }) },
   })
   const mergePushSession = useMutation({
     mutationFn: async (id: string) => { await sessions.merge(id); await projects.push(projectId!) },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['sessions', projectId] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sessions', projectId] }); qc.invalidateQueries({ queryKey: ['tasks', projectId] }) },
   })
   const requestReview = useMutation({
     mutationFn: ({ sessionId, agentId }: { sessionId: string; agentId: string }) => sessions.requestReview(sessionId, agentId),

@@ -5,7 +5,7 @@
 export type AgentProvider  = 'claude' | 'codex';
 export type ProjectRole    = 'any' | 'claude' | 'codex';
 export type TaskStatus     = 'pending' | 'running' | 'done' | 'failed';
-export type SessionStatus  = 'idle' | 'running' | 'done' | 'error' | 'merged';
+export type SessionStatus  = 'idle' | 'running' | 'waiting' | 'done' | 'error' | 'merged';
 export type AgentRole      = 'worker' | 'lead';
 export type TaskSize       = 'xs' | 's' | 'm' | 'l' | 'xl';
 export type KnowledgeScope = 'company' | 'department' | 'agent';

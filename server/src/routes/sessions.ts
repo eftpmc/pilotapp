@@ -361,7 +361,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 
   if (row.work_task_id) {
     const task = db.prepare('SELECT status FROM tasks WHERE id = ?').get(row.work_task_id) as TaskRow | undefined;
-    if (task?.status === 'running' || task?.status === 'failed') {
+    if (task?.status === 'running' || task?.status === 'failed' || task?.status === 'done') {
       resetTaskAfterSessionDiscard(row.work_task_id);
     }
   }

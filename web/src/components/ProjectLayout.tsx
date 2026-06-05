@@ -30,7 +30,7 @@ export default function ProjectLayout() {
   })
 
   const project      = projectList.find(p => p.id === id)
-  const runningCount = sessionList.filter(s => s.status === 'running').length
+  const runningCount = sessionList.filter(s => s.status === 'running' || s.status === 'waiting' || s.status === 'idle').length
   // Count unique tasks in review, not raw sessions
   const reviewCount  = new Set(
     sessionList

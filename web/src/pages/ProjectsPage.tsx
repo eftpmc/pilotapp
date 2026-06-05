@@ -63,7 +63,7 @@ export default function ProjectsPage() {
               {[
                 { n: '1', label: 'Add a project',  desc: 'Any folder, with or without git.' },
                 { n: '2', label: 'Add an agent',   desc: 'Connect an API key in Settings.' },
-                { n: '3', label: 'Dispatch tasks', desc: 'Review the work and merge what lands.' },
+                { n: '3', label: 'Dispatch tasks', desc: 'Review the work and accept what lands.' },
               ].map(({ n, label, desc }) => (
                 <div key={n} className="flex items-start gap-3.5 rounded-xl border border-border/70 bg-card/80 px-4 py-3.5 text-left">
                   <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-md bg-primary/10 text-[11px] font-bold text-primary">{n}</span>

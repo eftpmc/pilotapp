@@ -425,16 +425,19 @@ export default function AgentPage() {
             )}
           </section>
 
-          {/* ── Sessions ── */}
-          {recentSessions.length > 0 && (
+          {/* ── Recent work ── */}
+          {recentSessions.filter(s => s.workTaskId && !s.specId && !s.parentSessionId).length > 0 && (
             <section>
-              <p className="text-xs font-medium text-muted-foreground/50 mb-4">Recent sessions</p>
+              <p className="text-xs font-medium text-muted-foreground/50 mb-4">Recent work</p>
               <ItemGroup className="gap-2">
-                {recentSessions.map(s => {
+                {recentSessions.filter(s => s.workTaskId && !s.specId && !s.parentSessionId).map(s => {
                   const title     = taskTitle(s.workTaskId)
                   const proj      = projectName(s.projectId)
-                  const isRunning = s.status === 'running'
+                  const isRunning = s.status === 'running' || s.status === 'waiting' || s.status === 'idle'
                   const isError   = s.status === 'error'
+                  const isAccepted = s.status === 'merged'
+                  const statusLabel = isRunning ? 'Working' : isAccepted ? 'Accepted' : isError ? 'Error' : 'Done'
+                  const taskId = s.workTaskId
                   return (
                     <Item
                       key={s.id}
@@ -442,24 +445,24 @@ export default function AgentPage() {
                       variant="outline"
                       className="w-full bg-card/60 transition-colors hover:bg-card"
                     >
-                      <button onClick={() => navigate(`/sessions/${s.id}`)}>
+                      <button onClick={() => taskId ? navigate(`/projects/${s.projectId}/tasks/${taskId}`) : navigate(`/sessions/${s.id}`)}>
                         <ItemMedia><span className={cn(
                           'w-1.5 h-1.5 rounded-full shrink-0',
                           isRunning ? 'bg-[var(--green-dot)] animate-pulse'
                             : isError ? 'bg-destructive'
-                            : s.status === 'merged' ? 'bg-primary'
+                            : isAccepted ? 'bg-primary'
                             : 'bg-muted-foreground/40'
                         )} /></ItemMedia>
                         <ItemContent className="items-start">
-                          <ItemTitle className="max-w-full truncate">{title ?? s.id.slice(0, 8)}</ItemTitle>
+                          <ItemTitle className="max-w-full truncate">{title ?? '—'}</ItemTitle>
                           <ItemDescription className="w-full text-left text-xs">{proj}</ItemDescription>
                         </ItemContent>
                         <ItemActions className="gap-3">
                           <span className="text-xs text-muted-foreground/50 shrink-0 tabular-nums">{timeAgo(s.createdAt)}</span>
                           <span className={cn(
-                            'text-xs font-medium shrink-0 capitalize',
-                            isRunning ? 'text-[var(--green)]' : isError ? 'text-destructive' : 'text-muted-foreground'
-                          )}>{s.status}</span>
+                            'text-xs font-medium shrink-0',
+                            isRunning ? 'text-[var(--green)]' : isError ? 'text-destructive' : isAccepted ? 'text-primary' : 'text-muted-foreground'
+                          )}>{statusLabel}</span>
                         </ItemActions>
                       </button>
                     </Item>

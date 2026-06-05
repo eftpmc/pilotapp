@@ -25,7 +25,7 @@ function TaskRow({
   const reviewSessions = taskSessions.filter(s => !!s.parentSessionId)
 
   const overallStatus = (() => {
-    if (workSessions.some(s => s.status === 'running' || s.status === 'idle')) return 'running'
+    if (workSessions.some(s => s.status === 'running' || s.status === 'waiting' || s.status === 'idle')) return 'running'
     if (workSessions.some(s => s.status === 'error'))   return 'error'
     if (workSessions.some(s => s.status === 'done'))    return 'done'
     if (workSessions.every(s => s.status === 'merged')) return 'merged'
