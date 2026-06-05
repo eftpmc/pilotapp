@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils'
 
 export const TooltipProvider = TooltipPrimitive.Provider
 export const TooltipRoot     = TooltipPrimitive.Root
+export const Tooltip         = TooltipPrimitive.Root
 export const TooltipTrigger  = TooltipPrimitive.Trigger
 
 export function TooltipContent({

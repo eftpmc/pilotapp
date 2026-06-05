@@ -6,6 +6,8 @@ import type { Agent, Department, Session } from '../api/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { AgentAvatar } from '@/components/AgentAvatar'
 import { LiveTimer } from '@/components/LiveTimer'
@@ -13,7 +15,7 @@ import { PERSONALITY_PRESETS, DEPT_COLORS } from '@/lib/agent-constants'
 import { cn } from '@/lib/utils'
 
 // ---------------------------------------------------------------------------
-// Add/Edit Department dialog
+// Department dialog
 // ---------------------------------------------------------------------------
 
 function DepartmentDialog({ open, dept, onClose, onSave, loading, error }: {
@@ -80,43 +82,50 @@ function AgentCard({ employee, activeSession, activeTaskTitle, sessionCount, tot
   const presetLabels = chunks
     .map(c => PERSONALITY_PRESETS.find(p => p.prompt === c)?.label)
     .filter(Boolean) as string[]
-  const personalityLabel = presetLabels.length > 0
-    ? presetLabels.length === 1 ? presetLabels[0] : `${presetLabels[0]} +${presetLabels.length - 1}`
-    : (employee.personality ? employee.personality.split('\n')[0].slice(0, 40) : '')
 
   return (
-    <article className={cn('agent-card', confirmDelete && 'is-open')}>
-      <button className="agent-card-row" onClick={() => navigate(`/agents/${employee.id}`)}>
-        <AgentAvatar agent={employee} size={44} running={isActive} />
+    <article>
+      <button
+        className="w-full flex items-center gap-3 px-4 py-3.5 bg-card rounded-2xl hover:bg-muted/50 hover:-translate-y-px transition-all text-left"
+        onClick={() => !confirmDelete && navigate(`/agents/${employee.id}`)}
+      >
+        <AgentAvatar agent={employee} size={42} running={isActive} />
+
         <div className="min-w-0 flex-1">
-          <div className="agent-title-line">
-            <span className="agent-name">{employee.name}</span>
-            <div className={cn('agent-status-dot', isActive ? 'working' : 'idle')} />
+          <div className="flex items-center gap-2 mb-0.5">
+            <span className="text-sm font-semibold text-foreground truncate">{employee.name}</span>
+            {isLead && <Badge variant="default" className="text-[10px] px-1.5 py-0">Lead</Badge>}
           </div>
-          <p className="agent-summary-line">
-            {isLead && <span className="chip" style={{ color: 'var(--ember)', background: 'var(--ember-wash)', border: 'none' }}>Lead</span>}
-            {personalityLabel && <span>{personalityLabel}</span>}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {presetLabels.slice(0, 2).map(label => (
+              <Badge key={label} variant="secondary" className="text-[10px] px-1.5 py-0 font-normal">{label}</Badge>
+            ))}
+            {presetLabels.length > 2 && (
+              <span className="text-[11px] text-muted-foreground">+{presetLabels.length - 2}</span>
+            )}
             {isActive && activeTaskTitle && (
-              <><span className="sep">·</span><span className="text-[var(--green)]">{activeTaskTitle}</span></>
+              <span className="text-[11px] text-[var(--green)] truncate">{activeTaskTitle}</span>
             )}
             {!isActive && (sessionCount ?? 0) > 0 && (
-              <><span className="sep">·</span><span className="text-xs text-muted-foreground/50">
+              <span className="text-[11px] text-muted-foreground/50">
                 {sessionCount} session{sessionCount !== 1 ? 's' : ''}
                 {(totalCost ?? 0) > 0 && ` · $${totalCost!.toFixed(2)}`}
-              </span></>
+              </span>
             )}
-          </p>
+          </div>
         </div>
-        {isActive
-          ? <LiveTimer createdAt={activeSession!.createdAt} />
-          : <span className="text-xs text-muted-foreground/40">Idle</span>
-        }
-        <svg className="w-3 h-3 text-muted-foreground/30 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+
+        <div className="shrink-0">
+          {isActive
+            ? <LiveTimer createdAt={activeSession!.createdAt} />
+            : <span className="text-xs text-muted-foreground/40">Idle</span>
+          }
+        </div>
       </button>
 
       {confirmDelete && (
-        <div className="agent-confirm-panel">
-          <span>Delete {employee.name}?</span>
+        <div className="flex items-center gap-3 px-4 py-2.5 mt-1 bg-card rounded-xl">
+          <span className="text-sm text-foreground flex-1">Delete {employee.name}?</span>
           <Button size="sm" variant="ghost" onClick={() => setConfDel(false)}>Cancel</Button>
           <Button size="sm" variant="destructive" onClick={() => { onDelete(); setConfDel(false) }}>Delete</Button>
         </div>
@@ -134,12 +143,11 @@ function DepartmentSection({ dept, agentsInDept, sessionList, taskList, mutation
   agentsInDept: Agent[]
   sessionList: Session[]
   taskList: { id: string; title: string }[]
-  mutations: {
-    deleteAgent: (id: string) => void
-  }
+  mutations: { deleteAgent: (id: string) => void }
   onAddAgent: (deptId?: string) => void
 }) {
   const navigate = useNavigate()
+
   function activeSessionFor(empId: string) {
     return sessionList.find(s => s.agentId === empId && s.status === 'running') ?? null
   }
@@ -149,23 +157,23 @@ function DepartmentSection({ dept, agentsInDept, sessionList, taskList, mutation
   }
   function agentStats(empId: string) {
     const empSessions = sessionList.filter(s => s.agentId === empId)
-    const cost = empSessions.reduce((sum, s) => sum + (s.totalCostUsd ?? 0), 0)
-    return { count: empSessions.length, cost }
+    return { count: empSessions.length, cost: empSessions.reduce((sum, s) => sum + (s.totalCostUsd ?? 0), 0) }
   }
 
   const isUnassigned = dept === null
   const runningCount = agentsInDept.filter(emp => activeSessionFor(emp.id)).length
-
-  // For named depts: show lead first in a hero slot, then workers
-  const lead    = !isUnassigned ? agentsInDept.find(a => a.role === 'lead')    : undefined
-  const workers = !isUnassigned ? agentsInDept.filter(a => a.role !== 'lead')  : agentsInDept
+  const lead    = !isUnassigned ? agentsInDept.find(a => a.role === 'lead')   : undefined
+  const workers = !isUnassigned ? agentsInDept.filter(a => a.role !== 'lead') : agentsInDept
 
   return (
-    <section className="agent-department-section">
-      <div className="agent-department-header">
-        <div className="agent-department-title">
-          {!isUnassigned && <span className="agent-department-dot" style={{ background: dept.color }} />}
-          <div className="min-w-0">
+    <section className="mb-8">
+      {/* Section header */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          {!isUnassigned && (
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ background: dept.color }} />
+          )}
+          <div>
             {!isUnassigned ? (
               <button
                 className="text-sm font-semibold text-foreground hover:text-primary transition-colors"
@@ -174,63 +182,61 @@ function DepartmentSection({ dept, agentsInDept, sessionList, taskList, mutation
                 {dept.name}
               </button>
             ) : (
-              <h2>Unassigned</h2>
+              <span className="text-sm font-semibold text-foreground">Unassigned</span>
             )}
-            <p>
-              {agentsInDept.length} agent{agentsInDept.length !== 1 ? 's' : ''}
-              {runningCount > 0 && <> · {runningCount} working</>}
-            </p>
           </div>
+          <span className="text-xs text-muted-foreground/50">
+            {agentsInDept.length} agent{agentsInDept.length !== 1 ? 's' : ''}
+            {runningCount > 0 && <> · <span className="text-[var(--green)]">{runningCount} working</span></>}
+          </span>
         </div>
-        <div className="agent-department-actions">
+        <div className="flex items-center gap-1">
           {!isUnassigned && (
-            <Button size="sm" variant="ghost" onClick={() => navigate(`/departments/${dept.id}`)}>
+            <Button size="sm" variant="ghost" className="text-muted-foreground h-7 px-2 text-xs"
+              onClick={() => navigate(`/departments/${dept.id}`)}>
               Manage
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
             </Button>
           )}
           {isUnassigned && (
-            <Button size="sm" variant="outline" onClick={() => onAddAgent(undefined)}>+ Agent</Button>
+            <Button size="sm" variant="ghost" className="text-muted-foreground h-7 px-2 text-xs"
+              onClick={() => onAddAgent(undefined)}>+ Agent</Button>
           )}
         </div>
       </div>
 
-      <div className="agent-department-list">
-        {agentsInDept.length === 0 ? (
-          <button onClick={() => onAddAgent(dept?.id)} className="agent-empty-department">
-            Add the first agent{!isUnassigned && dept ? ` to ${dept.name}` : ''}
-          </button>
-        ) : (
-          <>
-            {/* Lead — full width */}
-            {lead && (
-              <div className="agent-lead-slot">
-                <AgentCard
-                  key={lead.id}
-                  employee={lead}
-                  activeSession={activeSessionFor(lead.id)}
-                  activeTaskTitle={activeTaskFor(lead.id)}
-                  sessionCount={agentStats(lead.id).count}
-                  totalCost={agentStats(lead.id).cost}
-                  onDelete={() => mutations.deleteAgent(lead.id)}
-                />
-              </div>
-            )}
-            {/* Workers — flow in the same grid */}
-            {workers.map(emp => (
-              <AgentCard
-                key={emp.id}
-                employee={emp}
-                activeSession={activeSessionFor(emp.id)}
-                activeTaskTitle={activeTaskFor(emp.id)}
-                sessionCount={agentStats(emp.id).count}
-                totalCost={agentStats(emp.id).cost}
-                onDelete={() => mutations.deleteAgent(emp.id)}
-              />
-            ))}
-          </>
-        )}
-      </div>
+      {/* Agent list */}
+      {agentsInDept.length === 0 ? (
+        <button
+          onClick={() => onAddAgent(dept?.id)}
+          className="w-full px-4 py-6 rounded-2xl border border-dashed border-border/50 text-sm text-muted-foreground/50 hover:text-muted-foreground hover:border-border transition-colors text-center"
+        >
+          Add the first agent{!isUnassigned && dept ? ` to ${dept.name}` : ''}
+        </button>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {lead && (
+            <AgentCard
+              employee={lead}
+              activeSession={activeSessionFor(lead.id)}
+              activeTaskTitle={activeTaskFor(lead.id)}
+              sessionCount={agentStats(lead.id).count}
+              totalCost={agentStats(lead.id).cost}
+              onDelete={() => mutations.deleteAgent(lead.id)}
+            />
+          )}
+          {workers.map(emp => (
+            <AgentCard
+              key={emp.id}
+              employee={emp}
+              activeSession={activeSessionFor(emp.id)}
+              activeTaskTitle={activeTaskFor(emp.id)}
+              sessionCount={agentStats(emp.id).count}
+              totalCost={agentStats(emp.id).cost}
+              onDelete={() => mutations.deleteAgent(emp.id)}
+            />
+          ))}
+        </div>
+      )}
     </section>
   )
 }
@@ -263,10 +269,6 @@ export default function AgentsPage() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['departments'] }); setDeptDialog({ open: false }) },
   })
 
-  const mutations = {
-    deleteAgent: (id: string) => deleteAgent.mutate(id),
-  }
-
   const busyCount = employeeList.filter(e => sessionList.some(s => s.agentId === e.id && s.status === 'running')).length
 
   const empsByDept = new Map<string | null, Agent[]>()
@@ -293,34 +295,55 @@ export default function AgentsPage() {
             </p>
           </div>
           <div className="flex gap-2 shrink-0">
-            <Button size="sm" variant="outline" onClick={() => setDeptDialog({ open: true })}>+ Team</Button>
+            <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => setDeptDialog({ open: true })}>+ Team</Button>
             <Button size="sm" onClick={() => goNewAgent()}>Hire agent</Button>
           </div>
         </div>
 
-        {deptList.map(dept => (
-          <DepartmentSection
-            key={dept.id}
-            dept={dept}
-            agentsInDept={empsByDept.get(dept.id) ?? []}
-            sessionList={sessionList as any} taskList={taskList as any}
-            mutations={mutations}
-            onAddAgent={goNewAgent}
-          />
-        ))}
+        {deptList.length > 0 && (
+          <>
+            {deptList.map((dept, i) => (
+              <div key={dept.id}>
+                <DepartmentSection
+                  dept={dept}
+                  agentsInDept={empsByDept.get(dept.id) ?? []}
+                  sessionList={sessionList as any} taskList={taskList as any}
+                  mutations={{ deleteAgent: (id) => deleteAgent.mutate(id) }}
+                  onAddAgent={goNewAgent}
+                />
+                {i < deptList.length - 1 && <Separator className="mb-8" />}
+              </div>
+            ))}
+            {(empsByDept.get(null)?.length ?? 0) > 0 && (
+              <>
+                <Separator className="mb-8" />
+                <DepartmentSection
+                  dept={null}
+                  agentsInDept={empsByDept.get(null) ?? []}
+                  sessionList={sessionList as any} taskList={taskList as any}
+                  mutations={{ deleteAgent: (id) => deleteAgent.mutate(id) }}
+                  onAddAgent={goNewAgent}
+                />
+              </>
+            )}
+          </>
+        )}
 
-        {(empsByDept.get(null)?.length ?? 0) > 0 && (
+        {deptList.length === 0 && (empsByDept.get(null)?.length ?? 0) > 0 && (
           <DepartmentSection
             dept={null}
             agentsInDept={empsByDept.get(null) ?? []}
             sessionList={sessionList as any} taskList={taskList as any}
-            mutations={mutations}
+            mutations={{ deleteAgent: (id) => deleteAgent.mutate(id) }}
             onAddAgent={goNewAgent}
           />
         )}
 
         {deptList.length === 0 && employeeList.length === 0 && (
-          <p className="empty-line">No agents yet. <button className="text-primary hover:underline" onClick={() => navigate('/agents/hire')}>Hire your first agent.</button></p>
+          <p className="text-sm text-muted-foreground">
+            No agents yet.{' '}
+            <button className="text-primary hover:underline" onClick={() => navigate('/agents/hire')}>Hire your first agent.</button>
+          </p>
         )}
 
       </div>

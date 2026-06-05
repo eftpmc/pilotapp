@@ -2,26 +2,40 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { sessions, agents, projects, tasks, me } from '../api/client'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
-import { useEffect, useRef, useState, useCallback } from 'react'
 import {
-  BookOpen, ChevronRight, FolderOpen, Home, LogOut, Moon, Plus, Search,
-  Settings, Sun, Users, Wrench,
+  CommandDialog, CommandInput, CommandList, CommandEmpty,
+  CommandGroup, CommandItem, CommandSeparator, CommandShortcut,
+} from '@/components/ui/command'
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu'
+import {
+  Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
+  SidebarHeader, SidebarMenu, SidebarMenuAction,
+  SidebarMenuButton, SidebarMenuItem, SidebarMenuSub, SidebarMenuSubButton,
+  SidebarMenuSubItem, SidebarProvider, SidebarInset, SidebarRail, SidebarTrigger,
+} from '@/components/ui/sidebar'
+import * as Collapsible from '@radix-ui/react-collapsible'
+import { cn } from '@/lib/utils'
+import { useEffect, useState, useCallback } from 'react'
+import {
+  BookOpen, ChevronRight, ChevronsUpDown, FolderOpen, Home, LogOut,
+  Moon, Plus, Search, Settings, Sun, Users, Wrench,
 } from 'lucide-react'
 
 const BOTTOM_NAV = [
   { label: 'Today',    path: '/',          end: true,  icon: Home },
   { label: 'Projects', path: '/projects',  end: false, icon: FolderOpen },
-  { label: 'Agents',   path: '/agents', end: false, icon: Users },
-  { label: 'Settings', path: '/settings',  end: false, icon: Settings },
+  { label: 'Agents',   path: '/agents',    end: false, icon: Users },
+  { label: 'Knowledge', path: '/knowledge', end: false, icon: BookOpen },
 ]
 
-const NAV = [
-  { label: 'Today',    path: '/',          end: true,  icon: Home },
-  { label: 'Agents',   path: '/agents', end: false, icon: Users },
+const NAV_ITEMS = [
+  { label: 'Today',     path: '/',          end: true,  icon: Home },
+  { label: 'Agents',    path: '/agents',    end: false, icon: Users },
   { label: 'Knowledge', path: '/knowledge', end: false, icon: BookOpen },
-  { label: 'Tools', path: '/tools', end: false, icon: Wrench },
-  { label: 'Settings', path: '/settings', end: false, icon: Settings },
+  { label: 'Tools',     path: '/tools',     end: false, icon: Wrench },
 ]
 
 // ── Theme ──────────────────────────────────────────────────────────────────────
@@ -37,215 +51,140 @@ function applyTheme(t: 'light' | 'dark') {
 }
 
 // ── Command palette ────────────────────────────────────────────────────────────
-
 type PaletteMode = 'search' | 'pick-project'
 
-type CmdEntry =
-  | { type: 'section'; label: string }
-  | { type: 'item'; label: string; sub?: string; dot?: string; dotPulse?: boolean; icon?: React.ReactNode; action: () => void; terms?: string[] }
-
-function CommandPalette({ onClose }: { onClose: () => void }) {
+function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const navigate = useNavigate()
-  const [mode, setMode]   = useState<PaletteMode>('search')
-  const [query, setQuery] = useState('')
-  const [active, setActive] = useState(0)
-  const inputRef = useRef<HTMLInputElement>(null)
-  const listRef  = useRef<HTMLDivElement>(null)
+  const [mode, setMode] = useState<PaletteMode>('search')
 
-  const { data: projectList  = [] } = useQuery({ queryKey: ['projects'],  queryFn: () => projects.list() })
-  const { data: agentList = [] } = useQuery({ queryKey: ['agents'], queryFn: () => agents.list() })
-  const { data: sessionList  = [] } = useQuery({ queryKey: ['sessions'],  queryFn: () => sessions.list() })
-  const { data: taskList     = [] } = useQuery({ queryKey: ['tasks'],     queryFn: () => tasks.list() })
+  const { data: projectList = [] } = useQuery({ queryKey: ['projects'], queryFn: () => projects.list() })
+  const { data: agentList   = [] } = useQuery({ queryKey: ['agents'],   queryFn: () => agents.list() })
+  const { data: sessionList = [] } = useQuery({ queryKey: ['sessions'], queryFn: () => sessions.list() })
+  const { data: taskList    = [] } = useQuery({ queryKey: ['tasks'],    queryFn: () => tasks.list() })
 
-  const taskTitleFor  = (id?: string) => id ? taskList.find(t => t.id === id)?.title : undefined
-  const agentNameFor  = (id: string)  => agentList.find(e => e.id === id)?.name ?? ''
+  const taskTitleFor = (id?: string) => id ? taskList.find(t => t.id === id)?.title : undefined
+  const agentNameFor = (id: string)  => agentList.find(e => e.id === id)?.name ?? ''
 
   function handleNewTask() {
     if (projectList.length === 0) { navigate('/projects'); onClose(); return }
     if (projectList.length === 1) { navigate(`/projects/${projectList[0].id}?new=1`); onClose(); return }
     setMode('pick-project')
-    setQuery('')
   }
 
-  function buildEntries(): CmdEntry[] {
-    const result: CmdEntry[] = []
+  function go(path: string) { navigate(path); onClose() }
 
-    if (mode === 'pick-project') {
-      for (const p of projectList) {
-        result.push({ type: 'item', label: p.name, sub: p.repoPath?.split('/').pop(),
-          action: () => { navigate(`/projects/${p.id}?new=1`); onClose() } })
-      }
-      return result
-    }
-
-    // Actions
-    result.push({ type: 'section', label: 'Actions' })
-    result.push({ type: 'item', label: 'New task', sub: '⌘N',
-      icon: <Plus size={13} style={{ color: 'var(--ember)', flexShrink: 0 }} />,
-      action: handleNewTask, terms: ['create', 'add', 'task'] })
-
-    // Needs review
-    const review = sessionList.filter(s => !s.specId && (s.status === 'done' || s.status === 'error'))
-    if (review.length > 0) {
-      result.push({ type: 'section', label: 'Needs review' })
-      for (const s of review) {
-        result.push({ type: 'item',
-          label: taskTitleFor(s.workTaskId) ?? s.branch ?? s.id.slice(0, 8),
-          sub: agentNameFor(s.agentId),
-          dot: s.status === 'error' ? 'red' : 'amber',
-          action: () => { navigate(`/sessions/${s.id}`); onClose() },
-          terms: ['review', 'done', 'error'] })
-      }
-    }
-
-    // In progress
-    const running = sessionList.filter(s => s.status === 'running')
-    if (running.length > 0) {
-      result.push({ type: 'section', label: 'In progress' })
-      for (const s of running) {
-        result.push({ type: 'item',
-          label: taskTitleFor(s.workTaskId) ?? s.branch ?? s.id.slice(0, 8),
-          sub: agentNameFor(s.agentId),
-          dot: 'green', dotPulse: true,
-          action: () => { navigate(`/sessions/${s.id}`); onClose() },
-          terms: ['running', 'active'] })
-      }
-    }
-
-    // Projects
-    if (projectList.length > 0) {
-      result.push({ type: 'section', label: 'Projects' })
-      for (const p of projectList) {
-        result.push({ type: 'item', label: p.name, sub: p.repoPath?.split('/').pop(),
-          action: () => { navigate(`/projects/${p.id}`); onClose() } })
-      }
-    }
-
-    // Agents
-    if (agentList.length > 0) {
-      result.push({ type: 'section', label: 'Agents' })
-      for (const e of agentList) {
-        result.push({ type: 'item', label: e.name, sub: e.provider,
-          action: () => { navigate(`/agents/${e.id}`); onClose() } })
-      }
-    }
-
-    return result
-  }
-
-  const allEntries = buildEntries()
-
-  // When searching, flatten to items only and filter
-  const q = query.toLowerCase().trim()
-  const displayEntries: CmdEntry[] = q
-    ? allEntries.filter((e): e is Extract<CmdEntry, { type: 'item' }> =>
-        e.type === 'item' && (
-          e.label.toLowerCase().includes(q) ||
-          (e.sub ?? '').toLowerCase().includes(q) ||
-          (e.terms ?? []).some(t => t.includes(q))
-        ))
-    : allEntries
-
-  // Selectable items only (for keyboard nav)
-  const selectables = displayEntries.filter(e => e.type === 'item') as Extract<CmdEntry, { type: 'item' }>[]
-
-  useEffect(() => { setTimeout(() => inputRef.current?.focus(), 0) }, [mode])
-  useEffect(() => { setActive(0) }, [query, mode])
-
-  function onKey(e: React.KeyboardEvent) {
-    if (e.key === 'ArrowDown') { e.preventDefault(); setActive(a => Math.min(a + 1, selectables.length - 1)) }
-    if (e.key === 'ArrowUp')   { e.preventDefault(); setActive(a => Math.max(a - 1, 0)) }
-    if (e.key === 'Enter')     { selectables[active]?.action() }
-    if (e.key === 'Escape')    {
-      if (mode === 'pick-project') { setMode('search'); setQuery('') }
-      else onClose()
-    }
-  }
-
-  // Keep active item scrolled into view
-  useEffect(() => {
-    const el = listRef.current?.querySelector(`[data-sel="${active}"]`) as HTMLElement | null
-    el?.scrollIntoView({ block: 'nearest' })
-  }, [active])
-
-  let selIdx = -1
+  const review  = sessionList.filter(s => !s.specId && (s.status === 'done' || s.status === 'error'))
+  const running = sessionList.filter(s => s.status === 'running')
 
   return (
-    <div className="cmdk-overlay" onClick={onClose}>
-      <div className="cmdk" onClick={e => e.stopPropagation()}>
+    <CommandDialog open={open} onOpenChange={o => !o && onClose()}>
+      <CommandInput placeholder={mode === 'pick-project' ? 'Pick a project…' : 'Search or jump to…'} autoFocus />
+      <CommandList>
+        <CommandEmpty>Nothing found.</CommandEmpty>
 
-        <div className="cmdk-header">
-          {mode === 'pick-project' && (
-            <button className="cmdk-back" onClick={() => { setMode('search'); setQuery('') }}>←</button>
-          )}
-          <input
-            ref={inputRef}
-            className="cmdk-input"
-            placeholder={mode === 'pick-project' ? 'Pick a project…' : 'Search or run a command…'}
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            onKeyDown={onKey}
-            autoComplete="off"
-            spellCheck={false}
-          />
-        </div>
+        {mode === 'pick-project' ? (
+          <CommandGroup heading="New task — pick a project">
+            {projectList.map(p => (
+              <CommandItem key={p.id} onSelect={() => go(`/projects/${p.id}?new=1`)}>
+                <FolderOpen size={14} className="text-[var(--muted)]" />
+                <span>{p.name}</span>
+                {p.repoPath && <span className="text-[var(--faint)] text-xs ml-1">{p.repoPath.split('/').pop()}</span>}
+              </CommandItem>
+            ))}
+            <CommandItem onSelect={() => setMode('search')}>
+              <span className="text-[var(--muted)]">← Back</span>
+            </CommandItem>
+          </CommandGroup>
+        ) : (
+          <>
+            <CommandGroup heading="Actions">
+              <CommandItem onSelect={handleNewTask} keywords={['create', 'add', 'task']}>
+                <Plus size={14} className="text-[var(--ember)]" />
+                <span className="font-medium" style={{ color: 'var(--ember)' }}>New task</span>
+                <CommandShortcut>⌘N</CommandShortcut>
+              </CommandItem>
+            </CommandGroup>
 
-        {mode === 'pick-project' && (
-          <div className="cmdk-context">New task · pick a project</div>
+            {review.length > 0 && (
+              <>
+                <CommandSeparator />
+                <CommandGroup heading="Needs review">
+                  {review.map(s => (
+                    <CommandItem key={s.id} onSelect={() => go(`/sessions/${s.id}`)} keywords={['review', 'done', 'error']}>
+                      <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', s.status === 'error' ? 'bg-destructive' : 'bg-[var(--amber-dot)]')} />
+                      <span className="flex-1 truncate">{taskTitleFor(s.workTaskId) ?? s.branch ?? s.id.slice(0, 8)}</span>
+                      <span className="text-[var(--faint)] text-xs">{agentNameFor(s.agentId)}</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </>
+            )}
+
+            {running.length > 0 && (
+              <>
+                <CommandSeparator />
+                <CommandGroup heading="In progress">
+                  {running.map(s => (
+                    <CommandItem key={s.id} onSelect={() => go(`/sessions/${s.id}`)} keywords={['running', 'active']}>
+                      <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-[var(--green-dot)] animate-pulse" />
+                      <span className="flex-1 truncate">{taskTitleFor(s.workTaskId) ?? s.branch ?? s.id.slice(0, 8)}</span>
+                      <span className="text-[var(--faint)] text-xs">{agentNameFor(s.agentId)}</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </>
+            )}
+
+            {projectList.length > 0 && (
+              <>
+                <CommandSeparator />
+                <CommandGroup heading="Projects">
+                  {projectList.map(p => (
+                    <CommandItem key={p.id} onSelect={() => go(`/projects/${p.id}`)}>
+                      <FolderOpen size={14} className="text-[var(--muted)]" />
+                      <span>{p.name}</span>
+                      {p.repoPath && <span className="text-[var(--faint)] text-xs">{p.repoPath.split('/').pop()}</span>}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </>
+            )}
+
+            {agentList.length > 0 && (
+              <>
+                <CommandSeparator />
+                <CommandGroup heading="Agents">
+                  {agentList.map(e => (
+                    <CommandItem key={e.id} onSelect={() => go(`/agents/${e.id}`)}>
+                      <Users size={14} className="text-[var(--muted)]" />
+                      <span>{e.name}</span>
+                      <span className="text-[var(--faint)] text-xs">{e.provider}</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </>
+            )}
+          </>
         )}
+      </CommandList>
 
-        <div className="cmdk-list" ref={listRef}>
-          {displayEntries.length === 0 ? (
-            <div className="cmdk-empty">Nothing found</div>
-          ) : displayEntries.map((entry, i) => {
-            if (entry.type === 'section') {
-              return <div key={`s-${i}`} className="cmdk-section">{entry.label}</div>
-            }
-            selIdx++
-            const myIdx = selIdx
-            return (
-              <div
-                key={`i-${i}`}
-                data-sel={myIdx}
-                className={cn('cmdk-item', myIdx === active && 'active')}
-                onMouseEnter={() => setActive(myIdx)}
-                onClick={() => entry.action()}
-              >
-                {entry.icon
-                  ? entry.icon
-                  : entry.dot && <span className={cn('dot', entry.dot, entry.dotPulse && 'pulse')} style={{ flexShrink: 0 }} />
-                }
-                <span className="cmdk-label" style={entry.icon ? { color: 'var(--ember)', fontWeight: 600 } : undefined}>
-                  {entry.label}
-                </span>
-                {entry.sub && <span className="cmdk-sub">{entry.sub}</span>}
-              </div>
-            )
-          })}
-        </div>
-
-        <div className="cmdk-foot">
-          <span>↑↓ navigate</span>
-          <span>↵ select</span>
-          <span>esc {mode === 'pick-project' ? 'back' : 'close'}</span>
-        </div>
+      <div className="flex items-center gap-4 px-4 py-2.5 border-t border-[var(--rule-soft)]">
+        <span className="text-[11px] text-[var(--faint)]">↑↓ navigate</span>
+        <span className="text-[11px] text-[var(--faint)]">↵ select</span>
+        <span className="text-[11px] text-[var(--faint)]">esc close</span>
       </div>
-    </div>
+    </CommandDialog>
   )
 }
 
 // ── Company onboarding ─────────────────────────────────────────────────────────
-
-function CompanyOnboarding({ onDone }: { onDone: (name: string) => void }) {
+function CompanyOnboarding({ onDone }: { onDone: () => void }) {
   const [name, setName] = useState('')
   const qc = useQueryClient()
 
   const save = useMutation({
     mutationFn: (n: string) => me.update({ name: n }),
-    onSuccess: (profile) => {
-      qc.setQueryData(['me'], profile)
-      onDone(profile.name)
-    },
+    onSuccess: (profile) => { qc.setQueryData(['me'], profile); onDone() },
   })
 
   function submit() {
@@ -259,7 +198,7 @@ function CompanyOnboarding({ onDone }: { onDone: (name: string) => void }) {
       <div className="w-full max-w-sm px-6 flex flex-col gap-8">
         <div>
           <div className="flex items-center gap-2 mb-6">
-            <span className="pilot-mark text-base">p</span>
+            <span className="pilot-mark">p</span>
             <span className="text-sm font-medium text-muted-foreground">pilot</span>
           </div>
           <h1 className="text-2xl font-semibold tracking-tight mb-2">Welcome.</h1>
@@ -275,12 +214,7 @@ function CompanyOnboarding({ onDone }: { onDone: (name: string) => void }) {
             onKeyDown={e => { if (e.key === 'Enter') submit() }}
           />
           {save.isError && <p className="text-xs text-destructive">{save.error.message}</p>}
-          <Button
-            onClick={submit}
-            disabled={!name.trim() || save.isPending}
-            className="w-full"
-            size="lg"
-          >
+          <Button onClick={submit} disabled={!name.trim() || save.isPending} className="w-full" size="lg">
             {save.isPending ? 'Saving…' : 'Get started →'}
           </Button>
         </div>
@@ -289,15 +223,171 @@ function CompanyOnboarding({ onDone }: { onDone: (name: string) => void }) {
   )
 }
 
+// ── App sidebar ────────────────────────────────────────────────────────────────
+function AppSidebar({
+  reviewCount, runningCount, theme, workspaceName, userInitial,
+  onOpenPalette, onToggleTheme, onSignOut,
+}: {
+  reviewCount: number
+  runningCount: number
+  theme: 'light' | 'dark'
+  workspaceName: string
+  userInitial: string
+  onOpenPalette: () => void
+  onToggleTheme: () => void
+  onSignOut: () => void
+}) {
+  const location = useLocation()
+  const [projectsOpen, setProjectsOpen] = useState(true)
+
+  const { data: projectList = [] } = useQuery({
+    queryKey: ['projects'], queryFn: () => projects.list(),
+  })
+
+  function isActive(path: string, end = false) {
+    if (path === '/projects') return location.pathname.startsWith('/projects')
+    return end ? location.pathname === path : location.pathname.startsWith(path)
+  }
+
+  return (
+    <Sidebar collapsible="icon" className="border-r border-[var(--rule-soft)]">
+      <SidebarHeader className="h-14 justify-center">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarTrigger />
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarHeader>
+
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {NAV_ITEMS.map(({ label, path, end, icon: Icon }) => (
+                <SidebarMenuItem key={label}>
+                  <SidebarMenuButton asChild isActive={isActive(path, end)} tooltip={label}>
+                    <NavLink to={path} end={end}>
+                      <div className="relative">
+                        <Icon size={17} />
+                        {label === 'Today' && reviewCount > 0 && (
+                          <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-[var(--amber-dot)]" />
+                        )}
+                        {label === 'Today' && reviewCount === 0 && runningCount > 0 && (
+                          <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-[var(--green-dot)]" />
+                        )}
+                      </div>
+                      <span>{label}</span>
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <Collapsible.Root open={projectsOpen} onOpenChange={setProjectsOpen} className="group/collapsible">
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={isActive('/projects')} tooltip="Projects">
+                    <NavLink to="/projects">
+                      <FolderOpen size={17} />
+                      <span>Projects</span>
+                    </NavLink>
+                  </SidebarMenuButton>
+                  <Collapsible.Trigger asChild>
+                    <SidebarMenuAction className="data-[state=open]:rotate-90">
+                      <ChevronRight size={14} />
+                    </SidebarMenuAction>
+                  </Collapsible.Trigger>
+                  <Collapsible.Content>
+                    <SidebarMenuSub>
+                      {projectList.map(p => (
+                        <SidebarMenuSubItem key={p.id}>
+                          <SidebarMenuSubButton asChild isActive={location.pathname.startsWith(`/projects/${p.id}`)}>
+                            <NavLink to={`/projects/${p.id}`}>{p.name}</NavLink>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      ))}
+                      {projectList.length === 0 && (
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild>
+                            <NavLink to="/projects">All projects</NavLink>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      )}
+                    </SidebarMenuSub>
+                  </Collapsible.Content>
+                </SidebarMenuItem>
+              </Collapsible.Root>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+
+      <SidebarFooter className="h-14 justify-center">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <SidebarMenuButton
+                  size="default"
+                  tooltip={workspaceName || 'pilot'}
+                  className="data-[state=open]:bg-sidebar-accent group-data-[collapsible=icon]:!justify-center group-data-[collapsible=icon]:!p-0"
+                >
+                  <div className="flex size-4 shrink-0 items-center justify-center overflow-visible group-data-[collapsible=icon]:size-8">
+                    <div className="size-7 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
+                      <span className="text-sm font-semibold text-primary">{userInitial}</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col leading-tight min-w-0 pl-1 opacity-100 transition-opacity duration-150 group-data-[collapsible=icon]:hidden group-data-[state=collapsed]:opacity-0">
+                    <span className="font-semibold truncate">{workspaceName || 'pilot'}</span>
+                    <span className="text-[11px] text-sidebar-foreground/50 truncate">Workspace</span>
+                  </div>
+                  <ChevronsUpDown size={14} className="ml-auto shrink-0 opacity-100 transition-opacity duration-150 group-data-[collapsible=icon]:hidden group-data-[state=collapsed]:opacity-0" />
+                </SidebarMenuButton>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent side="top" align="start" className="w-56 mb-1">
+                <DropdownMenuItem onClick={onOpenPalette}>
+                  <Search size={14} />
+                  <span>Search</span>
+                  <span className="ml-auto text-[11px] text-[var(--faint)] font-mono">⌘K</span>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <NavLink to="/settings">
+                    <Settings size={14} />
+                    <span>Settings</span>
+                  </NavLink>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={onToggleTheme}>
+                  {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+                  <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={onSignOut} className="destructive">
+                  <LogOut size={14} />
+                  <span>Sign out</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+
+      <SidebarRail />
+    </Sidebar>
+  )
+}
+
 // ── Layout ─────────────────────────────────────────────────────────────────────
 export default function Layout() {
   const navigate = useNavigate()
-  const location = useLocation()
 
-  const [theme, setTheme]     = useState<'light' | 'dark'>(getTheme)
-  const [paletteOpen, setPalette] = useState(false)
-  const [projectsOpen, setProjectsOpen] = useState(() => localStorage.getItem('pilot.sidebar.projects') !== 'closed')
-  const [onboardingDone, setOnboardingDone] = useState(false)
+  const [theme, setTheme]             = useState<'light' | 'dark'>(getTheme)
+  const [paletteOpen, setPalette]     = useState(false)
+  const [onboardingDone, setOnboarding] = useState(false)
 
   function toggleTheme() {
     const next = theme === 'dark' ? 'light' : 'dark'
@@ -308,174 +398,82 @@ export default function Layout() {
   const openPalette  = useCallback(() => setPalette(true), [])
   const closePalette = useCallback(() => setPalette(false), [])
 
-  // ⌘K / ctrl+K global shortcut
   useEffect(() => {
     function handler(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault()
-        setPalette(p => !p)
-      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setPalette(p => !p) }
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
   }, [])
 
-  // Apply saved theme on mount
   useEffect(() => { applyTheme(theme) }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data: userProfile } = useQuery({ queryKey: ['me'], queryFn: () => me.profile() })
 
   const { data: sessionList = [] } = useQuery({
-    queryKey: ['sessions'],
-    queryFn: () => sessions.list(),
-    refetchInterval: 5000,
-    staleTime: 3000,
+    queryKey: ['sessions'], queryFn: () => sessions.list(),
+    refetchInterval: 5000, staleTime: 3000,
   })
-  const { data: projectList = [] } = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => projects.list(),
-  })
-  const { data: taskList = [] } = useQuery({
-    queryKey: ['tasks'],
-    queryFn: () => tasks.list(),
-    refetchInterval: 8000,
-  })
-
-  const reviewCount = sessionList.filter(
-    s => !s.specId && (s.status === 'done' || s.status === 'error')
-  ).length
+  const reviewCount  = sessionList.filter(s => !s.specId && (s.status === 'done' || s.status === 'error')).length
   const runningCount = sessionList.filter(s => s.status === 'running').length
 
-  function toggleProjects() {
-    setProjectsOpen(open => {
-      const next = !open
-      localStorage.setItem('pilot.sidebar.projects', next ? 'open' : 'closed')
-      return next
-    })
-  }
+  function signOut() { localStorage.removeItem('token'); navigate('/login') }
 
-  function projectStats(projectId: string) {
-    const running = sessionList.filter(s => s.projectId === projectId && s.status === 'running').length
-    const review = sessionList.filter(s => s.projectId === projectId && !s.specId && (s.status === 'done' || s.status === 'error')).length
-    const queued = taskList.filter(t => t.projectId === projectId && t.status === 'pending').length
-    return { running, review, queued }
-  }
-
-  function signOut() {
-    localStorage.removeItem('token')
-    navigate('/login')
-  }
-
-  const workspaceName = userProfile?.name ?? ''
-  const showOnboarding = userProfile !== undefined && !workspaceName && !onboardingDone
+  const showOnboarding = userProfile !== undefined && !userProfile?.name && !onboardingDone
 
   if (showOnboarding) {
-    return <CompanyOnboarding onDone={() => setOnboardingDone(true)} />
+    return <CompanyOnboarding onDone={() => setOnboarding(true)} />
   }
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <div className="sidebar-brand">
+    <SidebarProvider defaultOpen={false}>
+      <AppSidebar
+        reviewCount={reviewCount}
+        runningCount={runningCount}
+        theme={theme}
+        workspaceName={userProfile?.name ?? ''}
+        userInitial={(userProfile?.name || userProfile?.email || '?')[0].toUpperCase()}
+        onOpenPalette={openPalette}
+        onToggleTheme={toggleTheme}
+        onSignOut={signOut}
+      />
+
+      <SidebarInset>
+        {/* Mobile topbar */}
+        <header className="mobile-topbar">
           <button className="wordmark" onClick={() => navigate('/')}>
             <span className="pilot-mark">p</span>
             pilot
           </button>
-        </div>
+          <button className="navtool" onClick={openPalette} title="Search">
+            <Search size={15} />
+          </button>
+        </header>
 
-        <nav className="sidebar-nav">
-          {NAV.map(({ label, path, end, icon: Icon }) => (
-            <NavLink key={label} to={path} end={end} className={({ isActive }) => cn('side-link', isActive && 'active')}>
-              <Icon size={15} />
+        <main className="app-main">
+          <Outlet />
+        </main>
+
+        {/* Mobile tab bar */}
+        <nav className="mobile-tabbar">
+          {BOTTOM_NAV.map(({ label, path, end, icon: Icon }) => (
+            <NavLink
+              key={label}
+              to={path}
+              end={end}
+              className={({ isActive }) => cn('mobile-tab', isActive && 'active')}
+            >
+              <div className="mobile-tab-icon">
+                <Icon size={20} />
+                {label === 'Today' && reviewCount > 0 && <span className="mobile-tab-badge" />}
+              </div>
               <span>{label}</span>
-              {label === 'Today' && reviewCount > 0 && <span className="side-count amber">{reviewCount}</span>}
-              {label === 'Today' && reviewCount === 0 && runningCount > 0 && <span className="side-count green">{runningCount}</span>}
             </NavLink>
           ))}
-
-          <div className="side-group">
-            <button
-              className={cn('side-link side-disclosure', (location.pathname === '/projects' || location.pathname.startsWith('/projects/')) && 'active')}
-              onClick={toggleProjects}
-            >
-              <FolderOpen size={15} />
-              <span>Projects</span>
-              {projectList.length > 0 && <span className="side-count">{projectList.length}</span>}
-              <ChevronRight size={14} className={cn('side-caret', projectsOpen && 'open')} />
-            </button>
-
-            {projectsOpen && (
-              <div className="project-list">
-                <NavLink to="/projects" end className={({ isActive }) => cn('project-link', isActive && 'active')}>
-                  All projects
-                </NavLink>
-                {projectList.map(project => {
-                  const stats = projectStats(project.id)
-                  return (
-                    <NavLink key={project.id} to={`/projects/${project.id}`} className={({ isActive }) => cn('project-link', isActive && 'active')}>
-                      <span className="project-name">{project.name}</span>
-                      <span className="project-pips">
-                        {stats.running > 0 && <span className="mini-dot green" title={`${stats.running} running`} />}
-                        {stats.review > 0 && <span className="mini-dot amber" title={`${stats.review} to review`} />}
-                        {stats.queued > 0 && <span className="mini-dot idle" title={`${stats.queued} queued`} />}
-                      </span>
-                    </NavLink>
-                  )
-                })}
-              </div>
-            )}
-          </div>
         </nav>
+      </SidebarInset>
 
-        <div className="sidebar-footer">
-          <button className="side-link" onClick={openPalette}>
-            <Search size={15} />
-            <span>Search</span>
-            <span className="kbd">⌘K</span>
-          </button>
-          <button className="side-link" onClick={toggleTheme}>
-            {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
-            <span>{theme === 'dark' ? 'Light' : 'Dark'} mode</span>
-          </button>
-          <button className="side-link" onClick={signOut}>
-            <LogOut size={15} />
-            <span>Sign out</span>
-          </button>
-        </div>
-      </aside>
-
-      <header className="mobile-topbar">
-        <button className="wordmark" onClick={() => navigate('/')}>
-          <span className="pilot-mark">p</span>
-          pilot
-        </button>
-        <button className="navtool" onClick={openPalette} title="Search">
-          <Search size={15} />
-        </button>
-      </header>
-
-      <main className="app-main">
-        <Outlet />
-      </main>
-
-      <nav className="mobile-tabbar">
-        {BOTTOM_NAV.map(({ label, path, end, icon: Icon }) => (
-          <NavLink
-            key={label}
-            to={path}
-            end={end}
-            className={({ isActive }) => cn('mobile-tab', isActive && 'active')}
-          >
-            <div className="mobile-tab-icon">
-              <Icon size={20} />
-              {label === 'Today' && reviewCount > 0 && <span className="mobile-tab-badge" />}
-            </div>
-            <span>{label}</span>
-          </NavLink>
-        ))}
-      </nav>
-
-      {paletteOpen && <CommandPalette onClose={closePalette} />}
-    </div>
+      <CommandPalette open={paletteOpen} onClose={closePalette} />
+    </SidebarProvider>
   )
 }

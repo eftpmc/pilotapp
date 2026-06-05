@@ -1,10 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { sessions, tasks, agents, projects, events } from '../api/client'
 import type { CompanyEvent } from '../api/client'
 import { AgentAvatar } from '@/components/AgentAvatar'
-import { StatusBadge } from '@/components/StatusBadge'
 import { useElapsed, fmtSecs, timeAgo } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
@@ -84,11 +83,6 @@ export default function OverviewPage() {
   if (!parts.length && recentWork.length > 0) parts.push(`${recentWork.length} recent session${recentWork.length !== 1 ? 's' : ''}`)
   const subtitle = parts.length ? parts.join(' · ') : 'Nothing running yet.'
 
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
-  function toggle(id: string) {
-    setCollapsed(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
-  }
-
   return (
     <div className="flex-1 overflow-y-auto bg-background">
       <div className="max-w-[960px] px-6 pt-10 pb-8 flex flex-col gap-8">
@@ -111,7 +105,7 @@ export default function OverviewPage() {
               <button
                 key={n}
                 onClick={() => navigate(path)}
-                className="flex items-start gap-4 px-4 py-3.5 bg-card border border-border rounded-xl text-left hover:bg-muted/50 transition-colors w-full"
+                className="flex items-start gap-4 px-4 py-3.5 bg-card rounded-2xl text-left hover:bg-muted/50 hover:-translate-y-px transition-all w-full"
               >
                 <span className="w-5 h-5 rounded-md bg-primary/10 text-primary text-[11px] font-bold grid place-items-center shrink-0 mt-0.5">{n}</span>
                 <div>
@@ -126,14 +120,8 @@ export default function OverviewPage() {
         {/* Needs review */}
         {review.length > 0 && (
           <section>
-            <button className="flex items-center gap-2 mb-3 group" onClick={() => toggle('review')} aria-expanded={!collapsed.has('review')}>
-              <p className="text-xs font-medium text-muted-foreground/60 group-hover:text-muted-foreground transition-colors">
-                Needs review
-              </p>
-              <span className="count">{review.length}</span>
-            </button>
-            {!collapsed.has('review') && (
-              <div className="flex flex-col gap-2">
+            <p className="text-xs text-muted-foreground/50 mb-3">Needs review</p>
+            <div className="flex flex-col gap-2">
                 {review.map(s => {
                   const agent = agentFor(s.agentId)
                   const title = taskTitle(s.workTaskId)
@@ -143,8 +131,8 @@ export default function OverviewPage() {
                       key={s.id}
                       onClick={() => navigate(`/sessions/${s.id}`)}
                       className={cn(
-                        'flex items-center gap-3 px-4 py-3.5 bg-card border rounded-xl hover:bg-muted/50 transition-colors text-left w-full [box-shadow:var(--shadow-sm)]',
-                        isError ? 'border-destructive/25' : 'border-[color-mix(in_srgb,var(--amber)_25%,transparent)]'
+                        'flex items-center gap-3 px-4 py-3.5 bg-card rounded-2xl hover:bg-muted/50 hover:-translate-y-px transition-all text-left w-full',
+                        isError && 'outline outline-1 outline-destructive/20'
                       )}
                     >
                       <AgentAvatar agent={agent} size={36} />
@@ -152,26 +140,19 @@ export default function OverviewPage() {
                         <p className="text-sm font-semibold text-foreground truncate">{title ?? s.id.slice(0, 8)}</p>
                         <p className="text-xs text-muted-foreground mt-0.5">{agent?.name ?? '—'} · {projectName(s.projectId)}</p>
                       </div>
-                      <StatusBadge status={isError ? 'error' : 'done'} />
-                      <svg className="w-3.5 h-3.5 text-muted-foreground/30 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                      {isError && <span className="text-xs text-destructive/70 shrink-0">error</span>}
                     </button>
                   )
                 })}
-              </div>
-            )}
+            </div>
           </section>
         )}
 
         {/* Running */}
         {running.length > 0 && (
           <section>
-            <button className="flex items-center gap-2 mb-3 group" onClick={() => toggle('running')}>
-              <p className="text-xs text-muted-foreground/50 group-hover:text-muted-foreground transition-colors">
-                In progress · {running.length}
-              </p>
-            </button>
-            {!collapsed.has('running') && (
-              <div className="flex flex-col gap-2">
+            <p className="text-xs text-muted-foreground/50 mb-3">In progress</p>
+            <div className="flex flex-col gap-2">
                 {running.map(s => {
                   const agent = agentFor(s.agentId)
                   const title = taskTitle(s.workTaskId)
@@ -179,7 +160,7 @@ export default function OverviewPage() {
                     <button
                       key={s.id}
                       onClick={() => navigate(`/sessions/${s.id}`)}
-                      className="flex items-center gap-3 px-4 py-3 bg-card border border-border rounded-xl hover:bg-muted/50 transition-colors text-left w-full"
+                      className="flex items-center gap-3 px-4 py-3 bg-card rounded-2xl hover:bg-muted/50 hover:-translate-y-px transition-all text-left w-full"
                     >
                       <span className="dot green pulse shrink-0" />
                       <AgentAvatar agent={agent} size={34} running />
@@ -191,8 +172,7 @@ export default function OverviewPage() {
                     </button>
                   )
                 })}
-              </div>
-            )}
+            </div>
           </section>
         )}
 
@@ -210,7 +190,7 @@ export default function OverviewPage() {
                     key={s.id}
                     onClick={() => navigate(`/sessions/${s.id}`)}
                     className={cn(
-                      'flex items-center gap-3 px-4 py-3.5 bg-card border border-border rounded-xl hover:bg-muted/50 transition-colors text-left w-full',
+                      'flex items-center gap-3 px-4 py-3.5 bg-card rounded-2xl hover:bg-muted/50 hover:-translate-y-px transition-all text-left w-full',
                       isError && 'border-destructive/25'
                     )}
                   >
@@ -220,7 +200,6 @@ export default function OverviewPage() {
                       <p className="text-xs text-muted-foreground mt-0.5">{agent?.name ?? '—'} · {projectName(s.projectId)}</p>
                     </div>
                     <span className="text-xs text-muted-foreground/40 shrink-0 tabular-nums">{timeAgo(s.createdAt)}</span>
-                    <StatusBadge status={s.status} />
                   </button>
                 )
               })}
