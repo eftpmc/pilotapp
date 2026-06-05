@@ -4,8 +4,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { departments, agents, tools, sessions } from '../api/client'
 import { AgentAvatar } from '@/components/AgentAvatar'
 import { Button } from '@/components/ui/button'
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
+import { Field, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item'
 import { LiveTimer } from '@/components/LiveTimer'
 import { DEPT_COLORS } from '@/lib/agent-constants'
 import { cn } from '@/lib/utils'
@@ -131,13 +133,13 @@ export default function DepartmentPage() {
 
           {/* Edit form */}
           {editing && (
-            <section className="flex flex-col gap-4 px-4 py-4 bg-card border border-border rounded-xl">
-              <div className="flex flex-col gap-1.5">
-                <Label>Name</Label>
+            <section className="flex flex-col gap-4 px-4 py-4 bg-card/70 border border-border/60 rounded-xl">
+              <Field>
+                <FieldLabel>Name</FieldLabel>
                 <Input value={name} onChange={e => setName(e.target.value)} />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label>Color</Label>
+              </Field>
+              <Field>
+                <FieldLabel>Color</FieldLabel>
                 <div className="flex gap-2">
                   {DEPT_COLORS.map(c => (
                     <button
@@ -148,7 +150,7 @@ export default function DepartmentPage() {
                     />
                   ))}
                 </div>
-              </div>
+              </Field>
               {updateDept.isError && <p className="text-xs text-destructive">{updateDept.error.message}</p>}
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" onClick={() => setEditing(false)}>Cancel</Button>
@@ -162,39 +164,39 @@ export default function DepartmentPage() {
           <section>
             <p className="text-xs font-medium text-muted-foreground/50 mb-4">Lead</p>
             {lead ? (
-              <button
-                onClick={() => navigate(`/agents/${lead.id}`)}
-                className="flex items-center gap-3 w-full px-4 py-3 bg-card border border-border rounded-xl hover:bg-muted/30 transition-colors text-left"
-              >
-                <AgentAvatar agent={lead} size={40} running={!!activeSessionFor(lead.id)} />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold text-foreground">{lead.name}</span>
+              <Item asChild variant="outline" className="w-full bg-card/70 transition-colors hover:bg-card">
+                <button onClick={() => navigate(`/agents/${lead.id}`)}>
+                  <ItemMedia><AgentAvatar agent={lead} size={40} running={!!activeSessionFor(lead.id)} /></ItemMedia>
+                  <ItemContent className="items-start">
+                    <ItemTitle>
+                      {lead.name}
                     <span
                       className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
                       style={{ color: 'var(--ember)', background: 'var(--ember-wash)' }}
                     >Lead</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                    {lead.personality?.split('\n')[0]?.slice(0, 70) ?? lead.provider}
-                  </p>
-                </div>
-                {activeSessionFor(lead.id)
-                  ? <LiveTimer createdAt={activeSessionFor(lead.id)!.createdAt} />
-                  : <span className="text-xs text-muted-foreground/40 shrink-0">Idle</span>
-                }
-              </button>
+                    </ItemTitle>
+                    <ItemDescription className="w-full text-left text-xs">
+                      {lead.personality?.split('\n')[0]?.slice(0, 90) ?? lead.provider}
+                    </ItemDescription>
+                  </ItemContent>
+                  <ItemActions>
+                    {activeSessionFor(lead.id)
+                      ? <LiveTimer createdAt={activeSessionFor(lead.id)!.createdAt} />
+                      : <span className="text-xs text-muted-foreground/40 shrink-0">Idle</span>
+                    }
+                  </ItemActions>
+                </button>
+              </Item>
             ) : (
-              <button
-                onClick={() => navigate('/agents/hire')}
-                className="flex items-center gap-3 w-full px-4 py-3 border border-dashed border-border rounded-xl hover:bg-muted/20 transition-colors text-left"
-              >
-                <div className="w-10 h-10 rounded-full bg-muted/40 flex items-center justify-center text-muted-foreground text-lg leading-none">+</div>
-                <div>
-                  <p className="text-sm font-medium text-foreground">No lead yet</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Hire a Lead agent to coordinate this team.</p>
-                </div>
-              </button>
+              <Empty className="border border-dashed border-border/70 bg-card/30 py-10">
+                <EmptyHeader>
+                  <EmptyTitle>No lead yet</EmptyTitle>
+                  <EmptyDescription>Hire a Lead agent to coordinate this team.</EmptyDescription>
+                </EmptyHeader>
+                <EmptyContent>
+                  <Button size="sm" onClick={() => navigate('/agents/hire')}>Hire lead</Button>
+                </EmptyContent>
+              </Empty>
             )}
           </section>
 
@@ -209,48 +211,50 @@ export default function DepartmentPage() {
               )}
             </div>
             {workers.length > 0 ? (
-              <div className="flex flex-col divide-y divide-border/40">
+              <ItemGroup className="gap-2">
                 {workers.map(w => {
                   const active = activeSessionFor(w.id)
                   const agentSessions = sessionList.filter(s => s.agentId === w.id)
                   const agentCost = agentSessions.reduce((sum, s) => sum + (s.totalCostUsd ?? 0), 0)
                   return (
-                    <button
+                    <Item
                       key={w.id}
-                      onClick={() => navigate(`/agents/${w.id}`)}
-                      className="flex items-center gap-3 py-3 hover:bg-muted/30 transition-colors rounded-lg px-2 -mx-2 text-left"
+                      asChild
+                      variant="outline"
+                      className="w-full bg-card/60 transition-colors hover:bg-card"
                     >
-                      <AgentAvatar agent={w} size={36} running={!!active} />
-                      <div className="flex-1 min-w-0">
-                        <span className="text-sm font-medium text-foreground">{w.name}</span>
-                        <div className="flex items-center gap-2 mt-0.5">
+                      <button onClick={() => navigate(`/agents/${w.id}`)}>
+                        <ItemMedia><AgentAvatar agent={w} size={36} running={!!active} /></ItemMedia>
+                        <ItemContent className="items-start">
+                          <ItemTitle>{w.name}</ItemTitle>
                           {agentSessions.length > 0 && (
-                            <span className="text-xs text-muted-foreground">
+                            <ItemDescription className="w-full text-left text-xs">
                               {agentSessions.length} session{agentSessions.length !== 1 ? 's' : ''}
                               {agentCost > 0 && ` · $${agentCost.toFixed(2)}`}
-                            </span>
+                            </ItemDescription>
                           )}
-                        </div>
-                      </div>
-                      {active
-                        ? <LiveTimer createdAt={active.createdAt} />
-                        : <span className="text-xs text-muted-foreground/40 shrink-0">Idle</span>
-                      }
-                    </button>
+                        </ItemContent>
+                        <ItemActions>
+                          {active
+                            ? <LiveTimer createdAt={active.createdAt} />
+                            : <span className="text-xs text-muted-foreground/40 shrink-0">Idle</span>
+                          }
+                        </ItemActions>
+                      </button>
+                    </Item>
                   )
                 })}
-              </div>
+              </ItemGroup>
             ) : (
-              <button
-                onClick={() => navigate('/agents/hire')}
-                className="flex items-center gap-3 w-full px-4 py-3 border border-dashed border-border rounded-xl hover:bg-muted/20 transition-colors text-left"
-              >
-                <div className="w-9 h-9 rounded-full bg-muted/40 flex items-center justify-center text-muted-foreground text-base leading-none">+</div>
-                <div>
-                  <p className="text-sm font-medium text-foreground">No workers yet</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Add agents to this team.</p>
-                </div>
-              </button>
+              <Empty className="border border-dashed border-border/70 bg-card/30 py-10">
+                <EmptyHeader>
+                  <EmptyTitle>No workers yet</EmptyTitle>
+                  <EmptyDescription>Add agents to this team.</EmptyDescription>
+                </EmptyHeader>
+                <EmptyContent>
+                  <Button size="sm" onClick={() => navigate('/agents/hire')}>Add worker</Button>
+                </EmptyContent>
+              </Empty>
             )}
           </section>
 
@@ -259,28 +263,33 @@ export default function DepartmentPage() {
             <section>
               <p className="text-xs font-medium text-muted-foreground/50 mb-1">Team tools</p>
               <p className="text-xs text-muted-foreground mb-4">Available to every agent in this team.</p>
-              <div className="flex flex-col divide-y divide-border/40">
+              <ItemGroup className="gap-2">
                 {allTools.map(tool => {
                   const assigned = deptToolIds.has(tool.id)
                   return (
-                    <button
+                    <Item
                       key={tool.id}
-                      type="button"
-                      onClick={() => assigned ? unassignTool.mutate(tool.id) : assignTool.mutate(tool.id)}
-                      className="flex items-center gap-3 py-2.5 text-left hover:bg-muted/30 transition-colors rounded-lg px-2 -mx-2"
+                      asChild
+                      variant="outline"
+                      className="w-full bg-card/60 transition-colors hover:bg-card"
                     >
-                      <span className={cn(
-                        'w-4 h-4 rounded border flex items-center justify-center shrink-0 text-[10px] font-bold transition-colors',
-                        assigned ? 'bg-primary border-primary text-primary-foreground' : 'border-border text-transparent'
-                      )}>✓</span>
-                      <div className="min-w-0 flex-1">
-                        <span className="text-sm font-medium text-foreground">{tool.name}</span>
-                        {tool.description && <span className="text-xs text-muted-foreground ml-2">{tool.description}</span>}
-                      </div>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => assigned ? unassignTool.mutate(tool.id) : assignTool.mutate(tool.id)}
+                      >
+                        <ItemMedia><span className={cn(
+                          'w-4 h-4 rounded border flex items-center justify-center shrink-0 text-[10px] font-bold transition-colors',
+                          assigned ? 'bg-primary border-primary text-primary-foreground' : 'border-border text-transparent'
+                        )}>✓</span></ItemMedia>
+                        <ItemContent className="items-start">
+                          <ItemTitle>{tool.name}</ItemTitle>
+                          {tool.description && <ItemDescription className="w-full text-left text-xs">{tool.description}</ItemDescription>}
+                        </ItemContent>
+                      </button>
+                    </Item>
                   )
                 })}
-              </div>
+              </ItemGroup>
             </section>
           )}
 

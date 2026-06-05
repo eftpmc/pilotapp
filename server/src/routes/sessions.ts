@@ -4,11 +4,11 @@ import { z } from 'zod';
 import fs from 'fs';
 import path from 'path';
 import { db } from '../db';
-import { createWorktree, removeWorktree, getDiff, mergeWorktree, commitWorktree, createWorkDir, removeWorkDir, getWorkDirDiff, copyTaskFilesToWorkDir, mergeIntoProjectWorkspace, seedWorkDirFromWorkspace } from '../services/git';
+import { createWorktree, removeWorktree, getDiff, mergeWorktree, commitWorktree, createWorkDir, removeWorkDir, getWorkDirDiff, copyTaskFilesToWorkDir, mergeIntoProjectWorkspace } from '../services/git';
 import { taskFilesDir } from './tasks';
 import { killAgent, runAgent, continueAgent } from '../services/agents';
 import { writeEvent } from '../services/events';
-import { markSessionMerged, resetErroredSessionForRetry, resetTaskAfterSessionDiscard } from '../services/lifecycle';
+import { markSessionMerged, markTaskDone, resetErroredSessionForRetry, resetTaskAfterSessionDiscard } from '../services/lifecycle';
 import { broadcastGlobal } from '../services/broadcast';
 import { authMiddleware, userId } from '../middleware/auth';
 import { SessionRow, toSession } from './_helpers';
@@ -53,47 +53,6 @@ router.get('/:id', (req: Request, res: Response) => {
   const row = db.prepare('SELECT * FROM sessions WHERE id = ? AND user_id = ?').get(req.params.id, userId(req)) as SessionRow | undefined;
   if (!row) { res.status(404).json({ error: 'Not found' }); return; }
   res.json(toSession(row));
-});
-
-// ---------------------------------------------------------------------------
-// POST /sessions
-// ---------------------------------------------------------------------------
-
-const CreateSchema = z.object({
-  agentId:   z.string(),
-  projectId: z.string(),
-});
-
-router.post('/', async (req: Request, res: Response) => {
-  const parsed = CreateSchema.safeParse(req.body);
-  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
-
-  const uid = userId(req);
-  const agent   = db.prepare(`
-    SELECT a.id, COALESCE(c.type, a.provider) as provider
-    FROM agents a
-    LEFT JOIN connections c ON c.id = a.connection_id
-    WHERE a.id = ? AND a.user_id = ?
-  `).get(parsed.data.agentId, uid) as AgentRow | undefined;
-  const project = db.prepare('SELECT * FROM projects WHERE id = ? AND user_id = ?').get(parsed.data.projectId, uid) as ProjectRow | undefined;
-
-  if (!agent)   { res.status(404).json({ error: 'Agent not found' }); return; }
-  if (!project) { res.status(404).json({ error: 'Project not found' }); return; }
-
-  const id            = uuid();
-  const isGit         = (project.workspace_mode ?? 'git') === 'git';
-  const branch        = isGit ? `agent/${id}` : '';
-  const worktreePath  = isGit
-    ? await createWorktree({ id: project.id, name: project.name, repoPath: project.repo_path, role: project.role as any, createdAt: project.created_at }, id)
-    : await createWorkDir(id);
-  if (!isGit) await seedWorkDirFromWorkspace(projectWorkspaceDir(project.id), worktreePath).catch(() => {});
-
-  db.prepare(
-    'INSERT INTO sessions (id, user_id, agent_id, project_id, provider, branch, worktree_path, workspace_mode, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(id, uid, agent.id, project.id, agent.provider, branch, worktreePath, project.workspace_mode ?? 'git', 'idle', new Date().toISOString());
-
-  const row = db.prepare('SELECT * FROM sessions WHERE id = ?').get(id) as SessionRow;
-  res.status(201).json(toSession(row));
 });
 
 // ---------------------------------------------------------------------------
@@ -145,7 +104,7 @@ router.post('/:id/merge', async (req: Request, res: Response) => {
   const row     = db.prepare('SELECT * FROM sessions WHERE id = ? AND user_id = ?').get(req.params.id, uid) as SessionRow | undefined;
   const project = row ? db.prepare('SELECT * FROM projects WHERE id = ?').get(row.project_id) as ProjectRow | undefined : undefined;
   if (!row || !project) { res.status(404).json({ error: 'Not found' }); return; }
-  if (row.status !== 'done') { res.status(400).json({ error: 'Only completed sessions can be merged' }); return; }
+  if (row.status !== 'done' && row.status !== 'error') { res.status(400).json({ error: 'Only completed sessions can be merged' }); return; }
   if (row.parent_session_id) { res.status(400).json({ error: 'Review sessions cannot be merged' }); return; }
 
   const isWorkspace = (row.workspace_mode ?? 'git') === 'workspace';
@@ -156,6 +115,7 @@ router.post('/:id/merge', async (req: Request, res: Response) => {
     // Merge session output into persistent project workspace so future sessions inherit it
     mergeIntoProjectWorkspace(row.worktree_path, projectWorkspaceDir(row.project_id)).catch(() => {});
     markSessionMerged(row.id);
+    if (row.work_task_id) markTaskDone(row.work_task_id);
     writeEvent(uid, 'session.merged', { sessionId: row.id, taskId: row.work_task_id ?? undefined, projectId: row.project_id, agentId: row.agent_id });
     res.json({ merged: true });
     return;
@@ -176,6 +136,7 @@ router.post('/:id/merge', async (req: Request, res: Response) => {
   }
   removeWorktree(projectObj, row.worktree_path).catch(() => {});
   markSessionMerged(row.id);
+  if (row.work_task_id) markTaskDone(row.work_task_id);
   writeEvent(uid, 'session.merged', { sessionId: row.id, taskId: row.work_task_id ?? undefined, projectId: row.project_id, agentId: row.agent_id });
   res.json({ merged: true });
 });

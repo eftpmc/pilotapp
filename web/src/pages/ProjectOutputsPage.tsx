@@ -1,6 +1,9 @@
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { projects } from '../api/client'
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item'
+import { Spinner } from '@/components/ui/spinner'
 import { Download } from 'lucide-react'
 
 const BORING = [
@@ -56,22 +59,25 @@ function FileRow({ file, projectId }: { file: string; projectId: string }) {
   const dir   = file.includes('/') ? file.slice(0, file.lastIndexOf('/')) : null
 
   return (
-    <button
-      onClick={() => downloadFile(projectId, file)}
-      className="group flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-muted/30 transition-colors"
-    >
-      <span
-        className="shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold w-12 text-center"
-        style={{ background: `color-mix(in srgb, ${color} 15%, transparent)`, color }}
-      >
-        {ext.toUpperCase() || '—'}
-      </span>
-      <span className="flex-1 min-w-0">
-        <span className="text-sm font-medium text-foreground">{name}</span>
-        {dir && <span className="ml-2 text-xs text-muted-foreground/50 font-mono">{dir}</span>}
-      </span>
-      <Download size={13} className="shrink-0 text-muted-foreground/30 group-hover:text-muted-foreground transition-colors" />
-    </button>
+    <Item asChild className="group">
+      <button onClick={() => downloadFile(projectId, file)}>
+        <ItemMedia>
+          <span
+            className="shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] font-semibold w-12 text-center"
+            style={{ background: `color-mix(in srgb, ${color} 15%, transparent)`, color }}
+          >
+            {ext.toUpperCase() || '-'}
+          </span>
+        </ItemMedia>
+        <ItemContent>
+          <ItemTitle>{name}</ItemTitle>
+          {dir && <ItemDescription className="font-mono text-xs">{dir}</ItemDescription>}
+        </ItemContent>
+        <ItemActions>
+          <Download size={13} className="shrink-0 text-muted-foreground/30 group-hover:text-muted-foreground transition-colors" />
+        </ItemActions>
+      </button>
+    </Item>
   )
 }
 
@@ -88,21 +94,23 @@ export default function ProjectOutputsPage() {
   const files = sortFiles(data?.files ?? [])
 
   if (isLoading) return (
-    <div className="p-8"><p className="text-xs font-mono text-muted-foreground">Loading…</p></div>
+    <div className="p-8 flex items-center gap-2 text-sm text-muted-foreground"><Spinner /> Loading outputs</div>
   )
 
   if (files.length === 0) return (
-    <div className="flex flex-col items-center justify-center py-24 text-center">
-      <p className="text-sm text-muted-foreground">No outputs yet</p>
-      <p className="text-xs text-muted-foreground/60 mt-1">Files will appear here once sessions are completed.</p>
-    </div>
+    <Empty className="mx-6 my-10 border border-dashed border-border/70 bg-card/30">
+      <EmptyHeader>
+        <EmptyTitle>No outputs yet</EmptyTitle>
+        <EmptyDescription>Files will appear here once sessions are completed.</EmptyDescription>
+      </EmptyHeader>
+    </Empty>
   )
 
   return (
     <div className="p-6 max-w-2xl">
-      <div className="rounded-lg border border-border overflow-hidden divide-y divide-border/60">
+      <ItemGroup className="rounded-xl border border-border/70 bg-card/70 p-1">
         {files.map(f => <FileRow key={f} file={f} projectId={id!} />)}
-      </div>
+      </ItemGroup>
     </div>
   )
 }

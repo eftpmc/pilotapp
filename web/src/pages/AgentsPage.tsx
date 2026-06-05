@@ -4,11 +4,14 @@ import { useNavigate } from 'react-router-dom'
 import { agents, departments, sessions, tasks } from '../api/client'
 import type { Agent, Department, Session } from '../api/client'
 import { Button } from '@/components/ui/button'
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
+import { Field, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item'
+import { Spinner } from '@/components/ui/spinner'
 import { AgentAvatar } from '@/components/AgentAvatar'
 import { LiveTimer } from '@/components/LiveTimer'
 import { PERSONALITY_PRESETS, DEPT_COLORS } from '@/lib/agent-constants'
@@ -31,13 +34,13 @@ function DepartmentDialog({ open, dept, onClose, onSave, loading, error }: {
       <DialogContent>
         <DialogHeader><DialogTitle>{dept ? 'Edit Team' : 'New Team'}</DialogTitle></DialogHeader>
         <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <Label>Name</Label>
+          <Field>
+            <FieldLabel>Name</FieldLabel>
             <Input autoFocus value={name} onChange={e => setName(e.target.value)}
               placeholder="Engineering" onKeyDown={e => { if (e.key === 'Enter' && name.trim()) onSave({ name: name.trim(), color }) }} />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Color</Label>
+          </Field>
+          <Field>
+            <FieldLabel>Color</FieldLabel>
             <div className="flex gap-2">
               {DEPT_COLORS.map(c => (
                 <button key={c} type="button" onClick={() => setColor(c)} className={cn(
@@ -46,13 +49,13 @@ function DepartmentDialog({ open, dept, onClose, onSave, loading, error }: {
                 )} style={{ background: c }} />
               ))}
             </div>
-          </div>
+          </Field>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
             <Button className="flex-1" disabled={!name.trim() || loading}
               onClick={() => onSave({ name: name.trim(), color })}>
-              {loading ? '…' : dept ? 'Save' : 'Create'}
+              {loading ? <Spinner /> : dept ? 'Save' : 'Create'}
             </Button>
           </div>
         </div>
@@ -85,18 +88,17 @@ function AgentCard({ employee, activeSession, activeTaskTitle, sessionCount, tot
 
   return (
     <article>
-      <button
-        className="w-full flex items-center gap-3 px-4 py-3.5 bg-card rounded-2xl hover:bg-muted/50 hover:-translate-y-px transition-all text-left"
-        onClick={() => !confirmDelete && navigate(`/agents/${employee.id}`)}
-      >
-        <AgentAvatar agent={employee} size={42} running={isActive} />
-
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 mb-0.5">
-            <span className="text-sm font-semibold text-foreground truncate">{employee.name}</span>
+      <Item asChild variant="outline" className="w-full bg-card/70 transition-all hover:-translate-y-0.5 hover:bg-card">
+        <button onClick={() => !confirmDelete && navigate(`/agents/${employee.id}`)}>
+          <ItemMedia>
+            <AgentAvatar agent={employee} size={42} running={isActive} />
+          </ItemMedia>
+          <ItemContent className="min-w-0">
+            <ItemTitle className="max-w-full truncate">
+              {employee.name}
             {isLead && <Badge variant="default" className="text-[10px] px-1.5 py-0">Lead</Badge>}
-          </div>
-          <div className="flex items-center gap-1.5 flex-wrap">
+            </ItemTitle>
+            <ItemDescription className="flex w-full items-center gap-1.5 flex-wrap text-left">
             {presetLabels.slice(0, 2).map(label => (
               <Badge key={label} variant="secondary" className="text-[10px] px-1.5 py-0 font-normal">{label}</Badge>
             ))}
@@ -107,21 +109,21 @@ function AgentCard({ employee, activeSession, activeTaskTitle, sessionCount, tot
               <span className="text-[11px] text-[var(--green)] truncate">{activeTaskTitle}</span>
             )}
             {!isActive && (sessionCount ?? 0) > 0 && (
-              <span className="text-[11px] text-muted-foreground/50">
+              <span className="text-[11px] text-muted-foreground/60">
                 {sessionCount} session{sessionCount !== 1 ? 's' : ''}
                 {(totalCost ?? 0) > 0 && ` · $${totalCost!.toFixed(2)}`}
               </span>
             )}
-          </div>
-        </div>
-
-        <div className="shrink-0">
-          {isActive
-            ? <LiveTimer createdAt={activeSession!.createdAt} />
-            : <span className="text-xs text-muted-foreground/40">Idle</span>
-          }
-        </div>
-      </button>
+            </ItemDescription>
+          </ItemContent>
+          <ItemActions>
+            {isActive
+              ? <LiveTimer createdAt={activeSession!.createdAt} />
+              : <span className="text-xs text-muted-foreground/40">Idle</span>
+            }
+          </ItemActions>
+        </button>
+      </Item>
 
       {confirmDelete && (
         <div className="flex items-center gap-3 px-4 py-2.5 mt-1 bg-card rounded-xl">
@@ -213,7 +215,7 @@ function DepartmentSection({ dept, agentsInDept, sessionList, taskList, mutation
           Add the first agent{!isUnassigned && dept ? ` to ${dept.name}` : ''}
         </button>
       ) : (
-        <div className="flex flex-col gap-2">
+        <ItemGroup className="gap-3">
           {lead && (
             <AgentCard
               employee={lead}
@@ -235,7 +237,7 @@ function DepartmentSection({ dept, agentsInDept, sessionList, taskList, mutation
               onDelete={() => mutations.deleteAgent(emp.id)}
             />
           ))}
-        </div>
+        </ItemGroup>
       )}
     </section>
   )
@@ -284,7 +286,7 @@ export default function AgentsPage() {
 
   return (
     <div className="flex-1 overflow-y-auto bg-background">
-      <div className="max-w-[960px] px-6 pt-10 pb-8">
+      <div className="max-w-[960px] px-6 pt-12 pb-10">
 
         <div className="flex items-start justify-between mb-8">
           <div>
@@ -340,10 +342,15 @@ export default function AgentsPage() {
         )}
 
         {deptList.length === 0 && employeeList.length === 0 && (
-          <p className="text-sm text-muted-foreground">
-            No agents yet.{' '}
-            <button className="text-primary hover:underline" onClick={() => navigate('/agents/hire')}>Hire your first agent.</button>
-          </p>
+          <Empty className="border border-dashed border-border/70 bg-card/30">
+            <EmptyHeader>
+              <EmptyTitle>No agents yet</EmptyTitle>
+              <EmptyDescription>Hire an agent, give them a personality, and start assigning work.</EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button onClick={() => navigate('/agents/hire')}>Hire your first agent</Button>
+            </EmptyContent>
+          </Empty>
         )}
 
       </div>

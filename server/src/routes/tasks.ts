@@ -194,6 +194,16 @@ router.post('/queue/run', async (req: Request, res: Response) => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /tasks/:id
+// ---------------------------------------------------------------------------
+
+router.get('/:id', (req: Request, res: Response) => {
+  const row = db.prepare('SELECT * FROM tasks WHERE id = ? AND user_id = ?').get(req.params.id, userId(req)) as TaskRow | undefined;
+  if (!row) { res.status(404).json({ error: 'Not found' }); return; }
+  res.json(toTask(row));
+});
+
+// ---------------------------------------------------------------------------
 // PATCH /tasks/:id
 // ---------------------------------------------------------------------------
 

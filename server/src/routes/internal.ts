@@ -109,22 +109,33 @@ router.post('/tasks', async (req: Request, res: Response) => {
 
         try {
           const worktreePath = await createWorktree(projectObj, newSessionId, baseBranch);
-          db.prepare(`
-            INSERT INTO sessions (id, user_id, agent_id, project_id, work_task_id, provider, branch, worktree_path, status, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'idle', ?)
-          `).run(newSessionId, session.user_id, idleAgent.id, session.project_id, taskId, idleAgent.provider, branch, worktreePath, now);
-          assignTaskToSession(taskId, idleAgent.id, newSessionId, now);
 
-          const { runAgent } = await import('../services/agents');
-          const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId) as { prompt: string } | undefined;
-          if (task) {
-            const newSession = db.prepare('SELECT * FROM sessions WHERE id = ?').get(newSessionId) as any;
-            void runAgent(
-              { id: newSession.id, agentId: newSession.agent_id, projectId: newSession.project_id,
-                workTaskId: newSession.work_task_id, provider: newSession.provider, branch: newSession.branch,
-                worktreePath: newSession.worktree_path, status: newSession.status, createdAt: newSession.created_at },
-              task.prompt, session.user_id, idleAgent.id
-            );
+          // Atomically claim the task — bail if another worker already took it
+          const claimed = db.prepare(
+            "UPDATE tasks SET status = 'running', agent_id = ?, session_id = ?, started_at = ? WHERE id = ? AND status = 'pending'"
+          ).run(idleAgent.id, newSessionId, now, taskId);
+
+          if (claimed.changes === 0) {
+            // Task already claimed by a concurrent auto-assign; clean up the worktree we just made
+            const { removeWorktree } = await import('../services/git');
+            removeWorktree(projectObj, worktreePath).catch(() => {});
+          } else {
+            db.prepare(`
+              INSERT INTO sessions (id, user_id, agent_id, project_id, work_task_id, provider, branch, worktree_path, status, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'idle', ?)
+            `).run(newSessionId, session.user_id, idleAgent.id, session.project_id, taskId, idleAgent.provider, branch, worktreePath, now);
+
+            const { runAgent } = await import('../services/agents');
+            const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId) as { prompt: string } | undefined;
+            if (task) {
+              const newSession = db.prepare('SELECT * FROM sessions WHERE id = ?').get(newSessionId) as any;
+              void runAgent(
+                { id: newSession.id, agentId: newSession.agent_id, projectId: newSession.project_id,
+                  workTaskId: newSession.work_task_id, provider: newSession.provider, branch: newSession.branch,
+                  worktreePath: newSession.worktree_path, status: newSession.status, createdAt: newSession.created_at },
+                task.prompt, session.user_id, idleAgent.id
+              );
+            }
           }
         } catch (err) {
           console.error('[internal] Failed to auto-assign:', err);

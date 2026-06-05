@@ -4,10 +4,13 @@ import { tools, departments } from '../api/client'
 import type { Tool, Department } from '../api/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
+import { Field, FieldLabel } from '@/components/ui/field'
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item'
+import { Spinner } from '@/components/ui/spinner'
 import { cn } from '@/lib/utils'
 import {
   Globe, Brain, Wrench, Plus, Pencil, Trash2, Users,
@@ -276,17 +279,17 @@ function ToolConfigDialog({ open, tool, onClose, onSave, loading, error }: {
             MCP servers are passed via <span className="font-mono bg-muted px-1 rounded">--mcp-config</span> when an employee runs. The JSON should be the contents of <span className="font-mono bg-muted px-1 rounded">mcpServers</span>.
           </p>
           <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <Label>Name</Label>
+            <Field>
+              <FieldLabel>Name</FieldLabel>
               <Input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="My Tool" />
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-muted-foreground font-normal">Description</Label>
+            </Field>
+            <Field>
+              <FieldLabel className="text-muted-foreground font-normal">Description</FieldLabel>
               <Input value={desc} onChange={e => setDesc(e.target.value)} placeholder="What it does" />
-            </div>
+            </Field>
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>MCP Config <span className="text-muted-foreground font-normal text-xs">(JSON)</span></Label>
+          <Field>
+            <FieldLabel>MCP Config <span className="text-muted-foreground font-normal text-xs">(JSON)</span></FieldLabel>
             <Textarea
               value={configStr}
               onChange={e => setConfig(e.target.value)}
@@ -295,12 +298,12 @@ function ToolConfigDialog({ open, tool, onClose, onSave, loading, error }: {
               className="font-mono text-xs resize-y"
             />
             {jsonErr && <p className="text-xs text-destructive">{jsonErr}</p>}
-          </div>
+          </Field>
           {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
             <Button className="flex-1" disabled={!name.trim() || loading} onClick={submit}>
-              {loading ? '…' : tool ? 'Save' : 'Add Tool'}
+              {loading ? <Spinner /> : tool ? 'Save' : 'Add Tool'}
             </Button>
           </div>
         </div>
@@ -351,8 +354,8 @@ function PresetInstallDialog({ preset, onClose, onInstall, loading, error }: {
         <div className="flex flex-col gap-4">
           <p className="text-xs text-muted-foreground">{preset.description}</p>
           {preset.envVars.map(v => (
-            <div key={v.key} className="flex flex-col gap-1.5">
-              <Label>{v.label}</Label>
+            <Field key={v.key}>
+              <FieldLabel>{v.label}</FieldLabel>
               <Input
                 autoFocus
                 value={envValues[v.key] ?? ''}
@@ -360,13 +363,13 @@ function PresetInstallDialog({ preset, onClose, onInstall, loading, error }: {
                 placeholder={v.placeholder}
                 type="password"
               />
-            </div>
+            </Field>
           ))}
           {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="flex gap-2">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
             <Button className="flex-1" disabled={!canSubmit || loading} onClick={submit}>
-              {loading ? '…' : 'Add to company'}
+              {loading ? <Spinner /> : 'Add to company'}
             </Button>
           </div>
         </div>
@@ -393,7 +396,7 @@ function ToolCard({ tool, deptList, deptToolIds, employeeToolIds, onEdit, onDele
   const directCount = employeeToolIds.size
 
   return (
-    <div className="bg-card rounded-xl [box-shadow:var(--shadow-card)] border border-border/50 overflow-hidden flex flex-col">
+    <div className="bg-card/80 rounded-xl shadow-sm border border-border/60 overflow-hidden flex flex-col">
       {/* Header */}
       <div className="px-4 pt-4 pb-3 flex items-start gap-3">
         <div className="w-8 h-8 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
@@ -477,35 +480,35 @@ function PresetRow({ preset, installedTool, onAdd }: { preset: Preset; installed
   const installed = !!installedTool
   const serverCount = installedTool ? Object.keys(installedTool.mcpConfig).length : 0
   return (
-    <div className={cn(
-      'flex items-center gap-4 px-4 py-3.5 rounded-xl border transition-colors group',
-      installed ? 'border-border/40 bg-muted/20 opacity-75' : 'border-transparent hover:border-border/60 hover:bg-muted/30'
+    <Item className={cn(
+      'rounded-xl border transition-colors group',
+      installed ? 'border-border/40 bg-muted/10 opacity-60' : 'border-border/50 bg-card/50 hover:bg-card hover:border-border/70'
     )}>
-      {Icon && (
-        <div className="w-8 h-8 rounded-lg bg-muted/70 flex items-center justify-center shrink-0">
-          <Icon className="h-4 w-4 text-foreground/70" />
-        </div>
-      )}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-baseline gap-2">
-          <span className="text-sm font-medium text-foreground">{preset.name}</span>
-          <span className="text-xs text-muted-foreground">{preset.tagline}</span>
-        </div>
-        <p className="text-xs text-muted-foreground/70 mt-0.5 leading-snug">
+      <ItemMedia variant="icon">
+        {Icon ? <Icon className="h-4 w-4 text-foreground/70" /> : <Wrench className="h-4 w-4 text-foreground/70" />}
+      </ItemMedia>
+      <ItemContent>
+        <ItemTitle>
+          {preset.name}
+          <span className="text-xs font-normal text-muted-foreground">{preset.tagline}</span>
+        </ItemTitle>
+        <ItemDescription className="text-xs">
           {installed ? `Installed · ${serverCount} server${serverCount !== 1 ? 's' : ''}` : preset.description}
-        </p>
-      </div>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={onAdd}
-        disabled={installed}
-        title={installed ? `${preset.name} is already installed.` : `Add ${preset.name}`}
-        className="shrink-0"
-      >
-        {installed ? 'Installed' : 'Add'}
-      </Button>
-    </div>
+        </ItemDescription>
+      </ItemContent>
+      <ItemActions>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={onAdd}
+          disabled={installed}
+          title={installed ? `${preset.name} is already installed.` : `Add ${preset.name}`}
+          className="shrink-0"
+        >
+          {installed ? 'Installed' : 'Add'}
+        </Button>
+      </ItemActions>
+    </Item>
   )
 }
 
@@ -566,7 +569,7 @@ export default function ToolsPage() {
 
   return (
     <div className="flex-1 overflow-y-auto bg-background">
-      <div className="max-w-[960px] px-6 pt-10 pb-8">
+      <div className="max-w-[1040px] px-6 pt-12 pb-10">
 
         {/* Header */}
         <div className="flex items-start justify-between mb-8">
@@ -584,7 +587,7 @@ export default function ToolsPage() {
         {toolList.length > 0 && (
           <section className="mb-10">
             <p className="text-xs text-muted-foreground/50 mb-3">Installed · {toolList.length}</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {toolList.map(tool => (
                 <ToolCard
                   key={tool.id}
@@ -607,7 +610,7 @@ export default function ToolsPage() {
         {PRESETS.length > 0 && (
           <section>
             <p className="text-xs text-muted-foreground/50 mb-1">Available</p>
-            <div className="flex flex-col">
+            <ItemGroup className="gap-2">
               {PRESETS.map(preset => (
                 <PresetRow
                   key={preset.id}
@@ -616,12 +619,17 @@ export default function ToolsPage() {
                   onAdd={() => setAddPreset(preset)}
                 />
               ))}
-            </div>
+            </ItemGroup>
           </section>
         )}
 
         {toolList.length === 0 && PRESETS.length === 0 && (
-          <p className="text-sm text-muted-foreground">All preset tools installed.</p>
+          <Empty className="border border-dashed border-border/70 bg-card/30">
+            <EmptyHeader>
+              <EmptyTitle>All preset tools installed</EmptyTitle>
+              <EmptyDescription>Your agents have access to every preset in the catalog.</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         )}
 
       </div>

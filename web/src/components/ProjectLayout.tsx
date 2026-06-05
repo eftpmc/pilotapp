@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useParams, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { projects, sessions } from '../api/client'
 import { Button } from '@/components/ui/button'
@@ -6,16 +6,17 @@ import { cn } from '@/lib/utils'
 import { ArrowLeft } from 'lucide-react'
 
 const TABS = [
-  { label: 'Board',    path: ''          },
-  { label: 'Sessions', path: '/sessions' },
-  { label: 'Plans',    path: '/plans'    },
-  { label: 'Outputs',  path: '/outputs'  },
-  { label: 'Settings', path: '/settings' },
+  { label: 'Board',    path: ''           },
+  { label: 'History',  path: '/sessions'  },
+  { label: 'Plans',    path: '/plans'     },
+  { label: 'Outputs',  path: '/outputs'   },
+  { label: 'Settings', path: '/settings'  },
 ]
 
 export default function ProjectLayout() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { pathname } = useLocation()
 
   const { data: projectList = [] } = useQuery({
     queryKey: ['projects'],
@@ -30,39 +31,52 @@ export default function ProjectLayout() {
 
   const project      = projectList.find(p => p.id === id)
   const runningCount = sessionList.filter(s => s.status === 'running').length
-  const reviewCount  = sessionList.filter(s => !s.specId && (s.status === 'done' || s.status === 'error')).length
+  // Count unique tasks in review, not raw sessions
+  const reviewCount  = new Set(
+    sessionList
+      .filter(s => !s.specId && !s.parentSessionId && (s.status === 'done' || s.status === 'error') && s.workTaskId)
+      .map(s => s.workTaskId!)
+  ).size
 
   return (
-    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <div className="proj-header">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/projects')} className="-ml-2 text-muted-foreground">
+    <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+      <div className="shrink-0 px-6 pt-5 pb-0 bg-background border-b border-border/60">
+        <Button variant="ghost" size="sm" onClick={() => navigate('/projects')} className="-ml-2 mb-3 text-muted-foreground">
           <ArrowLeft size={13} />
           Projects
         </Button>
-        <div className="proj-title-row">
-          <h1 className="proj-name">{project?.name ?? '…'}</h1>
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <h1 className="text-2xl font-semibold tracking-tight">{project?.name ?? '…'}</h1>
         </div>
-        <nav className="proj-tabs">
+        <nav className="flex gap-0.5 -mb-px">
           {TABS.map(({ label, path }) => (
             <NavLink
               key={label}
               to={`/projects/${id}${path}`}
               end={path === ''}
-              className={({ isActive }) => cn('proj-tab', isActive && 'active')}
+              className={({ isActive }) => {
+                const active = isActive
+                return cn(
+                  'inline-flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors',
+                  active
+                    ? 'text-foreground border-primary'
+                    : 'text-muted-foreground border-transparent hover:text-foreground'
+                )
+              }}
             >
               {label}
               {label === 'Board' && reviewCount > 0 && (
-                <span className="badge">{reviewCount}</span>
+                <span className="text-[10px] font-bold leading-none bg-primary text-primary-foreground rounded px-1.5 py-0.5">{reviewCount}</span>
               )}
-              {label === 'Sessions' && runningCount > 0 && (
-                <span className="badge green">{runningCount}</span>
+              {label === 'History' && runningCount > 0 && (
+                <span className="text-[10px] font-bold leading-none bg-[color:var(--green-dot)] text-white rounded px-1.5 py-0.5">{runningCount}</span>
               )}
             </NavLink>
           ))}
         </nav>
       </div>
 
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+      <div className="flex-1 min-h-0 overflow-y-auto">
         <Outlet />
       </div>
     </div>

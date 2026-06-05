@@ -4,12 +4,15 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { specs, agents, sessions } from '../api/client'
 import type { Spec, Agent } from '../api/client'
 import { Button } from '@/components/ui/button'
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
+import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Play, Trash2 } from 'lucide-react'
+import { Spinner } from '@/components/ui/spinner'
+import { cn } from '@/lib/utils'
+import { ChevronRight, Play, Trash2 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
 // Spec editor (inline textarea)
@@ -60,58 +63,53 @@ function PlanListRow({ spec, expanded, onToggle, onDelete, onExecute, onUpdate, 
   isDeleting: boolean
 }) {
   return (
-    <div>
+    <div className="rounded-xl border border-border/60 bg-card/70 shadow-sm overflow-hidden">
       <button
         onClick={onToggle}
-        className="row"
+        className="flex items-center gap-4 w-full p-4 text-left hover:bg-muted/20 transition-colors"
       >
-        <div className="row-main">
-          <div className="row-title">{spec.title}</div>
-          <div className="row-meta">
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-medium text-foreground leading-snug">{spec.title}</div>
+          <div className="text-xs text-muted-foreground mt-1 line-clamp-1">
             {spec.content.trim()
-              ? <span>{spec.content.replace(/^#.*\n?/gm, '').trim().slice(0, 140)}</span>
-              : <span>No content yet.</span>
+              ? spec.content.replace(/^#.*\n?/gm, '').trim().slice(0, 140)
+              : 'No content yet.'
             }
           </div>
         </div>
         <StatusPill spec={spec} />
-        <span className="row-go" style={{ opacity: expanded ? 1 : undefined, transform: expanded ? 'rotate(90deg)' : undefined }}>›</span>
+        <ChevronRight size={14} className={cn('text-muted-foreground/50 shrink-0 transition-transform', expanded && 'rotate-90')} />
       </button>
 
       {expanded && (
-        <div style={{ padding: '4px 4px 6px 4px', marginTop: 6 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {spec.status === 'planning' ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: 'var(--muted)', padding: '8px 0' }}>
-                <span className="dot amber pulse" />
-                Agent is writing the spec…
-                {spec.sessionId && (
-                  <button onClick={onWatch}
-                    style={{ color: 'var(--ember)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13 }}>
-                    Watch live
-                  </button>
-                )}
-              </div>
-            ) : (
-              <SpecEditor spec={spec} onUpdate={onUpdate} />
-            )}
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
-              {spec.status === 'planning' && spec.sessionId && (
-                <Button size="sm" variant="ghost" onClick={onStop} style={{ marginRight: 'auto' }}>
-                  Stop
-                </Button>
+        <div className="border-t border-border/50 p-4 flex flex-col gap-3">
+          {spec.status === 'planning' ? (
+            <div className="flex items-center gap-2.5 py-2 text-sm text-muted-foreground">
+              <span className="dot amber pulse" />
+              Agent is writing the spec…
+              {spec.sessionId && (
+                <button onClick={onWatch} className="text-primary hover:text-primary/80 bg-none border-none cursor-pointer text-sm transition-colors">
+                  Watch live
+                </button>
               )}
-              <Button size="sm" variant="ghost" onClick={onDelete} disabled={isDeleting}>
-                <Trash2 size={13} />
-                Delete
-              </Button>
-              <Button size="sm" onClick={onExecute}
-                disabled={!spec.content.trim() || isExecuting || spec.status === 'planning'}>
-                <Play size={13} />
-                Execute
-              </Button>
             </div>
+          ) : (
+            <SpecEditor spec={spec} onUpdate={onUpdate} />
+          )}
+
+          <div className="flex items-center gap-2 justify-end">
+            {spec.status === 'planning' && spec.sessionId && (
+              <Button size="sm" variant="ghost" onClick={onStop} className="mr-auto">Stop</Button>
+            )}
+            <Button size="sm" variant="ghost" onClick={onDelete} disabled={isDeleting}>
+              <Trash2 size={13} />
+              Delete
+            </Button>
+            <Button size="sm" onClick={onExecute}
+              disabled={!spec.content.trim() || isExecuting || spec.status === 'planning'}>
+              <Play size={13} />
+              Execute
+            </Button>
           </div>
         </div>
       )}
@@ -148,35 +146,35 @@ function NewPlanDialog({ projectId, agentList, onClose, onCreate }: {
       <DialogContent>
         <DialogHeader><DialogTitle>New plan</DialogTitle></DialogHeader>
         <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <Label>Title</Label>
+          <Field>
+            <FieldLabel>Title</FieldLabel>
             <Input autoFocus value={title} onChange={e => setTitle(e.target.value)}
               placeholder="e.g. Refactor auth middleware"
               onKeyDown={e => { if (e.key === 'Enter' && isValid && !loading) void submit() }} />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Brief <span className="text-muted-foreground font-normal">(optional)</span></Label>
+          </Field>
+          <Field>
+            <FieldLabel>Brief <span className="text-muted-foreground font-normal">(optional)</span></FieldLabel>
             <Textarea value={brief} onChange={e => setBrief(e.target.value)} rows={3}
               placeholder="Describe the goal — the agent will read the codebase and write the spec." />
-          </div>
+          </Field>
           {agentList.length > 0 && (
-            <div className="flex flex-col gap-1.5">
-              <Label>Agent</Label>
+            <Field>
+              <FieldLabel>Agent</FieldLabel>
               <Select value={agentId} onValueChange={setAgentId}>
                 <SelectTrigger><SelectValue placeholder="Select an agent" /></SelectTrigger>
                 <SelectContent>
                   {agentList.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
+              <FieldDescription>
                 The agent reads your codebase and writes a SPEC.md. You review it, then execute.
-              </p>
-            </div>
+              </FieldDescription>
+            </Field>
           )}
           <div className="flex gap-2 pt-1">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
             <Button className="flex-1" disabled={!isValid || loading || agentList.length === 0} onClick={() => void submit()}>
-              {loading ? '…' : 'Create plan'}
+              {loading ? <Spinner /> : 'Create plan'}
             </Button>
           </div>
           {agentList.length === 0 && (
@@ -235,7 +233,7 @@ export default function PlansPage() {
 
   return (
     <div className="flex-1 overflow-y-auto bg-background">
-      <div className="max-w-[960px] px-6 pt-6 pb-8 flex flex-col gap-4">
+      <div className="max-w-[960px] px-6 pt-10 pb-10 flex flex-col gap-6">
 
         <div className="flex items-center justify-between">
           <p className="text-xs text-muted-foreground/50">{specList.length > 0 ? `${specList.length} plan${specList.length !== 1 ? 's' : ''}` : 'No plans yet'}</p>
@@ -243,15 +241,20 @@ export default function PlansPage() {
         </div>
 
         {isLoading ? (
-          <div className="flex flex-col gap-2">
+          <FieldGroup className="gap-3">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="h-14 bg-card border border-border rounded-xl animate-pulse" />
+              <div key={i} className="h-16 bg-card border border-border rounded-xl animate-pulse" />
             ))}
-          </div>
+          </FieldGroup>
         ) : specList.length === 0 ? (
-          <p className="text-sm text-muted-foreground/50 py-8 text-center">No plans yet. Create one and an agent will write the spec.</p>
+          <Empty className="border border-dashed border-border/70 bg-card/30">
+            <EmptyHeader>
+              <EmptyTitle>No plans yet</EmptyTitle>
+              <EmptyDescription>Create one and an agent will turn your brief into a SPEC.md.</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         ) : (
-          <div className="flex flex-col gap-2">
+          <FieldGroup className="gap-3">
             {specList.map(spec => (
               <PlanListRow
                 key={spec.id}
@@ -267,7 +270,7 @@ export default function PlansPage() {
                 isDeleting={deleteSpec.isPending}
               />
             ))}
-          </div>
+          </FieldGroup>
         )}
       </div>
 

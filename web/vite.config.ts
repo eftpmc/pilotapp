@@ -34,7 +34,7 @@ export default defineConfig({
       '/specs':       'http://localhost:3000',
       '/github':      'http://localhost:3000',
       '/health':      'http://localhost:3000',
-      '/departments': 'http://localhost:3000',
+      '/departments': { target: 'http://localhost:3000', bypass: spaBypass },
       '/events':      'http://localhost:3000',
       '/shifts':      'http://localhost:3000',
       // These paths are both React routes and API prefixes — use bypass to

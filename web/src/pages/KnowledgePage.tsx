@@ -4,6 +4,8 @@ import { knowledge, agents, departments } from '../api/client'
 import type { KnowledgeDoc, KnowledgeScope, Agent, Department } from '../api/client'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@/components/ui/item'
 import { AgentAvatar } from '@/components/AgentAvatar'
 import { KnowledgeDocDialog } from '@/components/KnowledgeDocDialog'
 import { cn } from '@/lib/utils'
@@ -28,17 +30,19 @@ function DocRow({ doc, onEdit, onDelete }: {
   }
 
   return (
-    <div className="flex items-center gap-3 px-4 py-3">
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-foreground">{doc.title}</p>
+    <Item className="px-4 py-3">
+      <ItemContent>
+        <ItemTitle>{doc.title}</ItemTitle>
         {doc.content && (
-          <p className="text-xs text-muted-foreground truncate mt-0.5">{doc.content.split('\n')[0].slice(0, 80)}</p>
+          <ItemDescription className="truncate text-xs">{doc.content.split('\n')[0].slice(0, 80)}</ItemDescription>
         )}
-      </div>
+      </ItemContent>
       {!doc.content && <Badge variant="outline" className="text-[10px] text-muted-foreground">empty</Badge>}
-      <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground" onClick={onEdit}>Edit</Button>
-      <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive" onClick={() => setConfirmDelete(true)}>Delete</Button>
-    </div>
+      <ItemActions>
+        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground" onClick={onEdit}>Edit</Button>
+        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive" onClick={() => setConfirmDelete(true)}>Delete</Button>
+      </ItemActions>
+    </Item>
   )
 }
 
@@ -52,7 +56,7 @@ function DeptSection({ dept, docs, onAdd, onEdit, onDelete }: {
 }) {
   const [open, setOpen] = useState(false)
   return (
-    <div className="bg-card rounded-xl border border-border/50 overflow-hidden [box-shadow:var(--shadow-card)]">
+    <div className="bg-card/80 rounded-xl border border-border/60 overflow-hidden shadow-sm">
       <button onClick={() => setOpen(o => !o)}
         className="w-full flex items-center gap-3 px-4 py-3 text-left cursor-pointer hover:bg-muted/30 transition-colors bg-transparent border-none">
         <span className="w-5 h-5 rounded-md shrink-0" style={{ background: dept.color + '30', border: `1.5px solid ${dept.color}60` }}>
@@ -94,7 +98,7 @@ function EmployeeSection({ employee, docs, onAdd, onEdit, onDelete }: {
   const [open, setOpen] = useState(false)
 
   return (
-    <div className="bg-card rounded-xl border border-border/50 overflow-hidden [box-shadow:var(--shadow-card)]">
+    <div className="bg-card/80 rounded-xl border border-border/60 overflow-hidden shadow-sm">
       <button
         onClick={() => setOpen(o => !o)}
         className="w-full flex items-center gap-3 px-4 py-3 text-left cursor-pointer hover:bg-muted/30 transition-colors bg-transparent border-none"
@@ -171,7 +175,7 @@ export default function KnowledgePage() {
 
   return (
     <div className="flex-1 overflow-y-auto bg-background">
-      <div className="max-w-[960px] px-6 pt-10 pb-8 flex flex-col gap-8">
+      <div className="max-w-[960px] px-6 pt-12 pb-10 flex flex-col gap-10">
 
         <div className="flex items-start justify-between">
           <div>
@@ -188,15 +192,20 @@ export default function KnowledgePage() {
           </div>
 
           {companyDocs.length === 0 ? (
-            <p className="text-sm text-muted-foreground/50">No company knowledge yet.</p>
+            <Empty className="border border-dashed border-border/70 bg-card/30 py-10">
+              <EmptyHeader>
+                <EmptyTitle>No company knowledge</EmptyTitle>
+                <EmptyDescription>Shared context for every agent will appear here.</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
           ) : (
-            <div className="bg-card rounded-xl border border-border/50 overflow-hidden [box-shadow:var(--shadow-card)]">
+            <ItemGroup className="bg-card/80 rounded-xl border border-border/60 overflow-hidden shadow-sm">
               {companyDocs.map((doc, i) => (
                 <div key={doc.id} className={i > 0 ? 'border-t border-border/40' : ''}>
                   <DocRow doc={doc} onEdit={() => openEdit(doc)} onDelete={() => deleteDoc.mutate(doc.id)} />
                 </div>
               ))}
-            </div>
+            </ItemGroup>
           )}
         </section>
 
@@ -224,7 +233,12 @@ export default function KnowledgePage() {
           <p className="text-xs text-muted-foreground/50">Agent knowledge · personal context per agent</p>
 
           {agentList.length === 0 ? (
-            <p className="text-sm text-muted-foreground/50">No agents yet.</p>
+            <Empty className="border border-dashed border-border/70 bg-card/30 py-10">
+              <EmptyHeader>
+                <EmptyTitle>No agents yet</EmptyTitle>
+                <EmptyDescription>Personal knowledge attaches to agents once they exist.</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
           ) : (
             <div className="flex flex-col gap-2">
               {agentList.map(emp => (

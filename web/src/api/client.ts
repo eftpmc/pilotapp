@@ -262,6 +262,7 @@ export const agents = {
 // ---------------------------------------------------------------------------
 
 export const tasks = {
+  get:    (id: string) => req<Task>(`/tasks/${id}`),
   list:   (params?: { projectId?: string; status?: string }) => {
     const qs = new URLSearchParams(params as Record<string, string>).toString();
     return req<Task[]>(`/tasks${qs ? `?${qs}` : ''}`);
@@ -297,8 +298,6 @@ export const sessions = {
     return req<Session[]>(`/sessions${qs ? `?${qs}` : ''}`);
   },
   get:    (id: string) => req<Session>(`/sessions/${id}`),
-  create: (body: { agentId: string; projectId: string }) =>
-    req<Session>('/sessions', { method: 'POST', body: JSON.stringify(body) }),
   diff:          (id: string) => req<{ diff: string; unavailableReason?: string }>(`/sessions/${id}/diff`),
   merge:         (id: string) => req<{ merged: boolean }>(`/sessions/${id}/merge`, { method: 'POST' }),
   stop:          (id: string) => req<{ stopped: boolean }>(`/sessions/${id}/stop`, { method: 'POST' }),

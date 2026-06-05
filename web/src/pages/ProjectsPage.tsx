@@ -3,6 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { projects, tasks, sessions } from '../api/client'
 import { Button } from '@/components/ui/button'
+import { ButtonGroup } from '@/components/ui/button-group'
+import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
+import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -50,32 +53,32 @@ export default function ProjectsPage() {
   if (projectList.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center bg-background">
-        <div className="w-full max-w-sm px-6 flex flex-col gap-7">
-          <div>
-            <p className="text-2xl font-bold tracking-tight text-foreground mb-1.5">pilot</p>
-            <p className="text-sm text-muted-foreground">Your AI coding crew, ready to ship.</p>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            {[
-              { n: '1', label: 'Add a project',  desc: 'Any folder — optionally connect a git repo.' },
-              { n: '2', label: 'Add an agent',   desc: 'Configure an API key in Settings.' },
-              { n: '3', label: 'Dispatch tasks', desc: 'Agents work in parallel, you review and accept.' },
-            ].map(({ n, label, desc }) => (
-              <div key={n} className="flex items-start gap-3.5 px-4 py-3.5 bg-card border border-border rounded-xl">
-                <span className="w-5 h-5 rounded-md bg-primary/10 text-primary text-[11px] font-bold grid place-items-center shrink-0 mt-0.5">{n}</span>
-                <div>
-                  <p className="text-sm font-semibold text-foreground mb-0.5">{label}</p>
-                  <p className="text-xs text-muted-foreground">{desc}</p>
+        <Empty className="w-full max-w-md border-none bg-transparent px-6">
+          <EmptyHeader>
+            <EmptyTitle className="text-2xl font-bold">pilot</EmptyTitle>
+            <EmptyDescription>Your AI coding crew, ready to ship.</EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <div className="grid w-full gap-2">
+              {[
+                { n: '1', label: 'Add a project',  desc: 'Any folder, with or without git.' },
+                { n: '2', label: 'Add an agent',   desc: 'Connect an API key in Settings.' },
+                { n: '3', label: 'Dispatch tasks', desc: 'Review the work and merge what lands.' },
+              ].map(({ n, label, desc }) => (
+                <div key={n} className="flex items-start gap-3.5 rounded-xl border border-border/70 bg-card/80 px-4 py-3.5 text-left">
+                  <span className="mt-0.5 grid size-5 shrink-0 place-items-center rounded-md bg-primary/10 text-[11px] font-bold text-primary">{n}</span>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">{label}</p>
+                    <p className="text-xs text-muted-foreground">{desc}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-
-          <Button className="w-full justify-center" onClick={() => setShowNew(true)}>
-            New project
-          </Button>
-        </div>
+              ))}
+            </div>
+            <Button className="w-full justify-center" onClick={() => setShowNew(true)}>
+              New project
+            </Button>
+          </EmptyContent>
+        </Empty>
         <NewProjectDialog open={showNew} onClose={() => setShowNew(false)}
           onCreate={body => createProject.mutate(body)}
           loading={createProject.isPending} error={createProject.error?.message} />
@@ -85,17 +88,17 @@ export default function ProjectsPage() {
 
   return (
     <div className="flex-1 overflow-y-auto bg-background">
-      <div className="max-w-[960px] px-6 pt-10 pb-8">
+      <div className="max-w-[1040px] px-6 pt-12 pb-10">
 
-        <div className="flex items-start justify-between mb-8">
+        <div className="flex items-start justify-between mb-10">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
             <p className="text-sm text-muted-foreground mt-1">{projectList.length} project{projectList.length !== 1 ? 's' : ''}</p>
           </div>
-          <Button onClick={() => setShowNew(true)}>+ New</Button>
+          <Button onClick={() => setShowNew(true)}>New project</Button>
         </div>
 
-        <div className="project-card-grid">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-4">
           {projectList.map(p => {
             const { pending, running, review, latestAt } = statsFor(p.id)
             const repo = p.remoteUrl
@@ -106,33 +109,33 @@ export default function ProjectsPage() {
               <button
                 key={p.id}
                 onClick={() => navigate(`/projects/${p.id}`)}
-                className="project-card"
+                className="group flex flex-col gap-3 min-h-36 p-5 w-full rounded-2xl border border-border/60 bg-card/60 shadow-sm hover:shadow-md hover:bg-card hover:border-border hover:-translate-y-0.5 transition-all text-left"
               >
-                <div className="project-card-head">
-                  <span className="project-card-title">{p.name}</span>
+                <div className="flex items-start justify-between gap-2 w-full">
+                  <span className="text-base font-semibold text-foreground leading-tight">{p.name}</span>
                   {(running > 0 || review > 0) && (
-                    <span className="project-card-dots">
+                    <span className="flex items-center gap-1 shrink-0 mt-0.5">
                       {running > 0 && <span className="dot green pulse" />}
                       {review > 0  && <span className="dot amber" />}
                     </span>
                   )}
                 </div>
-                {repo && <p className="project-card-repo">{repo}</p>}
-                <div className="project-card-lanes" aria-hidden="true">
-                  <span className={cn('lane green', running > 0 && 'active')} />
-                  <span className={cn('lane amber', review > 0 && 'active')} />
-                  <span className={cn('lane muted', pending > 0 && 'active')} />
+                {repo && <p className="font-mono text-[11px] text-muted-foreground leading-none">{repo}</p>}
+                <div className="flex gap-1 w-full" aria-hidden="true">
+                  <span className={cn('h-0.5 flex-1 rounded-full transition-colors', running > 0 ? 'bg-[var(--green-dot)]' : 'bg-border/50')} />
+                  <span className={cn('h-0.5 flex-1 rounded-full transition-colors', review  > 0 ? 'bg-[var(--amber-dot)]' : 'bg-border/50')} />
+                  <span className={cn('h-0.5 flex-1 rounded-full transition-colors', pending > 0 ? 'bg-muted-foreground/40' : 'bg-border/50')} />
                 </div>
-                <div className="project-card-stats">
-                  {running > 0 && <span className="stat green" style={{ fontSize: 12 }}><span className="dot green pulse" />{running} running</span>}
-                  {review  > 0 && <span className="stat amber" style={{ fontSize: 12 }}><span className="dot amber" />{review} to review</span>}
-                  {pending > 0 && <span style={{ fontSize: 12, color: 'var(--muted)' }}>{pending} queued</span>}
+                <div className="flex items-center gap-3 flex-wrap">
+                  {running > 0 && <span className="stat green text-xs"><span className="dot green pulse" />{running} running</span>}
+                  {review  > 0 && <span className="stat amber text-xs"><span className="dot amber" />{review} to review</span>}
+                  {pending > 0 && <span className="text-xs text-muted-foreground">{pending} queued</span>}
                   {running === 0 && review === 0 && pending === 0 && (
-                    <span style={{ fontSize: 12, color: 'var(--faint)' }}>Idle</span>
+                    <span className="text-xs text-muted-foreground/40">Idle</span>
                   )}
                 </div>
-                <div className="project-card-foot">
-                  <span>{total > 0 ? `${total} active item${total !== 1 ? 's' : ''}` : 'Quiet'}</span>
+                <div className="flex justify-between gap-3 w-full mt-auto font-mono text-[10.5px] text-muted-foreground/40">
+                  <span>{total > 0 ? `${total} active` : 'Quiet'}</span>
                   <span>{timeAgoOrDefault(latestAt)}</span>
                 </div>
               </button>
@@ -181,16 +184,16 @@ function NewProjectDialog({ open, onClose, onCreate, loading, error }: {
         <DialogHeader><DialogTitle>New project</DialogTitle></DialogHeader>
         <div className="flex flex-col gap-5">
 
-          <div className="field">
-            <Label>Name</Label>
+          <Field>
+            <FieldLabel>Name</FieldLabel>
             <Input autoFocus value={name} onChange={e => setName(e.target.value)}
               placeholder="my-project"
               onKeyDown={e => { if (e.key === 'Enter' && isValid) submit() }} />
-          </div>
+          </Field>
 
-          <div className="flex flex-col gap-3">
+          <FieldGroup className="gap-3">
             <Label className="text-muted-foreground">Repository <span className="text-[11px]">(optional)</span></Label>
-            <div className="flex gap-1 bg-[var(--panel)] rounded-[10px] p-[3px]">
+            <ButtonGroup className="w-full rounded-[10px] bg-[var(--panel)] p-[3px]">
               {([
                 { id: 'none'   as GitSource, label: 'None'   },
                 { id: 'github' as GitSource, label: 'GitHub' },
@@ -202,20 +205,20 @@ function NewProjectDialog({ open, onClose, onCreate, loading, error }: {
                   source === s.id ? 'bg-background text-foreground shadow-sm' : 'bg-transparent text-muted-foreground'
                 )}>{s.label}</button>
               ))}
-            </div>
+            </ButtonGroup>
 
             {source === 'github' && (
-              <div className="flex flex-col gap-3">
-                <div className="field"><Label>Clone URL</Label><Input value={githubUrl} onChange={e => setGithubUrl(e.target.value)} placeholder="https://github.com/org/repo.git" /></div>
-                <div className="field"><Label>Access token</Label><Input type="password" value={githubToken} onChange={e => setToken(e.target.value)} placeholder="ghp_…" /></div>
-              </div>
+              <FieldGroup className="gap-3">
+                <Field><FieldLabel>Clone URL</FieldLabel><Input value={githubUrl} onChange={e => setGithubUrl(e.target.value)} placeholder="https://github.com/org/repo.git" /></Field>
+                <Field><FieldLabel>Access token</FieldLabel><Input type="password" value={githubToken} onChange={e => setToken(e.target.value)} placeholder="ghp_..." /></Field>
+              </FieldGroup>
             )}
             {source === 'local' && (
-              <div className="field">
-                <Label>Path</Label>
+              <Field>
+                <FieldLabel>Path</FieldLabel>
                 <Input value={localPath} onChange={e => setLocal(e.target.value)} placeholder="/Users/you/code/myproject" className="font-mono text-xs" />
-                <p className="text-xs text-muted-foreground mt-1">Pilot clones a bare copy. Your working tree stays untouched.</p>
-              </div>
+                <FieldDescription>Pilot clones a bare copy. Your working tree stays untouched.</FieldDescription>
+              </Field>
             )}
             {source === 'empty' && (
               <p className="text-sm text-muted-foreground">Empty git repo — agents create files and commit from scratch.</p>
@@ -223,7 +226,7 @@ function NewProjectDialog({ open, onClose, onCreate, loading, error }: {
             {source === 'none' && (
               <p className="text-sm text-muted-foreground">Plain folder — no git. Agents write files directly; you accept their output.</p>
             )}
-          </div>
+          </FieldGroup>
 
           {error && <p className="text-sm text-destructive">{error}</p>}
 

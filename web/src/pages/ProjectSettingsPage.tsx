@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
 import { projects } from '../api/client'
+import { Field, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@/components/ui/item'
+import { Spinner } from '@/components/ui/spinner'
 
 
 export default function ProjectSettingsPage() {
@@ -44,7 +46,7 @@ export default function ProjectSettingsPage() {
 
   return (
     <div className="flex-1 overflow-y-auto bg-background">
-      <div className="max-w-[960px] px-6 pt-6 pb-8 flex flex-col gap-6">
+      <div className="max-w-[960px] px-6 pt-8 pb-10 flex flex-col gap-8">
 
         {/* Project info */}
         <section className="flex flex-col gap-3">
@@ -60,44 +62,46 @@ export default function ProjectSettingsPage() {
           {isLoading ? (
             <p className="text-sm text-muted-foreground/50">Loading…</p>
           ) : editing ? (
-            <div className="bg-card border border-border rounded-xl p-4 flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <Label>Name</Label>
+            <div className="bg-card/70 border border-border/60 rounded-xl p-4 flex flex-col gap-4">
+              <Field>
+                <FieldLabel>Name</FieldLabel>
                 <Input value={name} onChange={e => setName(e.target.value)} autoFocus />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label>Remote URL <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              </Field>
+              <Field>
+                <FieldLabel>Remote URL <span className="text-muted-foreground font-normal">(optional)</span></FieldLabel>
                 <Input value={remoteUrl} onChange={e => setRemoteUrl(e.target.value)} placeholder="https://github.com/org/repo.git" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label>GitHub token <span className="text-muted-foreground font-normal">(leave blank to keep existing)</span></Label>
-                <Input type="password" value={githubToken} onChange={e => setGithubToken(e.target.value)} placeholder="ghp_…" />
-              </div>
+              </Field>
+              <Field>
+                <FieldLabel>GitHub token <span className="text-muted-foreground font-normal">(leave blank to keep existing)</span></FieldLabel>
+                <Input type="password" value={githubToken} onChange={e => setGithubToken(e.target.value)} placeholder="ghp_..." />
+              </Field>
               {updateProject.isError && <p className="text-sm text-destructive">{updateProject.error?.message}</p>}
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setEditing(false)}>Cancel</Button>
                 <Button className="flex-1 justify-center"
                   disabled={!name.trim() || updateProject.isPending}
                   onClick={() => updateProject.mutate({ name: name.trim(), remoteUrl: remoteUrl.trim() || undefined, githubToken: githubToken.trim() || undefined })}>
-                  {updateProject.isPending ? '…' : 'Save'}
+                  {updateProject.isPending ? <Spinner /> : 'Save'}
                 </Button>
               </div>
             </div>
           ) : (
-            <div className="bg-card border border-border rounded-xl overflow-hidden">
+            <ItemGroup className="gap-2">
               {[
                 { label: 'Name',       value: project?.name },
                 { label: 'Repository', value: project?.repoPath },
                 { label: 'Remote',     value: project?.remoteUrl },
                 { label: 'Local path', value: project?.localPath },
                 { label: 'Created',    value: project ? new Date(project.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : undefined },
-              ].filter(r => r.value).map((row, i) => (
-                <div key={row.label} className={`px-4 py-3 ${i > 0 ? 'border-t border-border/40' : ''}`}>
-                  <p className="text-xs text-muted-foreground/50 mb-1">{row.label}</p>
-                  <p className="text-sm text-foreground font-mono break-all">{row.value}</p>
-                </div>
+              ].filter(r => r.value).map(row => (
+                <Item key={row.label} variant="outline" className="bg-card/60">
+                  <ItemContent>
+                    <ItemDescription className="text-xs">{row.label}</ItemDescription>
+                    <ItemTitle className="break-all font-mono text-sm">{row.value}</ItemTitle>
+                  </ItemContent>
+                </Item>
               ))}
-            </div>
+            </ItemGroup>
           )}
         </section>
 
@@ -105,12 +109,12 @@ export default function ProjectSettingsPage() {
         {project && (
           <section className="flex flex-col gap-3">
             <p className="text-xs text-destructive/60">Danger zone</p>
-            <div className="bg-card border border-destructive/20 rounded-xl overflow-hidden">
-              <div className="flex items-center gap-4 px-4 py-3">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-foreground">Delete project</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Permanently deletes this project and all its tasks and sessions. This cannot be undone.</p>
-                </div>
+            <Item variant="outline" className="bg-card/60 border-destructive/20">
+                <ItemContent>
+                  <ItemTitle>Delete project</ItemTitle>
+                  <ItemDescription className="text-xs">Permanently deletes this project and all its tasks and sessions. This cannot be undone.</ItemDescription>
+                </ItemContent>
+                <ItemActions>
                 {!confirming ? (
                   <Button size="sm" variant="destructive" className="shrink-0" onClick={() => setConfirming(true)}>Delete</Button>
                 ) : (
@@ -122,8 +126,8 @@ export default function ProjectSettingsPage() {
                     </Button>
                   </div>
                 )}
-              </div>
-            </div>
+                </ItemActions>
+            </Item>
           </section>
         )}
 

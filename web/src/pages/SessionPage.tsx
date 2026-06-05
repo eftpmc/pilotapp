@@ -671,7 +671,7 @@ export default function SessionPage() {
             {session?.reviewVerdict === 'pending' && <span className="chip" style={{ color: 'var(--muted)' }}>Reviewing…</span>}
             {session?.reviewVerdict === 'approved' && <span className="chip" style={{ color: 'var(--green)', background: 'color-mix(in srgb, var(--green) 10%, transparent)' }}>Approved ✓</span>}
             {session?.reviewVerdict === 'changes_requested' && <span className="chip" style={{ color: 'var(--amber)', background: 'color-mix(in srgb, var(--amber) 10%, transparent)' }}>Changes Requested</span>}
-            {isDone && !isMerged && !session?.parentSessionId && <Button size="sm" onClick={() => merge.mutate()} disabled={merge.isPending}>{merge.isPending ? '…' : isWorkspace ? 'Complete ✓' : 'Merge ✓'}</Button>}
+            {(isDone || isError) && !isMerged && !session?.parentSessionId && <Button size="sm" onClick={() => merge.mutate()} disabled={merge.isPending}>{merge.isPending ? '…' : isError ? 'Merge anyway' : isWorkspace ? 'Complete ✓' : 'Merge ✓'}</Button>}
             {!isMerged && (
               <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-destructive"
                 onClick={() => discard.mutate()} disabled={discard.isPending}
@@ -735,7 +735,7 @@ export default function SessionPage() {
                 <button
                   key={ws.id}
                   onClick={() => navigate(`/sessions/${ws.id}`)}
-                  className="flex items-center gap-2 px-3 py-1.5 bg-card border border-border rounded-lg hover:bg-muted/40 transition-colors text-left"
+                  className="flex items-center gap-2 px-3 py-1.5 bg-card/70 border border-border/60 rounded-lg hover:bg-muted/40 transition-colors text-left"
                 >
                   {isLive && <span className="dot green pulse shrink-0" style={{ width: 6, height: 6 }} />}
                   <AgentAvatar agent={wa} size={20} running={isLive} animated={false} />

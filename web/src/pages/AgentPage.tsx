@@ -7,11 +7,13 @@ import { AgentAvatar } from '@/components/AgentAvatar'
 import { ProviderBadge } from '@/components/ProviderBadge'
 import { LiveTimer } from '@/components/LiveTimer'
 import { KnowledgeDocDialog } from '@/components/KnowledgeDocDialog'
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
+import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item'
 import { PersonalityPicker } from '@/components/PersonalityPicker'
 import { PERSONALITY_PRESETS } from '@/lib/agent-constants'
 import { timeAgo } from '@/lib/time'
@@ -198,14 +200,14 @@ export default function AgentPage() {
 
           {/* ── Identity ── */}
           {editing && <section>
-            <div className="flex flex-col gap-4">
+            <FieldGroup className="gap-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-1.5">
-                    <Label>Name</Label>
+                  <Field>
+                    <FieldLabel>Name</FieldLabel>
                     <Input value={name} onChange={e => { setName(e.target.value); setIdentityDirty(true) }} />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label>Connection</Label>
+                  </Field>
+                  <Field>
+                    <FieldLabel>Connection</FieldLabel>
                     <Select value={connectionId || agent.connectionId || ''} onValueChange={v => { setConnectionId(v); setIdentityDirty(true) }}>
                       <SelectTrigger><SelectValue placeholder="Select connection" /></SelectTrigger>
                       <SelectContent>
@@ -216,9 +218,9 @@ export default function AgentPage() {
                         ))}
                       </SelectContent>
                     </Select>
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label>Team</Label>
+                  </Field>
+                  <Field>
+                    <FieldLabel>Team</FieldLabel>
                     <Select value={deptId || '__none'} onValueChange={v => { setDeptId(v === '__none' ? '' : v); setIdentityDirty(true) }}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -226,9 +228,9 @@ export default function AgentPage() {
                         {deptList.map(d => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
-                  </div>
+                  </Field>
                 </div>
-                <label className="flex items-center gap-3 px-4 py-3 bg-card rounded-xl border border-border/50 w-full transition-colors hover:bg-muted/30 cursor-pointer">
+                <label className="flex items-center gap-3 px-4 py-3 bg-card/70 rounded-xl border border-border/60 w-full transition-colors hover:bg-muted/30 cursor-pointer">
                   <Checkbox
                     checked={role === 'lead'}
                     onCheckedChange={v => { setRole(v ? 'lead' : 'worker'); setIdentityDirty(true) }}
@@ -252,7 +254,7 @@ export default function AgentPage() {
                 {updateAgent.isError && (
                   <p className="text-xs text-destructive">{updateAgent.error.message}</p>
                 )}
-            </div>
+            </FieldGroup>
           </section>}
 
           {/* ── Personality ── */}
@@ -310,70 +312,85 @@ export default function AgentPage() {
               )}
             </div>
             {allTools.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No tools configured. <a href="/tools" className="text-primary hover:underline">Add in Tools.</a></p>
+              <Empty className="border border-dashed border-border/70 bg-card/30 py-10">
+                <EmptyHeader>
+                  <EmptyTitle>No tools configured</EmptyTitle>
+                  <EmptyDescription>Add tools from the Tools page to make them available here.</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             ) : !editing ? (
               (() => {
                 const assigned = allTools.filter(t => deptToolIds.has(t.id) || assignedToolIds.has(t.id))
                 return assigned.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">No tools assigned.</p>
+                  <Empty className="border border-dashed border-border/70 bg-card/30 py-10">
+                    <EmptyHeader>
+                      <EmptyTitle>No tools assigned</EmptyTitle>
+                      <EmptyDescription>This agent will run without MCP tools.</EmptyDescription>
+                    </EmptyHeader>
+                  </Empty>
                 ) : (
-                  <div className="flex flex-col divide-y divide-border/40">
+                  <ItemGroup className="gap-2">
                     {assigned.map(tool => {
                       const fromDept = deptToolIds.has(tool.id)
                       return (
-                        <div key={tool.id} className="flex items-center gap-3 py-2.5">
-                          <div className="min-w-0 flex-1">
-                            <span className="text-sm font-medium text-foreground">{tool.name}</span>
-                            {tool.description && <span className="text-xs text-muted-foreground ml-2">{tool.description}</span>}
-                          </div>
+                        <Item key={tool.id} variant="outline" className="bg-card/60">
+                          <ItemContent className="items-start">
+                            <ItemTitle>{tool.name}</ItemTitle>
+                            {tool.description && <ItemDescription className="w-full text-left text-xs">{tool.description}</ItemDescription>}
+                          </ItemContent>
                           {fromDept && (
-                            <span className="text-[10px] text-muted-foreground/50 shrink-0 flex items-center gap-1">
+                            <ItemActions className="text-[10px] text-muted-foreground/50 shrink-0 flex items-center gap-1">
                               <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: dept?.color }} />
                               {dept?.name}
-                            </span>
+                            </ItemActions>
                           )}
-                        </div>
+                        </Item>
                       )
                     })}
-                  </div>
+                  </ItemGroup>
                 )
               })()
             ) : (
-              <div className="flex flex-col divide-y divide-border/40">
+              <ItemGroup className="gap-2">
                 {allTools.map(tool => {
                   const fromDept = deptToolIds.has(tool.id)
                   const assigned = fromDept || assignedToolIds.has(tool.id)
                   return fromDept ? (
-                    <div key={tool.id} className="flex items-center gap-3 py-2.5 px-2 -mx-2">
-                      <span className="w-4 h-4 rounded border border-primary/40 bg-primary/10 flex items-center justify-center shrink-0 text-[10px] font-bold text-primary">✓</span>
-                      <div className="min-w-0 flex-1">
-                        <span className="text-sm font-medium text-foreground">{tool.name}</span>
-                        {tool.description && <span className="text-xs text-muted-foreground ml-2">{tool.description}</span>}
-                      </div>
-                      <span className="text-[10px] text-muted-foreground/50 shrink-0 flex items-center gap-1">
+                    <Item key={tool.id} variant="outline" className="bg-card/60">
+                      <ItemMedia><span className="w-4 h-4 rounded border border-primary/40 bg-primary/10 flex items-center justify-center shrink-0 text-[10px] font-bold text-primary">✓</span></ItemMedia>
+                      <ItemContent className="items-start">
+                        <ItemTitle>{tool.name}</ItemTitle>
+                        {tool.description && <ItemDescription className="w-full text-left text-xs">{tool.description}</ItemDescription>}
+                      </ItemContent>
+                      <ItemActions className="text-[10px] text-muted-foreground/50 shrink-0 flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: dept?.color }} />
                         {dept?.name}
-                      </span>
-                    </div>
+                      </ItemActions>
+                    </Item>
                   ) : (
-                    <button
+                    <Item
                       key={tool.id}
-                      type="button"
-                      onClick={() => assigned ? unassignTool.mutate(tool.id) : assignTool.mutate(tool.id)}
-                      className="flex items-center gap-3 py-2.5 text-left hover:bg-muted/30 transition-colors rounded-lg px-2 -mx-2 cursor-pointer"
+                      asChild
+                      variant="outline"
+                      className="w-full bg-card/60 transition-colors hover:bg-card"
                     >
-                      <span className={cn(
-                        'w-4 h-4 rounded border flex items-center justify-center shrink-0 text-[10px] font-bold transition-colors',
-                        assigned ? 'bg-primary border-primary text-primary-foreground' : 'border-border text-transparent'
-                      )}>✓</span>
-                      <div className="min-w-0 flex-1">
-                        <span className="text-sm font-medium text-foreground">{tool.name}</span>
-                        {tool.description && <span className="text-xs text-muted-foreground ml-2">{tool.description}</span>}
-                      </div>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => assigned ? unassignTool.mutate(tool.id) : assignTool.mutate(tool.id)}
+                      >
+                        <ItemMedia><span className={cn(
+                          'w-4 h-4 rounded border flex items-center justify-center shrink-0 text-[10px] font-bold transition-colors',
+                          assigned ? 'bg-primary border-primary text-primary-foreground' : 'border-border text-transparent'
+                        )}>✓</span></ItemMedia>
+                        <ItemContent className="items-start">
+                          <ItemTitle>{tool.name}</ItemTitle>
+                          {tool.description && <ItemDescription className="w-full text-left text-xs">{tool.description}</ItemDescription>}
+                        </ItemContent>
+                      </button>
+                    </Item>
                   )
                 })}
-              </div>
+              </ItemGroup>
             )}
           </section>
 
@@ -384,24 +401,27 @@ export default function AgentPage() {
               <Button variant="ghost" size="sm" onClick={() => setKnDialog({ open: true, doc: undefined })}>+ Add</Button>
             </div>
             {agentDocs.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No personal knowledge yet.</p>
+              <Empty className="border border-dashed border-border/70 bg-card/30 py-10">
+                <EmptyHeader>
+                  <EmptyTitle>No personal knowledge</EmptyTitle>
+                  <EmptyDescription>Add notes that should follow this agent into future sessions.</EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             ) : (
-              <div className="flex flex-col divide-y divide-border/40">
+              <ItemGroup className="gap-2">
                 {agentDocs.map(doc => (
-                  <div key={doc.id} className="flex items-center gap-3 py-2.5">
-                    <div className="flex-1 min-w-0">
-                      <span className="text-sm font-medium text-foreground">{doc.title}</span>
-                      {doc.content && (
-                        <span className="text-xs text-muted-foreground ml-2 truncate hidden sm:inline">
-                          {doc.content.split('\n')[0].slice(0, 60)}
-                        </span>
-                      )}
-                    </div>
-                    <Button variant="ghost" size="sm" onClick={() => setKnDialog({ open: true, doc })} className="text-muted-foreground h-7 px-2">edit</Button>
-                    <Button variant="ghost" size="icon" onClick={() => deleteKnowledge.mutate(doc.id)} className="text-muted-foreground hover:text-destructive h-7 w-7">×</Button>
-                  </div>
+                  <Item key={doc.id} variant="outline" className="bg-card/60">
+                    <ItemContent className="items-start">
+                      <ItemTitle>{doc.title}</ItemTitle>
+                      {doc.content && <ItemDescription className="w-full text-left text-xs">{doc.content.split('\n')[0].slice(0, 90)}</ItemDescription>}
+                    </ItemContent>
+                    <ItemActions>
+                      <Button variant="ghost" size="sm" onClick={() => setKnDialog({ open: true, doc })} className="text-muted-foreground h-7 px-2">edit</Button>
+                      <Button variant="ghost" size="icon" onClick={() => deleteKnowledge.mutate(doc.id)} className="text-muted-foreground hover:text-destructive h-7 w-7">×</Button>
+                    </ItemActions>
+                  </Item>
                 ))}
-              </div>
+              </ItemGroup>
             )}
           </section>
 
@@ -409,38 +429,43 @@ export default function AgentPage() {
           {recentSessions.length > 0 && (
             <section>
               <p className="text-xs font-medium text-muted-foreground/50 mb-4">Recent sessions</p>
-              <div className="flex flex-col divide-y divide-border/40">
+              <ItemGroup className="gap-2">
                 {recentSessions.map(s => {
                   const title     = taskTitle(s.workTaskId)
                   const proj      = projectName(s.projectId)
                   const isRunning = s.status === 'running'
                   const isError   = s.status === 'error'
                   return (
-                    <button
+                    <Item
                       key={s.id}
-                      onClick={() => navigate(`/sessions/${s.id}`)}
-                      className="flex items-center gap-3 py-2.5 text-left hover:bg-muted/30 transition-colors rounded-lg px-2 -mx-2 cursor-pointer"
+                      asChild
+                      variant="outline"
+                      className="w-full bg-card/60 transition-colors hover:bg-card"
                     >
-                      <span className={cn(
-                        'w-1.5 h-1.5 rounded-full shrink-0',
-                        isRunning ? 'bg-[var(--green-dot)] animate-pulse'
-                          : isError ? 'bg-destructive'
-                          : s.status === 'merged' ? 'bg-primary'
-                          : 'bg-muted-foreground/40'
-                      )} />
-                      <div className="flex-1 min-w-0">
-                        <span className="text-sm font-medium text-foreground truncate block">{title ?? s.id.slice(0, 8)}</span>
-                        <span className="text-xs text-muted-foreground">{proj}</span>
-                      </div>
-                      <span className="text-xs text-muted-foreground/50 shrink-0 tabular-nums">{timeAgo(s.createdAt)}</span>
-                      <span className={cn(
-                        'text-xs font-medium shrink-0 capitalize',
-                        isRunning ? 'text-[var(--green)]' : isError ? 'text-destructive' : 'text-muted-foreground'
-                      )}>{s.status}</span>
-                    </button>
+                      <button onClick={() => navigate(`/sessions/${s.id}`)}>
+                        <ItemMedia><span className={cn(
+                          'w-1.5 h-1.5 rounded-full shrink-0',
+                          isRunning ? 'bg-[var(--green-dot)] animate-pulse'
+                            : isError ? 'bg-destructive'
+                            : s.status === 'merged' ? 'bg-primary'
+                            : 'bg-muted-foreground/40'
+                        )} /></ItemMedia>
+                        <ItemContent className="items-start">
+                          <ItemTitle className="max-w-full truncate">{title ?? s.id.slice(0, 8)}</ItemTitle>
+                          <ItemDescription className="w-full text-left text-xs">{proj}</ItemDescription>
+                        </ItemContent>
+                        <ItemActions className="gap-3">
+                          <span className="text-xs text-muted-foreground/50 shrink-0 tabular-nums">{timeAgo(s.createdAt)}</span>
+                          <span className={cn(
+                            'text-xs font-medium shrink-0 capitalize',
+                            isRunning ? 'text-[var(--green)]' : isError ? 'text-destructive' : 'text-muted-foreground'
+                          )}>{s.status}</span>
+                        </ItemActions>
+                      </button>
+                    </Item>
                   )
                 })}
-              </div>
+              </ItemGroup>
             </section>
           )}
 

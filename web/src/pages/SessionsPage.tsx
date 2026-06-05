@@ -1,49 +1,116 @@
-import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
 import { sessions, agents, tasks } from '../api/client'
-import type { Session, Agent, Task, SessionStatus } from '../api/client'
+import type { Session, Agent, Task } from '../api/client'
 import { AgentAvatar } from '@/components/AgentAvatar'
-import { StatusBadge } from '@/components/StatusBadge'
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
+import { Spinner } from '@/components/ui/spinner'
 import { timeAgo } from '@/lib/time'
 import { cn } from '@/lib/utils'
+import { ChevronRight } from 'lucide-react'
 
-function SessionCard({ session, agent, task, onClick }: {
-  session: Session; agent?: Agent; task?: Task; onClick: () => void
+// ---------------------------------------------------------------------------
+// Task row
+// ---------------------------------------------------------------------------
+
+function TaskRow({
+  task, taskSessions, agentList, onClick,
+}: {
+  task: Task
+  taskSessions: Session[]
+  agentList: Agent[]
+  onClick: () => void
 }) {
-  const isSpec = !!session.specId
-  const shortBranch = (session.branch ?? 'session').replace(/^agent\/([0-9a-f]{8}).*/i, 'agent/$1')
-  const title = task?.title ?? (isSpec ? 'Planning session' : shortBranch)
+  const workSessions   = taskSessions.filter(s => !s.parentSessionId && !s.specId)
+  const reviewSessions = taskSessions.filter(s => !!s.parentSessionId)
+
+  const overallStatus = (() => {
+    if (workSessions.some(s => s.status === 'running' || s.status === 'idle')) return 'running'
+    if (workSessions.some(s => s.status === 'error'))   return 'error'
+    if (workSessions.some(s => s.status === 'done'))    return 'done'
+    if (workSessions.every(s => s.status === 'merged')) return 'merged'
+    return 'done'
+  })()
+
+  const verdict = reviewSessions.find(s => s.reviewVerdict && s.reviewVerdict !== 'pending')?.reviewVerdict
+
+  const statusLabel = verdict === 'approved'          ? 'Approved'
+                    : verdict === 'changes_requested' ? 'Changes needed'
+                    : overallStatus === 'running'      ? 'Working'
+                    : overallStatus === 'error'        ? 'Error'
+                    : overallStatus === 'merged'       ? 'Merged'
+                    : reviewSessions.some(s => s.status === 'running' || s.reviewVerdict === 'pending') ? 'Reviewing'
+                    : overallStatus === 'done'         ? 'Done'
+                    : 'Done'
+
+  const dotCls = overallStatus === 'running'             ? 'dot green pulse'
+               : overallStatus === 'error'               ? 'dot red'
+               : verdict === 'approved'                  ? 'dot green'
+               : verdict === 'changes_requested'         ? 'dot amber'
+               : overallStatus === 'merged'              ? 'dot idle'
+               : overallStatus === 'done'                ? 'dot amber'
+               : 'dot idle'
+
+  const agents = workSessions.reduce<Agent[]>((acc, s) => {
+    const a = agentList.find(ag => ag.id === s.agentId)
+    if (a && !acc.find(x => x.id === a.id)) acc.push(a)
+    return acc
+  }, [])
+
+  const latestSession = [...workSessions].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
 
   return (
-    <button onClick={onClick} className="card-row">
-      <AgentAvatar agent={agent} size={40} running={session.status === 'running'} />
-      <div className="card-row-main">
-        <p className="card-row-title">{title}</p>
-        <p className="text-[11.5px] text-muted-foreground font-mono truncate mt-0.5">
-          {shortBranch}{isSpec && ' · plan'}
-        </p>
+    <button
+      onClick={onClick}
+      className="flex items-center gap-4 w-full px-4 py-3.5 rounded-xl border border-border/60 bg-card/70 shadow-sm text-left hover:bg-card hover:-translate-y-0.5 transition-all"
+    >
+      {/* Status dot */}
+      <span className={cn(dotCls, 'shrink-0')} style={{ width: 7, height: 7 }} />
+
+      {/* Title + meta */}
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium truncate">{task.title}</p>
+        {task.prompt && (
+          <p className="text-xs text-muted-foreground/60 truncate mt-0.5 leading-snug">{task.prompt.slice(0, 100)}</p>
+        )}
       </div>
-      <span className="text-[11px] text-muted-foreground/50 font-mono shrink-0">{timeAgo(session.createdAt)}</span>
-      <StatusBadge status={session.status} />
+
+      {/* Right side */}
+      <div className="flex items-center gap-3 shrink-0">
+        {agents.length > 0 && (
+          <div className="flex -space-x-1.5">
+            {agents.slice(0, 3).map(a => (
+              <div key={a.id} className="rounded-full ring-2 ring-card">
+                <AgentAvatar agent={a} size={22} running={overallStatus === 'running'} />
+              </div>
+            ))}
+          </div>
+        )}
+        <span className={cn(
+          'text-xs font-medium',
+          overallStatus === 'running'             ? 'text-[var(--green)]'       :
+          overallStatus === 'error'               ? 'text-[var(--red)]'         :
+          verdict === 'changes_requested'         ? 'text-[var(--amber)]'       :
+          verdict === 'approved'                  ? 'text-[var(--green)]'       :
+          overallStatus === 'merged'              ? 'text-muted-foreground/40'  :
+          'text-muted-foreground/60'
+        )}>{statusLabel}</span>
+        <span className="text-[11px] text-muted-foreground/30 tabular-nums">
+          {timeAgo(latestSession?.createdAt ?? task.createdAt)}
+        </span>
+        <ChevronRight size={13} className="text-muted-foreground/30" />
+      </div>
     </button>
   )
 }
 
-type Filter = 'all' | SessionStatus
-
-const FILTERS: { key: Filter; label: string }[] = [
-  { key: 'all',     label: 'All'     },
-  { key: 'running', label: 'Running' },
-  { key: 'done',    label: 'Done'    },
-  { key: 'error',   label: 'Error'   },
-  { key: 'merged',  label: 'Merged'  },
-]
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
 
 export default function SessionsPage() {
   const { id: projectId } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const [filter, setFilter] = useState<Filter>('all')
 
   const { data: sessionList = [], isLoading } = useQuery({
     queryKey: ['sessions', projectId],
@@ -51,61 +118,83 @@ export default function SessionsPage() {
     enabled: !!projectId,
     refetchInterval: 5000,
   })
-  const { data: agentList = [] } = useQuery({ queryKey: ['agents'],         queryFn: () => agents.list() })
-  const { data: taskList  = [] } = useQuery({ queryKey: ['tasks', projectId], queryFn: () => tasks.list({ projectId }), enabled: !!projectId })
-
-  function agentFor(s: Session) { return agentList.find(a => a.id === s.agentId) }
-  function taskFor(s: Session)  { return taskList.find(t => t.id === s.workTaskId) }
-
-  const sorted = [...sessionList].sort((a, b) => {
-    const order: Record<string, number> = { running: 0, idle: 1, error: 2, done: 3, merged: 4 }
-    const od = (order[a.status] ?? 5) - (order[b.status] ?? 5)
-    return od !== 0 ? od : b.createdAt.localeCompare(a.createdAt)
+  const { data: agentList = [] } = useQuery({ queryKey: ['agents'], queryFn: () => agents.list() })
+  const { data: taskList  = [] } = useQuery({
+    queryKey: ['tasks', projectId],
+    queryFn: () => tasks.list({ projectId }),
+    enabled: !!projectId,
+    refetchInterval: 5000,
   })
 
-  const filtered = filter === 'all' ? sorted : sorted.filter(s => s.status === filter)
-  const counts = new Map<string, number>()
-  for (const s of sessionList) counts.set(s.status, (counts.get(s.status) ?? 0) + 1)
-  const visibleFilters = FILTERS.filter(f => f.key === 'all' || (counts.get(f.key) ?? 0) > 0)
+  // Group sessions by workTaskId
+  const sessionsByTask = new Map<string, Session[]>()
+  for (const s of sessionList) {
+    if (s.workTaskId) {
+      const arr = sessionsByTask.get(s.workTaskId) ?? []
+      arr.push(s)
+      sessionsByTask.set(s.workTaskId, arr)
+    }
+  }
+
+  // Map: rootTask.sessionId → subtasks
+  const subtasksByLeadSession = new Map<string, Task[]>()
+  for (const t of taskList) {
+    if (t.leadSessionId) {
+      const arr = subtasksByLeadSession.get(t.leadSessionId) ?? []
+      arr.push(t)
+      subtasksByLeadSession.set(t.leadSessionId, arr)
+    }
+  }
+
+  // Gather all sessions for a root task (root + all its subtasks)
+  function sessionsForRoot(root: Task): Session[] {
+    const all = [...(sessionsByTask.get(root.id) ?? [])]
+    const subtasks = root.sessionId ? (subtasksByLeadSession.get(root.sessionId) ?? []) : []
+    for (const sub of subtasks) {
+      all.push(...(sessionsByTask.get(sub.id) ?? []))
+    }
+    return all
+  }
+
+  // Only root tasks (no leadSessionId) that have been assigned (sessionId set on task record)
+  const activeTasks = taskList
+    .filter(t => !t.leadSessionId && t.sessionId)
+    .sort((a, b) => {
+      const aLast = sessionsForRoot(a).map(s => s.createdAt).sort().at(-1) ?? a.createdAt
+      const bLast = sessionsForRoot(b).map(s => s.createdAt).sort().at(-1) ?? b.createdAt
+      return bLast.localeCompare(aLast)
+    })
 
   return (
     <div className="flex-1 overflow-y-auto bg-background">
-      <div className="max-w-[960px] px-6 pt-6 pb-8 flex flex-col gap-6">
+      <div className="max-w-[960px] px-6 pt-10 pb-10 flex flex-col gap-6">
 
-        <div className="flex items-center justify-between">
-          <p className="text-xs text-muted-foreground/50">{sessionList.length} session{sessionList.length !== 1 ? 's' : ''}</p>
-          {visibleFilters.length > 2 && (
-            <div className="flex items-center gap-1 flex-wrap">
-              {visibleFilters.map(f => (
-                <button
-                  key={f.key}
-                  onClick={() => setFilter(f.key)}
-                  className={cn(
-                    'px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer',
-                    filter === f.key
-                      ? 'bg-card border-border text-foreground'
-                      : 'bg-transparent border-transparent text-muted-foreground hover:text-foreground'
-                  )}
-                >
-                  {f.label}
-                  {f.key !== 'all' && counts.get(f.key) && (
-                    <span className="ml-1.5 opacity-50 font-mono text-[10px]">{counts.get(f.key)}</span>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <p className="text-xs text-muted-foreground/50">
+          {activeTasks.length} task{activeTasks.length !== 1 ? 's' : ''}
+        </p>
 
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : filtered.length === 0 ? (
-          <p className="text-sm text-muted-foreground/50 py-8 text-center">{filter === 'all' ? 'No sessions yet.' : `No ${filter} sessions.`}</p>
+          <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
+            <Spinner />
+            Loading history
+          </div>
+        ) : activeTasks.length === 0 ? (
+          <Empty className="border border-dashed border-border/70 bg-card/30">
+            <EmptyHeader>
+              <EmptyTitle>No history yet</EmptyTitle>
+              <EmptyDescription>Tasks that have been assigned to agents will appear here.</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         ) : (
           <div className="flex flex-col gap-2">
-            {filtered.map(s => (
-              <SessionCard key={s.id} session={s} agent={agentFor(s)} task={taskFor(s)}
-                onClick={() => navigate(`/sessions/${s.id}`)} />
+            {activeTasks.map(task => (
+              <TaskRow
+                key={task.id}
+                task={task}
+                taskSessions={sessionsForRoot(task)}
+                agentList={agentList}
+                onClick={() => navigate(`/projects/${projectId}/tasks/${task.id}`)}
+              />
             ))}
           </div>
         )}

@@ -25,6 +25,7 @@ import AdminUsersPage from './pages/AdminUsersPage'
 import AdminServerPage from './pages/AdminServerPage'
 import AdminCharactersPage from './pages/AdminCharactersPage'
 import DepartmentPage from './pages/DepartmentPage'
+import TaskPage from './pages/TaskPage'
 
 const qc = new QueryClient({ defaultOptions: { queries: { staleTime: 10_000 } } })
 
@@ -69,7 +70,8 @@ export default function App() {
             <Route path="knowledge"     element={<KnowledgePage />} />
             <Route path="tools"         element={<ToolsPage />} />
             <Route path="settings"      element={<SettingsPage />} />
-            <Route path="sessions/:id"  element={<SessionPage />} />
+            <Route path="sessions/:id"              element={<SessionPage />} />
+            <Route path="projects/:id/tasks/:taskId" element={<TaskPage />} />
             <Route path="projects/:id"  element={<ProjectLayout />}>
               <Route index              element={<ProjectDetailPage />} />
               <Route path="sessions"    element={<SessionsPage />} />

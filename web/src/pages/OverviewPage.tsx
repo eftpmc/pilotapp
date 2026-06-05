@@ -2,15 +2,16 @@ import { useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { sessions, tasks, agents, projects, events } from '../api/client'
-import type { CompanyEvent } from '../api/client'
+import type { Task, Session, Agent, CompanyEvent } from '../api/client'
 import { AgentAvatar } from '@/components/AgentAvatar'
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
+import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item'
 import { useElapsed, fmtSecs, timeAgo } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
 const EVENT_VERB: Record<string, [string, string]> = {
-  'session.started':   ['started',   'text-muted-foreground'],
-  'session.completed': ['finished',  'text-green-500'],
-  'session.failed':    ['failed on', 'text-destructive'],
+  'session.completed': ['finished',  'text-[var(--green)]'],
+  'session.failed':    ['failed',    'text-destructive'],
   'session.merged':    ['merged',    'text-primary'],
 }
 
@@ -18,6 +19,68 @@ function ElapsedTimer({ createdAt }: { createdAt: string }) {
   const secs = useElapsed(createdAt, true)
   return <span className="text-xs font-mono text-[var(--green)] tabular-nums shrink-0">{fmtSecs(secs)}</span>
 }
+
+// ---------------------------------------------------------------------------
+// Task item — used for both running and review sections
+// ---------------------------------------------------------------------------
+
+function TaskItem({
+  task, taskSessions, agentList, projectName, running, onClick,
+}: {
+  task: Task
+  taskSessions: Session[]
+  agentList: Agent[]
+  projectName: string
+  running?: boolean
+  onClick: () => void
+}) {
+  const workSessions = taskSessions.filter(s => !s.parentSessionId)
+  const agents = workSessions.reduce<Agent[]>((acc, s) => {
+    const a = agentList.find(ag => ag.id === s.agentId)
+    if (a && !acc.find(x => x.id === a.id)) acc.push(a)
+    return acc
+  }, [])
+  const hasError = workSessions.some(s => s.status === 'error')
+  const earliest = workSessions.sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0]
+
+  return (
+    <Item
+      asChild
+      variant="outline"
+      className={cn(
+        'w-full bg-card/70 transition-all hover:-translate-y-0.5 hover:bg-card',
+        hasError && !running && 'outline outline-1 outline-destructive/20'
+      )}
+    >
+      <button onClick={onClick}>
+        <ItemMedia>
+          {running && <span className="dot green pulse shrink-0" />}
+          <div className="flex -space-x-1.5">
+            {agents.slice(0, 3).map(a => (
+              <div key={a.id} className="rounded-full ring-2 ring-card">
+                <AgentAvatar agent={a} size={running ? 32 : 34} running={running} />
+              </div>
+            ))}
+          </div>
+        </ItemMedia>
+        <ItemContent className="items-start">
+          <ItemTitle className="max-w-full truncate">{task.title}</ItemTitle>
+          <ItemDescription className="w-full text-left text-xs">
+            {agents.map(a => a.name).join(', ')} · {projectName}
+          </ItemDescription>
+        </ItemContent>
+        <ItemActions>
+          {running && earliest && <ElapsedTimer createdAt={earliest.createdAt} />}
+          {!running && hasError && <span className="text-xs text-destructive/70 shrink-0">error</span>}
+        </ItemActions>
+      </button>
+    </Item>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
 
 export default function OverviewPage() {
   const navigate = useNavigate()
@@ -50,24 +113,70 @@ export default function OverviewPage() {
     return () => { dead = true; ws?.close() }
   }, [qc])
 
-  const { data: sessionList  = [] } = useQuery({ queryKey: ['sessions'],  queryFn: () => sessions.list(),  refetchInterval: 30_000 })
-  const { data: taskList     = [] } = useQuery({ queryKey: ['tasks'],     queryFn: () => tasks.list(),     refetchInterval: 30_000 })
-  const { data: agentList = [] } = useQuery({ queryKey: ['agents'], queryFn: () => agents.list() })
-  const { data: projectList  = [] } = useQuery({ queryKey: ['projects'],  queryFn: () => projects.list()  })
-  const { data: eventList    = [] } = useQuery({ queryKey: ['events'],    queryFn: () => events.list(30),  refetchInterval: 30_000 })
+  const { data: sessionList = [] } = useQuery({ queryKey: ['sessions'],  queryFn: () => sessions.list(),  refetchInterval: 30_000 })
+  const { data: taskList    = [] } = useQuery({ queryKey: ['tasks'],     queryFn: () => tasks.list(),     refetchInterval: 30_000 })
+  const { data: agentList   = [] } = useQuery({ queryKey: ['agents'],    queryFn: () => agents.list() })
+  const { data: projectList = [] } = useQuery({ queryKey: ['projects'],  queryFn: () => projects.list() })
+  const { data: eventList   = [] } = useQuery({ queryKey: ['events'],    queryFn: () => events.list(30),  refetchInterval: 30_000 })
 
-  const codeSessions = sessionList.filter(s => !s.specId)
-  const running      = codeSessions.filter(s => s.status === 'running')
-  const review       = codeSessions.filter(s => s.status === 'done' || s.status === 'error')
-  const queued       = taskList.filter(t => t.status === 'pending')
-  const recentWork   = codeSessions
-    .filter(s => s.status === 'merged' || s.status === 'done' || s.status === 'error')
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 5)
-
-  function agentFor(id: string)    { return agentList.find(e => e.id === id) }
   function projectName(id: string) { return projectList.find(p => p.id === id)?.name ?? 'Unknown' }
-  function taskTitle(wid?: string) { return wid ? taskList.find(t => t.id === wid)?.title : undefined }
+
+  // Build task → sessions map (work sessions only, not spec)
+  const sessionsByTask = new Map<string, Session[]>()
+  for (const s of sessionList) {
+    if (!s.specId && s.workTaskId) {
+      const arr = sessionsByTask.get(s.workTaskId) ?? []
+      arr.push(s)
+      sessionsByTask.set(s.workTaskId, arr)
+    }
+  }
+
+  // Map: leadSessionId → subtasks (for campaign grouping)
+  const subtasksByLeadSession = new Map<string, Task[]>()
+  for (const t of taskList) {
+    if (t.leadSessionId) {
+      const arr = subtasksByLeadSession.get(t.leadSessionId) ?? []
+      arr.push(t)
+      subtasksByLeadSession.set(t.leadSessionId, arr)
+    }
+  }
+
+  // Gather ALL sessions for a root task (root + campaign subtasks)
+  function allCampaignSessions(root: Task): Session[] {
+    const all = [...(sessionsByTask.get(root.id) ?? [])]
+    const subtasks = root.sessionId ? (subtasksByLeadSession.get(root.sessionId) ?? []) : []
+    for (const sub of subtasks) all.push(...(sessionsByTask.get(sub.id) ?? []))
+    return all
+  }
+
+  // Root tasks only — root tasks are tasks with no leadSessionId that have been started
+  const rootTasks = taskList.filter(t => !t.leadSessionId && t.sessionId)
+
+  // Running: root task where any campaign session is active
+  const runningTasks = rootTasks.filter(t =>
+    allCampaignSessions(t).some(s => s.status === 'running' || s.status === 'idle')
+  )
+  const runningRootIds = new Set(runningTasks.map(t => t.id))
+
+  // Review: root task where a work session (non-review) is done/error and nothing is still running
+  const reviewTasks = rootTasks.filter(t => {
+    if (runningRootIds.has(t.id)) return false
+    const workSessions = allCampaignSessions(t).filter(s => !s.parentSessionId)
+    return workSessions.some(s => s.status === 'done' || s.status === 'error')
+  })
+
+  // Build taskSessionMap for TaskItem (still needed by TaskItem)
+  const taskSessionMap = new Map<string, Session[]>()
+  for (const t of rootTasks) taskSessionMap.set(t.id, allCampaignSessions(t))
+
+  const queued = taskList.filter(t => !t.leadSessionId && t.status === 'pending')
+
+  // Recent: root tasks that were recently completed/merged, not currently running or in review
+  const reviewRootIds = new Set(reviewTasks.map(t => t.id))
+  const recentTasks = rootTasks
+    .filter(t => !runningRootIds.has(t.id) && !reviewRootIds.has(t.id) && (t.status === 'done' || t.status === 'failed'))
+    .sort((a, b) => (b.completedAt ?? b.createdAt).localeCompare(a.completedAt ?? a.createdAt))
+    .slice(0, 5)
 
   const todayCost = sessionList.reduce((sum, s) => {
     if (!s.totalCostUsd) return sum
@@ -76,161 +185,162 @@ export default function OverviewPage() {
   }, 0)
 
   const parts: string[] = []
-  if (running.length) parts.push(`${running.length} agent${running.length !== 1 ? 's' : ''} working`)
-  if (review.length)  parts.push(`${review.length} to review`)
-  if (queued.length)  parts.push(`${queued.length} queued`)
-  if (todayCost > 0)  parts.push(`$${todayCost.toFixed(2)} today`)
-  if (!parts.length && recentWork.length > 0) parts.push(`${recentWork.length} recent session${recentWork.length !== 1 ? 's' : ''}`)
+  if (runningTasks.length) parts.push(`${runningTasks.length} task${runningTasks.length !== 1 ? 's' : ''} running`)
+  if (reviewTasks.length)  parts.push(`${reviewTasks.length} to review`)
+  if (queued.length)       parts.push(`${queued.length} queued`)
+  if (todayCost > 0)       parts.push(`$${todayCost.toFixed(2)} today`)
+  if (!parts.length && recentTasks.length > 0) parts.push(`${recentTasks.length} recent`)
   const subtitle = parts.length ? parts.join(' · ') : 'Nothing running yet.'
+
+  const isEmpty = runningTasks.length === 0 && reviewTasks.length === 0
 
   return (
     <div className="flex-1 overflow-y-auto bg-background">
-      <div className="max-w-[960px] px-6 pt-10 pb-8 flex flex-col gap-8">
+      <div className="max-w-[960px] px-6 pt-12 pb-10 flex flex-col gap-10">
 
-        {/* Header — same pattern as Knowledge / Tools */}
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Today</h1>
           <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
         </div>
 
-        {/* Empty onboarding */}
-        {running.length === 0 && review.length === 0 && projectList.length === 0 && (
+        {/* Onboarding */}
+        {isEmpty && projectList.length === 0 && (
           <section className="flex flex-col gap-2">
             <p className="text-xs text-muted-foreground/50 mb-1">Get started</p>
-            {[
-              { n: '1', label: 'Add a project',  desc: 'Connect a GitHub repo or local path.', path: '/projects'  },
-              { n: '2', label: 'Add agents',      desc: 'Configure API keys and create named agents.', path: '/agents' },
-              { n: '3', label: 'Dispatch work',   desc: 'Open a project, create tasks, assign to agents.', path: '/projects' },
-            ].map(({ n, label, desc, path }) => (
-              <button
-                key={n}
-                onClick={() => navigate(path)}
-                className="flex items-start gap-4 px-4 py-3.5 bg-card rounded-2xl text-left hover:bg-muted/50 hover:-translate-y-px transition-all w-full"
-              >
-                <span className="w-5 h-5 rounded-md bg-primary/10 text-primary text-[11px] font-bold grid place-items-center shrink-0 mt-0.5">{n}</span>
-                <div>
-                  <p className="text-sm font-semibold text-foreground">{label}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
-                </div>
-              </button>
-            ))}
+            <ItemGroup className="gap-3">
+              {[
+                { n: '1', label: 'Add a project',  desc: 'Connect a GitHub repo or local path.', path: '/projects' },
+                { n: '2', label: 'Add agents',      desc: 'Configure API keys and create named agents.', path: '/agents' },
+                { n: '3', label: 'Dispatch work',   desc: 'Open a project, create tasks, assign to agents.', path: '/projects' },
+              ].map(({ n, label, desc, path }) => (
+                <Item key={n} asChild variant="outline" className="w-full bg-card/70 transition-all hover:-translate-y-0.5 hover:bg-card">
+                  <button onClick={() => navigate(path)}>
+                    <ItemMedia>
+                      <span className="grid size-5 place-items-center rounded-md bg-primary/10 text-[11px] font-bold text-primary">{n}</span>
+                    </ItemMedia>
+                    <ItemContent>
+                      <ItemTitle>{label}</ItemTitle>
+                      <ItemDescription className="w-full text-left text-xs">{desc}</ItemDescription>
+                    </ItemContent>
+                  </button>
+                </Item>
+              ))}
+            </ItemGroup>
           </section>
         )}
 
         {/* Needs review */}
-        {review.length > 0 && (
+        {reviewTasks.length > 0 && (
           <section>
             <p className="text-xs text-muted-foreground/50 mb-3">Needs review</p>
-            <div className="flex flex-col gap-2">
-                {review.map(s => {
-                  const agent = agentFor(s.agentId)
-                  const title = taskTitle(s.workTaskId)
-                  const isError = s.status === 'error'
-                  return (
-                    <button
-                      key={s.id}
-                      onClick={() => navigate(`/sessions/${s.id}`)}
-                      className={cn(
-                        'flex items-center gap-3 px-4 py-3.5 bg-card rounded-2xl hover:bg-muted/50 hover:-translate-y-px transition-all text-left w-full',
-                        isError && 'outline outline-1 outline-destructive/20'
-                      )}
-                    >
-                      <AgentAvatar agent={agent} size={36} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-foreground truncate">{title ?? s.id.slice(0, 8)}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{agent?.name ?? '—'} · {projectName(s.projectId)}</p>
-                      </div>
-                      {isError && <span className="text-xs text-destructive/70 shrink-0">error</span>}
-                    </button>
-                  )
-                })}
-            </div>
+            <ItemGroup className="gap-3">
+              {reviewTasks.map(task => (
+                <TaskItem
+                  key={task.id}
+                  task={task}
+                  taskSessions={taskSessionMap.get(task.id) ?? []}
+                  agentList={agentList}
+                  projectName={projectName(task.projectId)}
+                  onClick={() => navigate(`/projects/${task.projectId}/tasks/${task.id}`)}
+                />
+              ))}
+            </ItemGroup>
           </section>
         )}
 
-        {/* Running */}
-        {running.length > 0 && (
+        {/* In progress */}
+        {runningTasks.length > 0 && (
           <section>
             <p className="text-xs text-muted-foreground/50 mb-3">In progress</p>
-            <div className="flex flex-col gap-2">
-                {running.map(s => {
-                  const agent = agentFor(s.agentId)
-                  const title = taskTitle(s.workTaskId)
-                  return (
-                    <button
-                      key={s.id}
-                      onClick={() => navigate(`/sessions/${s.id}`)}
-                      className="flex items-center gap-3 px-4 py-3 bg-card rounded-2xl hover:bg-muted/50 hover:-translate-y-px transition-all text-left w-full"
-                    >
-                      <span className="dot green pulse shrink-0" />
-                      <AgentAvatar agent={agent} size={34} running />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">{title ?? s.id.slice(0, 8)}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">{agent?.name ?? '—'} · {projectName(s.projectId)}</p>
-                      </div>
-                      <ElapsedTimer createdAt={s.createdAt} />
-                    </button>
-                  )
-                })}
-            </div>
+            <ItemGroup className="gap-3">
+              {runningTasks.map(task => (
+                <TaskItem
+                  key={task.id}
+                  task={task}
+                  taskSessions={taskSessionMap.get(task.id) ?? []}
+                  agentList={agentList}
+                  projectName={projectName(task.projectId)}
+                  running
+                  onClick={() => navigate(`/projects/${task.projectId}/tasks/${task.id}`)}
+                />
+              ))}
+            </ItemGroup>
           </section>
         )}
 
         {/* Recent work */}
-        {running.length === 0 && review.length === 0 && recentWork.length > 0 && (
+        {isEmpty && recentTasks.length > 0 && (
           <section>
             <p className="text-xs font-medium text-muted-foreground/60 mb-3">Recent work</p>
-            <div className="flex flex-col gap-2">
-              {recentWork.map(s => {
-                const agent = agentFor(s.agentId)
-                const title = taskTitle(s.workTaskId)
-                const isError = s.status === 'error'
-                return (
-                  <button
-                    key={s.id}
-                    onClick={() => navigate(`/sessions/${s.id}`)}
-                    className={cn(
-                      'flex items-center gap-3 px-4 py-3.5 bg-card rounded-2xl hover:bg-muted/50 hover:-translate-y-px transition-all text-left w-full',
-                      isError && 'border-destructive/25'
-                    )}
-                  >
-                    <AgentAvatar agent={agent} size={34} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-foreground truncate">{title ?? (s.branch ?? 'session').replace(/^agent\/([0-9a-f]{8}).*/i, 'agent/$1')}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{agent?.name ?? '—'} · {projectName(s.projectId)}</p>
-                    </div>
-                    <span className="text-xs text-muted-foreground/40 shrink-0 tabular-nums">{timeAgo(s.createdAt)}</span>
-                  </button>
-                )
-              })}
-            </div>
+            <ItemGroup className="gap-3">
+              {recentTasks.map(task => (
+                <TaskItem
+                  key={task.id}
+                  task={task}
+                  taskSessions={taskSessionMap.get(task.id) ?? []}
+                  agentList={agentList}
+                  projectName={projectName(task.projectId)}
+                  onClick={() => navigate(`/projects/${task.projectId}/tasks/${task.id}`)}
+                />
+              ))}
+            </ItemGroup>
           </section>
         )}
 
-        {/* Activity */}
-        {eventList.length > 0 && (
-          <section>
-            <p className="text-xs font-medium text-muted-foreground/60 mb-3">Activity</p>
-            <div className="flex flex-col">
-              {(eventList as CompanyEvent[]).slice(0, 12).map(ev => {
-                const name = ev.data.employeeName ?? ''
-                const [verb, colorClass] = EVENT_VERB[ev.type] ?? ['updated', 'text-muted-foreground']
-                return (
-                  <button
-                    key={ev.id}
-                    onClick={() => ev.sessionId && navigate(`/sessions/${ev.sessionId}`)}
-                    disabled={!ev.sessionId}
-                    className="flex items-center gap-3 px-4 py-2 rounded-lg hover:bg-muted/40 transition-colors text-left w-full disabled:cursor-default"
-                  >
-                    <span className="w-[52px] shrink-0 text-xs font-semibold truncate text-foreground">{name || '—'}</span>
-                    <span className={cn('w-[60px] shrink-0 text-xs', colorClass)}>{verb}</span>
-                    <span className="flex-1 min-w-0 text-xs text-muted-foreground truncate">{ev.data.taskTitle ?? ''}</span>
-                    <span className="text-xs text-muted-foreground/40 shrink-0 tabular-nums">{timeAgo(ev.createdAt)}</span>
-                  </button>
-                )
-              })}
-            </div>
-          </section>
+        {/* Activity feed — one entry per task, significant events only */}
+        {(() => {
+          const significant = (eventList as CompanyEvent[]).filter(ev => ev.type in EVENT_VERB)
+          // Deduplicate: one entry per taskId (most recent), fall back to sessionId for no-task events
+          const seen = new Set<string>()
+          const deduped = significant.filter(ev => {
+            const key = ev.taskId ?? ev.sessionId ?? ev.id
+            if (seen.has(key)) return false
+            seen.add(key)
+            return true
+          }).slice(0, 10)
+
+          if (!deduped.length) return null
+          return (
+            <section>
+              <p className="text-xs font-medium text-muted-foreground/60 mb-3">Recent activity</p>
+              <ItemGroup className="gap-1">
+                {deduped.map(ev => {
+                  const name = ev.data.employeeName ?? ''
+                  const title = ev.taskId ? (taskList.find(t => t.id === ev.taskId)?.title ?? ev.data.taskTitle ?? '') : ''
+                  const [verb, colorClass] = EVENT_VERB[ev.type]!
+                  return (
+                    <Item key={ev.id} asChild size="sm" className="hover:bg-muted/40">
+                      <button
+                        onClick={() => {
+                          if (ev.taskId && ev.projectId) navigate(`/projects/${ev.projectId}/tasks/${ev.taskId}`)
+                          else if (ev.sessionId) navigate(`/sessions/${ev.sessionId}`)
+                        }}
+                        disabled={!ev.taskId && !ev.sessionId}
+                      >
+                        <span className="w-[52px] shrink-0 text-xs font-semibold truncate text-foreground">{name || '-'}</span>
+                        <span className={cn('w-[60px] shrink-0 text-xs', colorClass)}>{verb}</span>
+                        <ItemContent className="min-w-0">
+                          <ItemDescription className="truncate text-xs">{title}</ItemDescription>
+                        </ItemContent>
+                        <ItemActions>
+                          <span className="text-xs text-muted-foreground/40 shrink-0 tabular-nums">{timeAgo(ev.createdAt)}</span>
+                        </ItemActions>
+                      </button>
+                    </Item>
+                  )
+                })}
+              </ItemGroup>
+            </section>
+          )
+        })()}
+
+        {isEmpty && recentTasks.length === 0 && projectList.length > 0 && (
+          <Empty className="border border-dashed border-border/70 bg-card/30">
+            <EmptyHeader>
+              <EmptyTitle>Quiet today</EmptyTitle>
+              <EmptyDescription>Queued, running, and reviewed work will show up here.</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         )}
 
       </div>

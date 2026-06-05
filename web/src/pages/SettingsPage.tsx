@@ -245,7 +245,7 @@ function PairingDialog({ open, onClose }: { open: boolean; onClose: () => void }
             <p className="text-sm text-destructive">{error}</p>
           ) : (
             <div className="flex flex-col items-center gap-3">
-              <div className="bg-card rounded-xl p-3 border border-border">
+              <div className="bg-card/80 rounded-xl p-3 border border-border/60">
                 <canvas ref={canvasRef} />
               </div>
               {expiresAt && (
@@ -403,7 +403,7 @@ export default function SettingsPage() {
         {/* ── Account Profile ── */}
         <section className="flex flex-col gap-3">
           <p className="text-xs text-muted-foreground/50">Account</p>
-          <div className="bg-card rounded-xl border border-border overflow-hidden">
+          <div className="bg-card/80 rounded-xl border border-border/60 overflow-hidden">
 
             {/* Profile info / edit */}
             {!editingProfile ? (
@@ -539,7 +539,7 @@ export default function SettingsPage() {
               <Button size="sm" onClick={() => setShowPairing(true)}>+ Connect device</Button>
             </div>
           </div>
-          <div className="bg-card rounded-xl border border-border overflow-hidden">
+          <div className="bg-card/80 rounded-xl border border-border/60 overflow-hidden">
             {deviceList.length === 0 ? (
               <div className="px-4 py-6 text-center">
                 <p className="text-sm text-muted-foreground">No registered devices.</p>
@@ -566,7 +566,7 @@ export default function SettingsPage() {
           {connectionList.length === 0 ? (
             <p className="text-sm text-muted-foreground/50">No connections yet.</p>
           ) : (
-            <div className="bg-card rounded-xl border border-border overflow-hidden">
+            <div className="bg-card/80 rounded-xl border border-border/60 overflow-hidden">
               {connectionList.map((b, i) => (
                 <div key={b.id} className={i > 0 ? 'border-t border-border/40' : ''}>
                   <ConnectionRow

@@ -238,6 +238,7 @@ function AppSidebar({
   onSignOut: () => void
 }) {
   const location = useLocation()
+  const navigate = useNavigate()
   const [projectsOpen, setProjectsOpen] = useState(true)
 
   const { data: projectList = [] } = useQuery({
@@ -253,8 +254,30 @@ function AppSidebar({
     <Sidebar collapsible="icon" className="border-r border-[var(--rule-soft)]">
       <SidebarHeader className="h-14 justify-center">
         <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarTrigger />
+          <SidebarMenuItem className="group/sidebar-head flex w-full items-center gap-2 group-data-[collapsible=icon]:w-auto">
+            <div className="flex w-full items-center gap-2 group-data-[collapsible=icon]:hidden">
+              <button
+                type="button"
+                onClick={() => navigate('/')}
+                className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 text-left text-sm font-semibold hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              >
+                <span className="pilot-mark !size-7 !rounded-lg shrink-0">p</span>
+                <span className="truncate">pilot</span>
+              </button>
+              <SidebarTrigger className="shrink-0" />
+            </div>
+
+            <div className="relative hidden size-8 group-data-[collapsible=icon]:block">
+              <button
+                type="button"
+                onClick={() => navigate('/')}
+                aria-label="pilot"
+                className="absolute inset-0 grid place-items-center rounded-md transition-opacity duration-150 group-hover/sidebar-head:opacity-0"
+              >
+                <span className="pilot-mark !size-7 !rounded-lg">p</span>
+              </button>
+              <SidebarTrigger className="absolute inset-0 !h-8 !w-8 opacity-0 transition-opacity duration-150 group-hover/sidebar-head:opacity-100" />
+            </div>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
