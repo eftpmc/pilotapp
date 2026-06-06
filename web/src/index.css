@@ -122,7 +122,12 @@
   background: color-mix(in srgb, var(--bg) 85%, transparent);
   backdrop-filter: blur(16px) saturate(1.2);
 }
-.mobile-topbar .navtool { margin-left: auto; }
+.mobile-topbar-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
 .mobile-topbar .wordmark {
   display: flex;
   align-items: center;

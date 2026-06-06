@@ -45,6 +45,7 @@ export default defineConfig({
       '/me':          'http://localhost:3000',
       '/admin':       'http://localhost:3000',
       '/ws': { target: 'ws://localhost:3000', ws: true },
+      '/kaykit': 'http://localhost:3000',
     },
   },
 })

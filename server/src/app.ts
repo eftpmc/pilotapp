@@ -24,6 +24,9 @@ app.use(express.json({ limit: '4mb' }));
 const publicDir = path.join(__dirname, '../public');
 app.use(express.static(publicDir));
 
+const kaykitDir = path.resolve(__dirname, '../../kaykit');
+app.use('/kaykit', express.static(kaykitDir));
+
 app.use('/auth',        authRoutes);
 app.use('/projects',    projectRoutes);
 app.use('/agents',      agentRoutes);

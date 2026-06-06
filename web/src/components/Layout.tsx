@@ -10,32 +10,25 @@ import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
-import {
-  Sidebar, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
-  SidebarHeader, SidebarMenu, SidebarMenuAction,
-  SidebarMenuButton, SidebarMenuItem, SidebarMenuSub, SidebarMenuSubButton,
-  SidebarMenuSubItem, SidebarProvider, SidebarInset, SidebarRail, SidebarTrigger,
-} from '@/components/ui/sidebar'
-import * as Collapsible from '@radix-ui/react-collapsible'
 import { cn } from '@/lib/utils'
 import { useEffect, useState, useCallback } from 'react'
 import {
-  BookOpen, ChevronRight, ChevronsUpDown, FolderOpen, Home, LogOut,
+  BookOpen, Building2, FolderOpen, Home, LogOut,
   Moon, Plus, Search, Settings, Sun, Users, Wrench,
 } from 'lucide-react'
 
 const BOTTOM_NAV = [
-  { label: 'Today',    path: '/',          end: true,  icon: Home },
-  { label: 'Projects', path: '/projects',  end: false, icon: FolderOpen },
-  { label: 'Agents',   path: '/agents',    end: false, icon: Users },
-  { label: 'Knowledge', path: '/knowledge', end: false, icon: BookOpen },
+  { label: 'Office',    path: '/',          end: true,  icon: Building2 },
+  { label: 'Today',     path: '/today',     end: false, icon: Home },
+  { label: 'Projects',  path: '/projects',  end: false, icon: FolderOpen },
+  { label: 'Agents',    path: '/agents',    end: false, icon: Users },
 ]
 
 const NAV_ITEMS = [
-  { label: 'Today',     path: '/',          end: true,  icon: Home },
+  { label: 'Office',    path: '/',          end: true,  icon: Building2 },
+  { label: 'Today',     path: '/today',     end: false, icon: Home },
+  { label: 'Projects',  path: '/projects',  end: false, icon: FolderOpen },
   { label: 'Agents',    path: '/agents',    end: false, icon: Users },
-  { label: 'Knowledge', path: '/knowledge', end: false, icon: BookOpen },
-  { label: 'Tools',     path: '/tools',     end: false, icon: Wrench },
 ]
 
 // ── Theme ──────────────────────────────────────────────────────────────────────
@@ -53,7 +46,11 @@ function applyTheme(t: 'light' | 'dark') {
 // ── Command palette ────────────────────────────────────────────────────────────
 type PaletteMode = 'search' | 'pick-project'
 
-function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
+function CommandPalette({ open, initialMode, onClose }: {
+  open: boolean
+  initialMode: PaletteMode
+  onClose: () => void
+}) {
   const navigate = useNavigate()
   const [mode, setMode] = useState<PaletteMode>('search')
 
@@ -75,6 +72,10 @@ function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void 
 
   const review  = sessionList.filter(s => !s.specId && (s.status === 'done' || s.status === 'error'))
   const running = sessionList.filter(s => s.status === 'running')
+
+  useEffect(() => {
+    if (open) setMode(initialMode)
+  }, [initialMode, open])
 
   return (
     <CommandDialog open={open} onOpenChange={o => !o && onClose()}>
@@ -102,6 +103,34 @@ function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void 
                 <Plus size={14} className="text-[var(--ember)]" />
                 <span className="font-medium" style={{ color: 'var(--ember)' }}>New task</span>
                 <CommandShortcut>⌘N</CommandShortcut>
+              </CommandItem>
+            </CommandGroup>
+
+            <CommandSeparator />
+            <CommandGroup heading="Go to">
+              <CommandItem onSelect={() => go('/')} keywords={['office', 'home', '3d']}>
+                <Building2 size={14} className="text-[var(--muted)]" />
+                <span>Office</span>
+              </CommandItem>
+              <CommandItem onSelect={() => go('/today')} keywords={['home', 'overview']}>
+                <Home size={14} className="text-[var(--muted)]" />
+                <span>Today</span>
+              </CommandItem>
+              <CommandItem onSelect={() => go('/projects')} keywords={['repos', 'code']}>
+                <FolderOpen size={14} className="text-[var(--muted)]" />
+                <span>Projects</span>
+              </CommandItem>
+              <CommandItem onSelect={() => go('/agents')} keywords={['team', 'crew']}>
+                <Users size={14} className="text-[var(--muted)]" />
+                <span>Agents</span>
+              </CommandItem>
+              <CommandItem onSelect={() => go('/knowledge')} keywords={['docs', 'notes']}>
+                <BookOpen size={14} className="text-[var(--muted)]" />
+                <span>Knowledge</span>
+              </CommandItem>
+              <CommandItem onSelect={() => go('/settings')} keywords={['config', 'connections']}>
+                <Settings size={14} className="text-[var(--muted)]" />
+                <span>Settings</span>
               </CommandItem>
             </CommandGroup>
 
@@ -223,184 +252,181 @@ function CompanyOnboarding({ onDone }: { onDone: () => void }) {
   )
 }
 
-// ── App sidebar ────────────────────────────────────────────────────────────────
-function AppSidebar({
+// ── Desktop app bar ────────────────────────────────────────────────────────────
+function AppTopBar({
   reviewCount, runningCount, theme, workspaceName, userInitial,
-  onOpenPalette, onToggleTheme, onSignOut,
+  onNewTask, onOpenPalette, onToggleTheme, onSignOut,
 }: {
-  reviewCount: number
-  runningCount: number
-  theme: 'light' | 'dark'
-  workspaceName: string
-  userInitial: string
-  onOpenPalette: () => void
-  onToggleTheme: () => void
-  onSignOut: () => void
+  reviewCount: number; runningCount: number
+  theme: 'light' | 'dark'; workspaceName: string; userInitial: string
+  onNewTask: () => void; onOpenPalette: () => void; onToggleTheme: () => void; onSignOut: () => void
 }) {
   const location = useLocation()
   const navigate = useNavigate()
-  const [projectsOpen, setProjectsOpen] = useState(true)
-
-  const { data: projectList = [] } = useQuery({
-    queryKey: ['projects'], queryFn: () => projects.list(),
-  })
 
   function isActive(path: string, end = false) {
-    if (path === '/projects') return location.pathname.startsWith('/projects')
     return end ? location.pathname === path : location.pathname.startsWith(path)
   }
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-[var(--rule-soft)]">
-      <SidebarHeader className="h-14 justify-center">
-        <SidebarMenu>
-          <SidebarMenuItem className="group/sidebar-head flex w-full items-center gap-2 group-data-[collapsible=icon]:w-auto">
-            <div className="flex w-full items-center gap-2 group-data-[collapsible=icon]:hidden">
-              <button
-                type="button"
-                onClick={() => navigate('/')}
-                className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 text-left text-sm font-semibold hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              >
-                <span className="pilot-mark !size-7 !rounded-lg shrink-0">p</span>
-                <span className="truncate">pilot</span>
-              </button>
-              <SidebarTrigger className="shrink-0" />
-            </div>
+    <header className="hidden md:flex h-14 shrink-0 items-center gap-4 border-b border-[var(--rule-soft)] bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+      <button
+        type="button"
+        onClick={() => navigate('/')}
+        className="flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-sm font-semibold hover:bg-accent"
+      >
+        <span className="pilot-mark !size-7 !rounded-lg">p</span>
+        <span className="truncate">{workspaceName || 'pilot'}</span>
+      </button>
 
-            <div className="relative hidden size-8 group-data-[collapsible=icon]:block">
-              <button
-                type="button"
-                onClick={() => navigate('/')}
-                aria-label="pilot"
-                className="absolute inset-0 grid place-items-center rounded-md transition-opacity duration-150 group-hover/sidebar-head:opacity-0"
-              >
-                <span className="pilot-mark !size-7 !rounded-lg">p</span>
-              </button>
-              <SidebarTrigger className="absolute inset-0 !h-8 !w-8 opacity-0 transition-opacity duration-150 group-hover/sidebar-head:opacity-100" />
-            </div>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarHeader>
+      <nav className="flex min-w-0 flex-1 items-center gap-1">
+        {NAV_ITEMS.map(({ label, path, end, icon: Icon }) => (
+          <NavLink
+            key={label}
+            to={path}
+            end={end}
+            className={() => cn(
+              'relative inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium transition-colors',
+              isActive(path, end)
+                ? 'bg-accent text-foreground'
+                : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+            )}
+          >
+            <Icon size={15} strokeWidth={1.8} />
+            <span>{label}</span>
+            {label === 'Today' && reviewCount > 0 && (
+              <span className="ml-0.5 h-1.5 w-1.5 rounded-full bg-[var(--amber-dot)]" />
+            )}
+            {label === 'Today' && reviewCount === 0 && runningCount > 0 && (
+              <span className="ml-0.5 h-1.5 w-1.5 rounded-full bg-[var(--green-dot)]" />
+            )}
+          </NavLink>
+        ))}
+      </nav>
 
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {NAV_ITEMS.map(({ label, path, end, icon: Icon }) => (
-                <SidebarMenuItem key={label}>
-                  <SidebarMenuButton asChild isActive={isActive(path, end)} tooltip={label}>
-                    <NavLink to={path} end={end}>
-                      <div className="relative">
-                        <Icon size={17} />
-                        {label === 'Today' && reviewCount > 0 && (
-                          <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-[var(--amber-dot)]" />
-                        )}
-                        {label === 'Today' && reviewCount === 0 && runningCount > 0 && (
-                          <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-[var(--green-dot)]" />
-                        )}
-                      </div>
-                      <span>{label}</span>
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+      <div className="flex items-center gap-2">
+        <Button size="sm" onClick={onNewTask} className="h-8 gap-1.5">
+          <Plus size={14} />
+          New task
+        </Button>
+        <button
+          type="button"
+          onClick={onOpenPalette}
+          className="hidden lg:flex h-8 items-center gap-2 rounded-md border border-border bg-card px-2.5 text-xs text-muted-foreground hover:text-foreground"
+        >
+          <Search size={13} />
+          <span className="font-mono text-[10px] text-[var(--faint)]">⌘K</span>
+        </button>
+        <button
+          type="button"
+          onClick={onOpenPalette}
+          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground lg:hidden"
+          title="Search"
+        >
+          <Search size={15} />
+        </button>
 
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <Collapsible.Root open={projectsOpen} onOpenChange={setProjectsOpen} className="group/collapsible">
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={isActive('/projects')} tooltip="Projects">
-                    <NavLink to="/projects">
-                      <FolderOpen size={17} />
-                      <span>Projects</span>
-                    </NavLink>
-                  </SidebarMenuButton>
-                  <Collapsible.Trigger asChild>
-                    <SidebarMenuAction className="data-[state=open]:rotate-90">
-                      <ChevronRight size={14} />
-                    </SidebarMenuAction>
-                  </Collapsible.Trigger>
-                  <Collapsible.Content>
-                    <SidebarMenuSub>
-                      {projectList.map(p => (
-                        <SidebarMenuSubItem key={p.id}>
-                          <SidebarMenuSubButton asChild isActive={location.pathname.startsWith(`/projects/${p.id}`)}>
-                            <NavLink to={`/projects/${p.id}`}>{p.name}</NavLink>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      ))}
-                      {projectList.length === 0 && (
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild>
-                            <NavLink to="/projects">All projects</NavLink>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                      )}
-                    </SidebarMenuSub>
-                  </Collapsible.Content>
-                </SidebarMenuItem>
-              </Collapsible.Root>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/15 text-sm font-semibold text-primary hover:bg-primary/20"
+              title={workspaceName || 'pilot'}
+            >
+              {userInitial}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="bottom" align="end" className="w-56 mt-1">
+            <DropdownMenuItem asChild>
+              <NavLink to="/knowledge">
+                <BookOpen size={14} />
+                <span>Knowledge</span>
+              </NavLink>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <NavLink to="/tools">
+                <Wrench size={14} />
+                <span>Tools</span>
+              </NavLink>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <NavLink to="/settings">
+                <Settings size={14} />
+                <span>Settings</span>
+              </NavLink>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onToggleTheme}>
+              {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+              <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onSignOut} className="destructive">
+              <LogOut size={14} />
+              <span>Sign out</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </header>
+  )
+}
 
-      <SidebarFooter className="h-14 justify-center">
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <SidebarMenuButton
-                  size="default"
-                  tooltip={workspaceName || 'pilot'}
-                  className="data-[state=open]:bg-sidebar-accent group-data-[collapsible=icon]:!justify-center group-data-[collapsible=icon]:!p-0"
-                >
-                  <div className="flex size-4 shrink-0 items-center justify-center overflow-visible group-data-[collapsible=icon]:size-8">
-                    <div className="size-7 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
-                      <span className="text-sm font-semibold text-primary">{userInitial}</span>
-                    </div>
-                  </div>
-                  <div className="flex flex-col leading-tight min-w-0 pl-1 opacity-100 transition-opacity duration-150 group-data-[collapsible=icon]:hidden group-data-[state=collapsed]:opacity-0">
-                    <span className="font-semibold truncate">{workspaceName || 'pilot'}</span>
-                    <span className="text-[11px] text-sidebar-foreground/50 truncate">Workspace</span>
-                  </div>
-                  <ChevronsUpDown size={14} className="ml-auto shrink-0 opacity-100 transition-opacity duration-150 group-data-[collapsible=icon]:hidden group-data-[state=collapsed]:opacity-0" />
-                </SidebarMenuButton>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent side="top" align="start" className="w-56 mb-1">
-                <DropdownMenuItem onClick={onOpenPalette}>
-                  <Search size={14} />
-                  <span>Search</span>
-                  <span className="ml-auto text-[11px] text-[var(--faint)] font-mono">⌘K</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <NavLink to="/settings">
-                    <Settings size={14} />
-                    <span>Settings</span>
-                  </NavLink>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={onToggleTheme}>
-                  {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
-                  <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={onSignOut} className="destructive">
-                  <LogOut size={14} />
-                  <span>Sign out</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarFooter>
-
-      <SidebarRail />
-    </Sidebar>
+function MobileMenu({
+  theme, userInitial, workspaceName, onNewTask, onToggleTheme, onSignOut,
+}: {
+  theme: 'light' | 'dark'
+  userInitial: string
+  workspaceName: string
+  onNewTask: () => void
+  onToggleTheme: () => void
+  onSignOut: () => void
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/15 text-sm font-semibold text-primary hover:bg-primary/20"
+          title={workspaceName || 'Account'}
+        >
+          {userInitial}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="bottom" align="end" className="w-52 mt-1">
+        <DropdownMenuItem onClick={onNewTask}>
+          <Plus size={14} />
+          <span>New task</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <NavLink to="/knowledge">
+            <BookOpen size={14} />
+            <span>Knowledge</span>
+          </NavLink>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <NavLink to="/tools">
+            <Wrench size={14} />
+            <span>Tools</span>
+          </NavLink>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <NavLink to="/settings">
+            <Settings size={14} />
+            <span>Settings</span>
+          </NavLink>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={onToggleTheme}>
+          {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+          <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={onSignOut} className="destructive">
+          <LogOut size={14} />
+          <span>Sign out</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -408,8 +434,9 @@ function AppSidebar({
 export default function Layout() {
   const navigate = useNavigate()
 
-  const [theme, setTheme]             = useState<'light' | 'dark'>(getTheme)
-  const [paletteOpen, setPalette]     = useState(false)
+  const [theme, setTheme]               = useState<'light' | 'dark'>(getTheme)
+  const [paletteOpen, setPalette]       = useState(false)
+  const [paletteMode, setPaletteMode]   = useState<PaletteMode>('search')
   const [onboardingDone, setOnboarding] = useState(false)
 
   function toggleTheme() {
@@ -418,12 +445,18 @@ export default function Layout() {
     applyTheme(next)
   }
 
-  const openPalette  = useCallback(() => setPalette(true), [])
+  const openPalette  = useCallback(() => { setPaletteMode('search'); setPalette(true) }, [])
   const closePalette = useCallback(() => setPalette(false), [])
 
   useEffect(() => {
     function handler(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setPalette(p => !p) }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        setPalette(p => {
+          if (!p) setPaletteMode('search')
+          return !p
+        })
+      }
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
@@ -432,6 +465,7 @@ export default function Layout() {
   useEffect(() => { applyTheme(theme) }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data: userProfile } = useQuery({ queryKey: ['me'], queryFn: () => me.profile() })
+  const { data: projectList = [] } = useQuery({ queryKey: ['projects'], queryFn: () => projects.list() })
 
   const { data: sessionList = [] } = useQuery({
     queryKey: ['sessions'], queryFn: () => sessions.list(),
@@ -442,6 +476,13 @@ export default function Layout() {
 
   function signOut() { localStorage.removeItem('token'); navigate('/login') }
 
+  function handleNewTask() {
+    if (projectList.length === 0) { navigate('/projects'); return }
+    if (projectList.length === 1) { navigate(`/projects/${projectList[0].id}?new=1`); return }
+    setPaletteMode('pick-project')
+    setPalette(true)
+  }
+
   const showOnboarding = userProfile !== undefined && !userProfile?.name && !onboardingDone
 
   if (showOnboarding) {
@@ -449,54 +490,61 @@ export default function Layout() {
   }
 
   return (
-    <SidebarProvider defaultOpen={false}>
-      <AppSidebar
+    <div className="h-screen overflow-hidden bg-background flex flex-col">
+      <AppTopBar
         reviewCount={reviewCount}
         runningCount={runningCount}
         theme={theme}
         workspaceName={userProfile?.name ?? ''}
         userInitial={(userProfile?.name || userProfile?.email || '?')[0].toUpperCase()}
+        onNewTask={handleNewTask}
         onOpenPalette={openPalette}
         onToggleTheme={toggleTheme}
         onSignOut={signOut}
       />
 
-      <SidebarInset>
-        {/* Mobile topbar */}
-        <header className="mobile-topbar">
-          <button className="wordmark" onClick={() => navigate('/')}>
-            <span className="pilot-mark">p</span>
-            pilot
-          </button>
+      <header className="mobile-topbar">
+        <button className="wordmark" onClick={() => navigate('/')}>
+          <span className="pilot-mark">p</span>
+          pilot
+        </button>
+        <div className="mobile-topbar-actions">
           <button className="navtool" onClick={openPalette} title="Search">
             <Search size={15} />
           </button>
-        </header>
+          <MobileMenu
+            theme={theme}
+            userInitial={(userProfile?.name || userProfile?.email || '?')[0].toUpperCase()}
+            workspaceName={userProfile?.name ?? ''}
+            onNewTask={handleNewTask}
+            onToggleTheme={toggleTheme}
+            onSignOut={signOut}
+          />
+        </div>
+      </header>
 
-        <main className="app-main">
-          <Outlet />
-        </main>
+      <main className="app-main min-h-0">
+        <Outlet />
+      </main>
 
-        {/* Mobile tab bar */}
-        <nav className="mobile-tabbar">
-          {BOTTOM_NAV.map(({ label, path, end, icon: Icon }) => (
-            <NavLink
-              key={label}
-              to={path}
-              end={end}
-              className={({ isActive }) => cn('mobile-tab', isActive && 'active')}
-            >
-              <div className="mobile-tab-icon">
-                <Icon size={20} />
-                {label === 'Today' && reviewCount > 0 && <span className="mobile-tab-badge" />}
-              </div>
-              <span>{label}</span>
-            </NavLink>
-          ))}
-        </nav>
-      </SidebarInset>
+      <nav className="mobile-tabbar">
+        {BOTTOM_NAV.map(({ label, path, end, icon: Icon }) => (
+          <NavLink
+            key={label}
+            to={path}
+            end={end}
+            className={({ isActive }) => cn('mobile-tab', isActive && 'active')}
+          >
+            <div className="mobile-tab-icon">
+              <Icon size={20} />
+              {label === 'Today' && reviewCount > 0 && <span className="mobile-tab-badge" />}
+            </div>
+            <span>{label}</span>
+          </NavLink>
+        ))}
+      </nav>
 
-      <CommandPalette open={paletteOpen} onClose={closePalette} />
-    </SidebarProvider>
+      <CommandPalette open={paletteOpen} initialMode={paletteMode} onClose={closePalette} />
+    </div>
   )
 }

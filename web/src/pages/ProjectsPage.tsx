@@ -30,6 +30,10 @@ export default function ProjectsPage() {
   const createProject = useMutation({
     mutationFn: (body: Parameters<typeof projects.create>[0]) => projects.create(body),
     onSuccess: (data) => {
+      qc.setQueryData<Awaited<ReturnType<typeof projects.list>>>(['projects'], current => {
+        const list = current ?? []
+        return [data, ...list.filter(p => p.id !== data.id)]
+      })
       qc.invalidateQueries({ queryKey: ['projects'] })
       setShowNew(false)
       navigate(`/projects/${data.id}`)

@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useParams, useNavigate, useLocation } from 'react-router-dom'
+import { NavLink, Outlet, useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { projects, sessions } from '../api/client'
 import { Button } from '@/components/ui/button'
@@ -16,7 +16,6 @@ const TABS = [
 export default function ProjectLayout() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { pathname } = useLocation()
 
   const { data: projectList = [] } = useQuery({
     queryKey: ['projects'],

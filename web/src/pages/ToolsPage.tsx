@@ -16,6 +16,7 @@ import {
   Globe, Brain, Wrench, Plus, Pencil, Trash2, Users,
   BookMarked, Server,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
 // Preset catalog
@@ -24,7 +25,7 @@ import {
 interface Preset {
   id:          string
   name:        string
-  icon?:       React.ElementType
+  icon?:       LucideIcon
   tagline:     string
   description: string
   mcpConfig:   Record<string, unknown>
