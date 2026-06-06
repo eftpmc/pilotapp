@@ -5,6 +5,7 @@ import { sessions, agents, projects, tasks } from '../api/client'
 import type { Agent } from '../api/client'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { AgentAvatar } from '@/components/AgentAvatar'
 import { StatusBadge } from '@/components/StatusBadge'
@@ -410,6 +411,7 @@ export default function SessionPage() {
   const merge         = useMutation({ mutationFn: () => sessions.merge(id!),   onSuccess: () => { qc.invalidateQueries({ queryKey: ['sessions'] }); qc.invalidateQueries({ queryKey: ['tasks'] }); refetchSession() } })
   const push          = useMutation({ mutationFn: () => projects.push(project!.id), onSuccess: () => setPushed(true) })
   const stop          = useMutation({ mutationFn: () => sessions.stop(id!),   onSuccess: () => refetchSession() })
+  const [confirmDiscard, setConfirmDiscard] = useState(false)
   const discard       = useMutation({ mutationFn: () => sessions.delete(id!), onSuccess: () => { qc.invalidateQueries({ queryKey: ['sessions'] }); navigate(session?.projectId ? `/projects/${session.projectId}` : -1 as never) } })
   const requestReview = useMutation({ mutationFn: (agentId: string) => sessions.requestReview(id!, agentId), onSuccess: () => refetchSession() })
   const retry         = useMutation({
@@ -662,10 +664,27 @@ export default function SessionPage() {
             {session?.reviewVerdict === 'changes_requested' && <span className="chip" style={{ color: 'var(--amber)', background: 'color-mix(in srgb, var(--amber) 10%, transparent)' }}>Changes Requested</span>}
             {(isDone || isError) && !isMerged && !session?.parentSessionId && <Button size="sm" onClick={() => merge.mutate()} disabled={merge.isPending}>{merge.isPending ? '…' : isError ? 'Accept anyway' : isWorkspace ? 'Complete ✓' : 'Accept ✓'}</Button>}
             {!isMerged && (
-              <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-destructive"
-                onClick={() => discard.mutate()} disabled={discard.isPending}
-              >{discard.isPending ? '…' : 'Discard'}</Button>
+              <Button size="sm" variant="destructive" onClick={() => setConfirmDiscard(true)}>
+                Discard
+              </Button>
             )}
+
+            <Dialog open={confirmDiscard} onOpenChange={setConfirmDiscard}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Discard session?</DialogTitle>
+                  <DialogDescription>
+                    The session and its worktree will be permanently deleted. Any uncommitted work will be lost.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex justify-end gap-2 mt-2">
+                  <Button variant="outline" size="sm" onClick={() => setConfirmDiscard(false)}>Cancel</Button>
+                  <Button variant="destructive" size="sm" disabled={discard.isPending} onClick={() => { setConfirmDiscard(false); discard.mutate() }}>
+                    {discard.isPending ? '…' : 'Discard'}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
 
@@ -681,9 +700,8 @@ export default function SessionPage() {
           ))}
           {(session?.journal || isLiveStatus(session?.status)) && (
             <button
-              className={`proj-tab ${activeTab === 'journal' ? 'active' : ''}`}
+              className={`proj-tab capitalize ${activeTab === 'journal' ? 'active' : ''}`}
               onClick={() => setActiveTab('journal')}
-              style={{ textTransform: 'capitalize' }}
             >
               {session?.parentSessionId ? 'review' : 'journal'}
             </button>

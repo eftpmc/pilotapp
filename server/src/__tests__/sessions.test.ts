@@ -97,7 +97,7 @@ describe('POST /sessions/:id/merge', () => {
     expect(res.status).toBe(401);
   });
 
-  test('rejects merging an errored session', async () => {
+  test('allows merging an errored session ("Accept anyway")', async () => {
     const { user, agent, project, token } = scaffold();
     const session = seedSession(user.id, agent.id, project.id, { status: 'error' });
 
@@ -105,7 +105,9 @@ describe('POST /sessions/:id/merge', () => {
       .post(`/sessions/${session.id}/merge`)
       .set('Authorization', `Bearer ${token}`);
 
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(200);
+    const row = db.prepare('SELECT status FROM sessions WHERE id = ?').get(session.id) as { status: string };
+    expect(row.status).toBe('merged');
   });
 
   test('rejects merging a review session', async () => {
@@ -158,6 +160,37 @@ describe('DELETE /sessions/:id (discard)', () => {
       .set('Authorization', `Bearer ${token}`);
 
     expect(res.status).toBe(400);
+  });
+
+  test('leaves linked task in its current status — does not re-queue it', async () => {
+    const { user, agent, project, token } = scaffold();
+    const task    = seedTask(user.id, project.id, { status: 'running' });
+    const session = seedSession(user.id, agent.id, project.id, { status: 'done', workTaskId: task.id });
+
+    await request(app)
+      .delete(`/sessions/${session.id}`)
+      .set('Authorization', `Bearer ${token}`);
+
+    const taskRow = db.prepare('SELECT status FROM tasks WHERE id = ?').get(task.id) as { status: string };
+    expect(taskRow.status).toBe('running'); // unchanged — not reset to pending
+  });
+
+  test('deletes orphaned subtask when parent is gone', async () => {
+    const { user, agent, project, token } = scaffold();
+    const parent  = seedTask(user.id, project.id);
+    const subtask = seedTask(user.id, project.id, { status: 'running', parentTaskId: parent.id });
+    const session = seedSession(user.id, agent.id, project.id, { status: 'done', workTaskId: subtask.id });
+
+    // Delete parent first (FK off to simulate cascade from project deletion)
+    db.pragma('foreign_keys = OFF');
+    db.prepare('DELETE FROM tasks WHERE id = ?').run(parent.id);
+    db.pragma('foreign_keys = ON');
+
+    await request(app)
+      .delete(`/sessions/${session.id}`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(db.prepare('SELECT id FROM tasks WHERE id = ?').get(subtask.id)).toBeUndefined();
   });
 });
 

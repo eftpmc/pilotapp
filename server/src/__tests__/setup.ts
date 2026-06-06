@@ -35,6 +35,7 @@ export function makeFakeProcess(stdoutLines: string[] = [], exitCode = 0) {
 vi.mock('child_process', () => ({
   spawn:    vi.fn().mockImplementation(() => makeFakeProcess([], 0)),
   execSync: vi.fn(() => '/usr/bin/claude'),
+  exec:     vi.fn((_cmd: string, cb: (err: null, stdout: string) => void) => cb(null, '')),
 }));
 
 // ---------------------------------------------------------------------------
@@ -42,21 +43,32 @@ vi.mock('child_process', () => ({
 // ---------------------------------------------------------------------------
 
 vi.mock('../services/git', () => ({
-  initRepo:        vi.fn().mockResolvedValue(undefined),
-  cloneRepo:       vi.fn().mockResolvedValue(undefined),
-  importLocalRepo: vi.fn().mockResolvedValue(undefined),
-  pushToRemote:    vi.fn().mockResolvedValue(undefined),
-  createWorktree:  vi.fn().mockImplementation(
+  initRepo:                 vi.fn().mockResolvedValue(undefined),
+  cloneRepo:                vi.fn().mockResolvedValue(undefined),
+  importLocalRepo:          vi.fn().mockResolvedValue(undefined),
+  pushToRemote:             vi.fn().mockResolvedValue(undefined),
+  createWorktree:           vi.fn().mockImplementation(
     async (_project: unknown, sessionId: string) => {
       const wt = path.join(tmpDir, 'worktrees', sessionId);
       fs.mkdirSync(wt, { recursive: true });
       return wt;
     }
   ),
-  removeWorktree:  vi.fn().mockResolvedValue(undefined),
-  getDiff:         vi.fn().mockResolvedValue('diff --git a/index.ts b/index.ts\n+export {}'),
-  mergeWorktree:   vi.fn().mockResolvedValue(undefined),
-  commitWorktree:  vi.fn().mockResolvedValue(undefined),
+  createWorkDir:            vi.fn().mockImplementation(async (sessionId: string) => {
+    const wt = path.join(tmpDir, 'workdirs', sessionId);
+    fs.mkdirSync(wt, { recursive: true });
+    return wt;
+  }),
+  removeWorktree:           vi.fn().mockResolvedValue(undefined),
+  removeWorkDir:            vi.fn().mockResolvedValue(undefined),
+  getDiff:                  vi.fn().mockResolvedValue('diff --git a/index.ts b/index.ts\n+export {}'),
+  getWorkDirDiff:           vi.fn().mockResolvedValue(''),
+  mergeWorktree:            vi.fn().mockResolvedValue(undefined),
+  commitWorktree:           vi.fn().mockResolvedValue(undefined),
+  copyTaskFilesToWorkDir:   vi.fn().mockResolvedValue(undefined),
+  seedWorkDirFromWorkspace: vi.fn().mockResolvedValue(undefined),
+  mergeIntoProjectWorkspace: vi.fn().mockResolvedValue(undefined),
+  listFilesRecursive:       vi.fn().mockResolvedValue([]),
 }));
 
 // ---------------------------------------------------------------------------

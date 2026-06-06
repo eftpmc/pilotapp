@@ -41,7 +41,8 @@ function TaskItem({
     return acc
   }, [])
   const hasError = workSessions.some(s => s.status === 'error')
-  const earliest = workSessions.sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0]
+  const activeSession = workSessions.find(s => s.status === 'running' || s.status === 'idle' || s.status === 'waiting')
+    ?? workSessions.sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
 
   return (
     <Item
@@ -70,7 +71,7 @@ function TaskItem({
           </ItemDescription>
         </ItemContent>
         <ItemActions>
-          {running && earliest && <ElapsedTimer createdAt={earliest.createdAt} />}
+          {running && activeSession && <ElapsedTimer createdAt={activeSession.createdAt} />}
           {!running && hasError && <span className="text-xs text-destructive/70 shrink-0">error</span>}
         </ItemActions>
       </button>

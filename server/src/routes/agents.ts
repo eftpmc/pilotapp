@@ -123,8 +123,15 @@ router.patch('/:id', (req: Request, res: Response) => {
     : undefined;
   if (parsed.data.connectionId && !connection) { res.status(404).json({ error: 'Connection not found' }); return; }
 
+  // Lead agents must use a Claude connection (they orchestrate via claude -p --resume)
+  const effectiveRole = parsed.data.role ?? row.role;
+  const effectiveConnectionType = connection?.type ?? row.provider;
+  if (effectiveRole === 'lead' && effectiveConnectionType !== 'claude') {
+    res.status(400).json({ error: 'Lead agents must use a Claude connection' });
+    return;
+  }
+
   // One lead per department (check when promoting to lead or moving to a new department)
-  const effectiveRole  = parsed.data.role ?? row.role;
   const effectiveDept  = parsed.data.departmentId !== undefined ? parsed.data.departmentId : row.department_id;
   if (effectiveRole === 'lead' && effectiveDept) {
     const existing = db.prepare(

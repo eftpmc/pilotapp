@@ -90,6 +90,40 @@ describe('DELETE /tasks/:id', () => {
     const row = db.prepare('SELECT id FROM tasks WHERE id = ?').get(task.id);
     expect(row).toBeUndefined();
   });
+
+  test('deletes a running task without requiring session stop first', async () => {
+    const { user, agent, project, token } = scaffold();
+    const task    = seedTask(user.id, project.id, { status: 'running' });
+    const session = seedSession(user.id, agent.id, project.id, { status: 'running', workTaskId: task.id });
+
+    const res = await request(app)
+      .delete(`/tasks/${task.id}`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(204);
+    const taskRow    = db.prepare('SELECT id FROM tasks WHERE id = ?').get(task.id);
+    const sessionRow = db.prepare('SELECT work_task_id FROM sessions WHERE id = ?').get(session.id) as { work_task_id: string | null } | undefined;
+    expect(taskRow).toBeUndefined();
+    // Session still exists (agent may still be shutting down) but FK is nulled
+    expect(sessionRow?.work_task_id).toBeNull();
+  });
+
+  test('cascades to subtasks and nulls their session FKs', async () => {
+    const { user, agent, project, token } = scaffold();
+    const parent  = seedTask(user.id, project.id, { status: 'done' });
+    const subtask = seedTask(user.id, project.id, { status: 'running', parentTaskId: parent.id });
+    const session = seedSession(user.id, agent.id, project.id, { workTaskId: subtask.id });
+
+    const res = await request(app)
+      .delete(`/tasks/${parent.id}`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(204);
+    expect(db.prepare('SELECT id FROM tasks WHERE id = ?').get(parent.id)).toBeUndefined();
+    expect(db.prepare('SELECT id FROM tasks WHERE id = ?').get(subtask.id)).toBeUndefined();
+    const sessionRow = db.prepare('SELECT work_task_id FROM sessions WHERE id = ?').get(session.id) as { work_task_id: string | null } | undefined;
+    expect(sessionRow?.work_task_id).toBeNull();
+  });
 });
 
 describe('POST /tasks/:id/assign', () => {

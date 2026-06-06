@@ -396,20 +396,20 @@ async function assignAndRunTask(
   const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(projectId) as ProjectRowMin | undefined;
   if (!task || !project) return;
 
-  const sessionId    = uuid();
-  const isGit        = (project.workspace_mode ?? 'git') === 'git';
-  const branch       = isGit ? `agent/${sessionId}` : '';
+  const sessionId     = uuid();
+  const isGit         = (project.workspace_mode ?? 'git') === 'git';
+  const branch        = isGit ? `agent/${sessionId}` : '';
   const workspaceMode = isGit ? 'git' : 'workspace';
-  const now          = new Date().toISOString();
-  const projectObj   = { id: project.id, name: project.name, repoPath: project.repo_path, role: project.role as any, createdAt: project.created_at };
+  const now           = new Date().toISOString();
+  const projectObj    = { id: project.id, name: project.name, repoPath: project.repo_path, role: project.role as any, createdAt: project.created_at };
 
   let worktreePath: string | undefined;
   try {
     worktreePath = isGit
       ? await createWorktree(projectObj, sessionId, baseBranch)
       : await createWorkDir(sessionId);
-    // Re-check task is still pending — concurrent callers may have claimed it during the async setup
-    const taskStatus = db.prepare("SELECT status FROM tasks WHERE id = ?").get(taskId) as { status: string } | undefined;
+    // Re-check: another caller may have claimed this task during async worktree setup
+    const taskStatus = db.prepare('SELECT status FROM tasks WHERE id = ?').get(taskId) as { status: string } | undefined;
     if (taskStatus?.status !== 'pending') {
       if (isGit) void removeWorktree(projectObj, worktreePath);
       else void removeWorkDir(worktreePath);
@@ -419,7 +419,7 @@ async function assignAndRunTask(
       'INSERT INTO sessions (id, user_id, agent_id, project_id, work_task_id, provider, branch, worktree_path, workspace_mode, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     ).run(sessionId, userId, agent.id, projectId, taskId, agent.provider, branch, worktreePath, workspaceMode, 'idle', now);
     assignTaskToSession(taskId, agent.id, now);
-    if (!isGit) void seedWorkDirFromWorkspace(path.join(DATA_DIR, 'workspaces', projectId), worktreePath);
+    if (!isGit) void seedWorkDirFromWorkspace(path.join(DATA_DIR, 'workspaces', projectId), worktreePath).catch(() => {});
     void copyTaskFilesToWorkDir(path.join(DATA_DIR, 'task-files', taskId), worktreePath);
     void runAgent(
       { id: sessionId, agentId: agent.id, projectId, workTaskId: taskId,
@@ -441,12 +441,19 @@ async function assignAndRunTask(
 
 async function tryAssignPendingTasks(userId: string, projectId: string): Promise<void> {
   const pending = db.prepare(`
-    SELECT id, prompt, base_branch, depends_on FROM tasks
+    SELECT id, prompt, base_branch, depends_on, parent_task_id FROM tasks
     WHERE project_id = ? AND status = 'pending'
     ORDER BY priority DESC, created_at ASC LIMIT 10
-  `).all(projectId) as { id: string; prompt: string; base_branch: string; depends_on: string | null }[];
+  `).all(projectId) as { id: string; prompt: string; base_branch: string; depends_on: string | null; parent_task_id: string | null }[];
 
   for (const task of pending) {
+    // Don't re-queue subtasks whose parent task has already completed — the lead
+    // flow is done and re-running would be a boot-loop after a crash.
+    if (task.parent_task_id) {
+      const parent = db.prepare("SELECT status FROM tasks WHERE id = ?").get(task.parent_task_id) as { status: string } | undefined;
+      if (parent?.status === 'done' || parent?.status === 'failed') continue;
+    }
+
     if (task.depends_on) {
       let deps: string[];
       try { deps = JSON.parse(task.depends_on); } catch { continue; }
@@ -478,29 +485,32 @@ async function tryAssignPendingTasks(userId: string, projectId: string): Promise
 // ---------------------------------------------------------------------------
 
 async function checkLeadContinuation(completedTaskId: string, userId: string): Promise<void> {
-  const task = db.prepare('SELECT lead_session_id, project_id FROM tasks WHERE id = ?').get(completedTaskId) as
-    { lead_session_id: string | null; project_id: string } | undefined;
-  if (!task?.lead_session_id) return;
+  // Is this a subtask? (has a parent task)
+  const task = db.prepare('SELECT parent_task_id, project_id FROM tasks WHERE id = ?').get(completedTaskId) as
+    { parent_task_id: string | null; project_id: string } | undefined;
+  if (!task?.parent_task_id) return;
 
-  // Are all subtasks terminal?
+  const parentTaskId = task.parent_task_id;
+
+  // Are all sibling subtasks terminal?
   const stats = db.prepare(`
     SELECT COUNT(*) as total,
            SUM(CASE WHEN status IN ('done','failed') THEN 1 ELSE 0 END) as terminal
-    FROM tasks WHERE lead_session_id = ? AND title != ?
-  `).get(task.lead_session_id, SYNTHESIS_TITLE) as { total: number; terminal: number };
+    FROM tasks WHERE parent_task_id = ? AND title != ?
+  `).get(parentTaskId, SYNTHESIS_TITLE) as { total: number; terminal: number };
   if (stats.total === 0 || stats.terminal < stats.total) return;
 
-  // Don't double-create
-  const already = db.prepare("SELECT id FROM tasks WHERE lead_session_id = ? AND title = ?").get(task.lead_session_id, SYNTHESIS_TITLE);
+  // Don't double-create the synthesis task
+  const already = db.prepare("SELECT id FROM tasks WHERE parent_task_id = ? AND title = ?").get(parentTaskId, SYNTHESIS_TITLE);
   if (already) return;
 
   // Build synthesis prompt from all subtask journals
   const subtasks = db.prepare(`
     SELECT t.title, t.status,
       (SELECT s.journal FROM sessions s WHERE s.work_task_id = t.id AND s.journal IS NOT NULL ORDER BY s.created_at DESC LIMIT 1) as journal
-    FROM tasks t WHERE t.lead_session_id = ? AND title != ?
+    FROM tasks t WHERE t.parent_task_id = ? AND title != ?
     ORDER BY t.created_at ASC
-  `).all(task.lead_session_id, SYNTHESIS_TITLE) as { title: string; status: string; journal: string | null }[];
+  `).all(parentTaskId, SYNTHESIS_TITLE) as { title: string; status: string; journal: string | null }[];
 
   const done   = subtasks.filter(t => t.status === 'done');
   const failed = subtasks.filter(t => t.status === 'failed');
@@ -519,8 +529,12 @@ async function checkLeadContinuation(completedTaskId: string, userId: string): P
     ? `\n\n**There are ${failed.length} failed task(s).** For each failure, decide:\n- Retry with a corrected prompt using \`create_task\`\n- Accept the failure and note it in your synthesis\n- Use \`request_clarification\` if you need user input before deciding`
     : '';
 
-  const leadSession = db.prepare('SELECT agent_id FROM sessions WHERE id = ?').get(task.lead_session_id) as { agent_id: string } | undefined;
+  // Find the lead agent — most recent session that ran the parent task
+  const leadSession = db.prepare(
+    "SELECT agent_id FROM sessions WHERE work_task_id = ? ORDER BY created_at DESC LIMIT 1"
+  ).get(parentTaskId) as { agent_id: string } | undefined;
   if (!leadSession) return;
+
   const agent = db.prepare(`
     SELECT a.id, COALESCE(c.type, a.provider) as provider
     FROM agents a
@@ -532,12 +546,12 @@ async function checkLeadContinuation(completedTaskId: string, userId: string): P
   const synthTaskId = uuid();
   const now = new Date().toISOString();
   db.prepare(`
-    INSERT INTO tasks (id, user_id, project_id, title, prompt, base_branch, status, priority, size, lead_session_id, created_at)
+    INSERT INTO tasks (id, user_id, project_id, title, prompt, base_branch, status, priority, size, parent_task_id, created_at)
     VALUES (?, ?, ?, ?, ?, 'main', 'pending', 10, 's', ?, ?)
   `).run(
     synthTaskId, userId, task.project_id, SYNTHESIS_TITLE,
     `All delegated subtasks have reached a terminal state. Review the outcomes below and synthesize the results.${failureGuidance}\n\n${summaries}\n\nWhen done: call \`append_journal\` with your synthesis and decisions, then \`complete_task\` with a one-line summary.`,
-    task.lead_session_id, now,
+    parentTaskId, now,
   );
   writeEvent(userId, 'task.created', { taskId: synthTaskId, projectId: task.project_id });
 
@@ -550,7 +564,7 @@ async function checkLeadContinuation(completedTaskId: string, userId: string): P
 // ---------------------------------------------------------------------------
 
 async function captureTasks(session: SessionRef, exitCode: number): Promise<void> {
-  const { count } = db.prepare('SELECT COUNT(*) as count FROM tasks WHERE lead_session_id = ?').get(session.id) as { count: number };
+  const { count } = db.prepare('SELECT COUNT(*) as count FROM tasks WHERE parent_task_id = ?').get(session.workTaskId ?? '') as { count: number };
   if (count === 0) return; // lead created no tasks — leave session in done/error for inspection
   if (exitCode !== 0) return; // lead crashed — leave as error so user can inspect; subtasks continue independently
 

@@ -48,9 +48,9 @@ describe('project app runtime routes', () => {
 
     expect(started.status).toBe(201);
     expect(spawn).toHaveBeenCalledWith(
-      'npm run dev',
-      [],
-      expect.objectContaining({ shell: true, stdio: ['ignore', 'pipe', 'pipe'] }),
+      'npm',
+      ['run', 'dev'],
+      expect.objectContaining({ shell: false, stdio: ['ignore', 'pipe', 'pipe'] }),
     );
   });
 });

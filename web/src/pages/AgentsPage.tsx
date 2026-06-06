@@ -119,7 +119,7 @@ function AgentCard({ employee, activeSession, activeTaskTitle, sessionCount, tot
           <ItemActions>
             {isActive
               ? <LiveTimer createdAt={activeSession!.createdAt} />
-              : <span className="text-xs text-muted-foreground/40">Idle</span>
+              : <span className="flex items-center gap-1.5 text-xs text-muted-foreground/40"><span className="dot idle" />Idle</span>
             }
           </ItemActions>
         </button>

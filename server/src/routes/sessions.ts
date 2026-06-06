@@ -8,7 +8,7 @@ import { createWorktree, removeWorktree, getDiff, mergeWorktree, commitWorktree,
 import { taskFilesDir } from './tasks';
 import { killAgent, runAgent, continueAgent } from '../services/agents';
 import { writeEvent } from '../services/events';
-import { markSessionMerged, markTaskDone, resetErroredSessionForRetry, resetTaskAfterSessionDiscard } from '../services/lifecycle';
+import { markSessionMerged, markTaskDone, resetErroredSessionForRetry } from '../services/lifecycle';
 import { broadcastGlobal } from '../services/broadcast';
 import { authMiddleware, userId } from '../middleware/auth';
 import { SessionRow, toSession } from './_helpers';
@@ -360,16 +360,18 @@ router.delete('/:id', async (req: Request, res: Response) => {
   killAgent(row.id);
 
   if (row.work_task_id) {
-    const task = db.prepare('SELECT id, status, parent_task_id FROM tasks WHERE id = ?').get(row.work_task_id) as (TaskRow & { parent_task_id: string | null }) | undefined;
+    const task = db.prepare('SELECT id, parent_task_id FROM tasks WHERE id = ?').get(row.work_task_id) as (Pick<TaskRow, 'id'> & { parent_task_id: string | null }) | undefined;
     if (task) {
-      // Orphaned subtask — parent task was deleted; delete the subtask instead of resetting to pending
       const isOrphan = task.parent_task_id &&
         !db.prepare('SELECT id FROM tasks WHERE id = ?').get(task.parent_task_id);
       if (isOrphan) {
+        // Subtask whose parent was deleted — clean up the orphan entirely
         db.prepare('UPDATE sessions SET work_task_id = NULL WHERE work_task_id = ?').run(task.id);
         db.prepare('DELETE FROM tasks WHERE id = ?').run(task.id);
-      } else if (task.status === 'running' || task.status === 'failed' || task.status === 'done') {
-        resetTaskAfterSessionDiscard(row.work_task_id);
+      } else {
+        // Null the FK so the task record is no longer tied to this session,
+        // but leave the task in its current status (don't re-queue it).
+        db.prepare('UPDATE sessions SET work_task_id = NULL WHERE id = ?').run(row.id);
       }
     }
   }

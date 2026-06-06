@@ -1,13 +1,12 @@
 import { Router, Request, Response } from 'express';
-import { v4 as uuid } from 'uuid';
 import { z } from 'zod';
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
+import { v4 as uuid } from 'uuid';
 import { db } from '../db';
-import { createWorktree, createWorkDir, copyTaskFilesToWorkDir, seedWorkDirFromWorkspace } from '../services/git';
-import { runAgent } from '../services/agents';
-import { assignTaskToSession } from '../services/lifecycle';
+import { killAgent } from '../services/agents';
+import { createSessionForTask } from '../services/dispatch';
 import { authMiddleware, userId } from '../middleware/auth';
 import { SessionRow, toSession } from './_helpers';
 
@@ -160,27 +159,11 @@ router.post('/queue/run', async (req: Request, res: Response) => {
       if (!next) continue;
 
       const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(next.project_id) as ProjectRow;
-      const sessionId     = uuid();
-      const isGit         = (project.workspace_mode ?? 'git') === 'git';
-      const branch        = isGit ? `agent/${sessionId}` : '';
-      const workspaceMode = isGit ? 'git' : 'workspace';
-      const worktreePath  = isGit
-        ? await createWorktree({ id: project.id, name: project.name, repoPath: project.repo_path, role: project.role as any, createdAt: project.created_at }, sessionId, next.base_branch)
-        : await createWorkDir(sessionId);
-
-      const now = new Date().toISOString();
-      db.prepare(
-        'INSERT INTO sessions (id, user_id, agent_id, project_id, work_task_id, provider, branch, worktree_path, workspace_mode, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-      ).run(sessionId, uid, agent.id, project.id, next.id, agent.provider, branch, worktreePath, workspaceMode, 'idle', now);
-
-      assignTaskToSession(next.id, agent.id, now);
-      if (!isGit) await seedWorkDirFromWorkspace(projectWorkspaceDir(project.id), worktreePath).catch(() => {});
-      await copyTaskFilesToWorkDir(taskFilesDir(next.id), worktreePath);
+      const result = await createSessionForTask(next.id, next.prompt, next.base_branch, agent, project, uid);
+      if (!result) continue;
 
       const updatedTask    = db.prepare('SELECT * FROM tasks WHERE id = ?').get(next.id) as TaskRow;
-      const updatedSession = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId) as SessionRow;
-
-      void runAgent(toSession(updatedSession), next.prompt, uid, agent.id);
+      const updatedSession = db.prepare('SELECT * FROM sessions WHERE id = ?').get(result.sessionId) as SessionRow;
 
       dispatched.push({ task: toTask(updatedTask), session: toSession(updatedSession) });
       assignedTaskIds.add(next.id);
@@ -238,21 +221,23 @@ router.patch('/:id', (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 
 router.delete('/:id', (req: Request, res: Response) => {
-  const row = db.prepare('SELECT id, status FROM tasks WHERE id = ? AND user_id = ?').get(req.params.id, userId(req)) as Pick<TaskRow, 'id' | 'status'> | undefined;
+  const row = db.prepare('SELECT id FROM tasks WHERE id = ? AND user_id = ?').get(req.params.id, userId(req)) as Pick<TaskRow, 'id'> | undefined;
   if (!row) { res.status(404).json({ error: 'Not found' }); return; }
-  if (row.status === 'running') { res.status(400).json({ error: 'Cannot delete a running task — stop the session first' }); return; }
 
-  // Cascade: delete all subtasks (and null their session foreign keys first)
-  const subtaskIds = (db.prepare('SELECT id FROM tasks WHERE parent_task_id = ?').all(req.params.id) as { id: string }[]).map(r => r.id);
-  for (const sid of subtaskIds) {
-    db.prepare('UPDATE sessions SET work_task_id = NULL WHERE work_task_id = ?').run(sid);
+  // Kill any active agents for this task and its subtasks, then null the FK so
+  // the finish handler's DB writes don't fail on a deleted row.
+  const allTaskIds = [req.params.id, ...(db.prepare('SELECT id FROM tasks WHERE parent_task_id = ?').all(req.params.id) as { id: string }[]).map(r => r.id)];
+  for (const taskId of allTaskIds) {
+    const sessions = db.prepare('SELECT id FROM sessions WHERE work_task_id = ?').all(taskId) as { id: string }[];
+    for (const s of sessions) killAgent(s.id);
+    db.prepare('UPDATE sessions SET work_task_id = NULL WHERE work_task_id = ?').run(taskId);
   }
+
+  const subtaskIds = allTaskIds.slice(1);
   if (subtaskIds.length > 0) {
     const ph = subtaskIds.map(() => '?').join(',');
     db.prepare(`DELETE FROM tasks WHERE id IN (${ph})`).run(...subtaskIds);
   }
-
-  db.prepare('UPDATE sessions SET work_task_id = NULL WHERE work_task_id = ?').run(req.params.id);
   db.prepare('DELETE FROM tasks WHERE id = ?').run(req.params.id);
   res.status(204).send();
 });
@@ -267,9 +252,9 @@ router.post('/:id/assign', async (req: Request, res: Response) => {
   const parsed = AssignSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
 
-  const uid     = userId(req);
-  const task    = db.prepare('SELECT * FROM tasks WHERE id = ? AND user_id = ?').get(req.params.id, uid) as TaskRow | undefined;
-  const agent   = db.prepare(`
+  const uid   = userId(req);
+  const task  = db.prepare('SELECT * FROM tasks WHERE id = ? AND user_id = ?').get(req.params.id, uid) as TaskRow | undefined;
+  const agent = db.prepare(`
     SELECT a.*, COALESCE(c.type, a.provider) as provider
     FROM agents a
     LEFT JOIN connections c ON c.id = a.connection_id
@@ -283,28 +268,11 @@ router.post('/:id/assign', async (req: Request, res: Response) => {
   const project = db.prepare('SELECT * FROM projects WHERE id = ? AND user_id = ?').get(task.project_id, uid) as ProjectRow | undefined;
   if (!project) { res.status(404).json({ error: 'Project not found' }); return; }
 
-  const sessionId     = uuid();
-  const isGit2        = (project.workspace_mode ?? 'git') === 'git';
-  const branch        = isGit2 ? `agent/${sessionId}` : '';
-  const workspaceMode = isGit2 ? 'git' : 'workspace';
-  const worktreePath  = isGit2
-    ? await createWorktree({ id: project.id, name: project.name, repoPath: project.repo_path, role: project.role as any, createdAt: project.created_at }, sessionId, task.base_branch)
-    : await createWorkDir(sessionId);
-
-  const now = new Date().toISOString();
-
-  db.prepare(
-    'INSERT INTO sessions (id, user_id, agent_id, project_id, work_task_id, provider, branch, worktree_path, workspace_mode, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(sessionId, uid, agent.id, project.id, task.id, agent.provider, branch, worktreePath, workspaceMode, 'idle', now);
-
-  assignTaskToSession(task.id, agent.id, now);
+  const result = await createSessionForTask(task.id, task.prompt, task.base_branch, agent, project, uid);
+  if (!result) { res.status(409).json({ error: 'Task was claimed by another agent' }); return; }
 
   const updatedTask    = db.prepare('SELECT * FROM tasks WHERE id = ?').get(task.id) as TaskRow;
-  const updatedSession = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId) as SessionRow;
-
-  if (!isGit2) await seedWorkDirFromWorkspace(projectWorkspaceDir(project.id), worktreePath).catch(() => {});
-  await copyTaskFilesToWorkDir(taskFilesDir(task.id), worktreePath);
-  void runAgent(toSession(updatedSession), task.prompt, uid, agent.id);
+  const updatedSession = db.prepare('SELECT * FROM sessions WHERE id = ?').get(result.sessionId) as SessionRow;
 
   res.status(201).json({ task: toTask(updatedTask), session: toSession(updatedSession) });
 });
