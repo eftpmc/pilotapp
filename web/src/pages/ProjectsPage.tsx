@@ -109,7 +109,7 @@ export default function ProjectsPage() {
               <button
                 key={p.id}
                 onClick={() => navigate(`/projects/${p.id}`)}
-                className="group flex flex-col gap-3 min-h-36 p-5 w-full rounded-2xl border border-border/60 bg-card/60 shadow-sm hover:shadow-md hover:bg-card hover:border-border hover:-translate-y-0.5 transition-all text-left"
+                className="group flex flex-col gap-3 min-h-36 p-5 w-full rounded-xl border border-border/60 bg-card/60 shadow-sm hover:shadow-md hover:bg-card hover:border-border hover:-translate-y-0.5 transition-all text-left"
               >
                 <div className="flex items-start justify-between gap-2 w-full">
                   <span className="text-base font-semibold text-foreground leading-tight">{p.name}</span>

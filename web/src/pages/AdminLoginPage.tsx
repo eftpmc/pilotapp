@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { auth } from '../api/client'
+import { Button } from '@/components/ui/button'
 
 export default function AdminLoginPage() {
   const navigate   = useNavigate()
@@ -93,14 +94,14 @@ export default function AdminLoginPage() {
             }}>{error}</p>
           )}
 
-          <button
+          <Button
             type="submit"
-            className="btn primary w-full justify-center mt-0.5 text-[14px]"
+            variant="primary"
+            className="w-full justify-center mt-0.5 text-[14px] py-[11px]"
             disabled={loading}
-            style={{ padding: '11px' }}
           >
             {loading ? '…' : 'Sign in'}
-          </button>
+          </Button>
         </form>
 
         <p style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', marginTop: 24 }}>

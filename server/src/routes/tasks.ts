@@ -49,7 +49,7 @@ interface TaskRow {
   id: string; user_id: string; project_id: string; title: string; prompt: string;
   base_branch: string; status: string; priority: number; size: string;
   attached_files: string;
-  agent_id: string | null; session_id: string | null; lead_session_id: string | null;
+  agent_id: string | null; parent_task_id: string | null;
   created_at: string; started_at: string | null; completed_at: string | null;
 }
 
@@ -66,9 +66,8 @@ function toTask(r: TaskRow) {
     status: r.status, priority: r.priority ?? 0,
     size: (r.size ?? 'm') as 'xs' | 's' | 'm' | 'l' | 'xl',
     attachedFiles: parseAttachedFiles(r.attached_files),
-    agentId:       r.agent_id        ?? undefined,
-    sessionId:     r.session_id      ?? undefined,
-    leadSessionId: r.lead_session_id ?? undefined,
+    agentId:      r.agent_id      ?? undefined,
+    parentTaskId: r.parent_task_id ?? undefined,
     createdAt: r.created_at,
     startedAt: r.started_at ?? undefined, completedAt: r.completed_at ?? undefined,
   };
@@ -98,7 +97,7 @@ const SIZES = ['xs', 's', 'm', 'l', 'xl'] as const;
 const CreateSchema = z.object({
   projectId: z.string(),
   title:     z.string().min(1),
-  prompt:    z.string().min(1),
+  prompt:    z.string().default(''),
   size:      z.enum(SIZES).default('m'),
 });
 
@@ -114,7 +113,7 @@ router.post('/', (req: Request, res: Response) => {
     title: parsed.data.title, prompt: parsed.data.prompt,
     base_branch: 'main', status: 'pending', priority: 0,
     size: parsed.data.size, attached_files: '[]',
-    agent_id: null, session_id: null, lead_session_id: null,
+    agent_id: null, parent_task_id: null,
     created_at: new Date().toISOString(), started_at: null, completed_at: null,
   };
 
@@ -174,7 +173,7 @@ router.post('/queue/run', async (req: Request, res: Response) => {
         'INSERT INTO sessions (id, user_id, agent_id, project_id, work_task_id, provider, branch, worktree_path, workspace_mode, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
       ).run(sessionId, uid, agent.id, project.id, next.id, agent.provider, branch, worktreePath, workspaceMode, 'idle', now);
 
-      assignTaskToSession(next.id, agent.id, sessionId, now);
+      assignTaskToSession(next.id, agent.id, now);
       if (!isGit) await seedWorkDirFromWorkspace(projectWorkspaceDir(project.id), worktreePath).catch(() => {});
       await copyTaskFilesToWorkDir(taskFilesDir(next.id), worktreePath);
 
@@ -242,6 +241,17 @@ router.delete('/:id', (req: Request, res: Response) => {
   const row = db.prepare('SELECT id, status FROM tasks WHERE id = ? AND user_id = ?').get(req.params.id, userId(req)) as Pick<TaskRow, 'id' | 'status'> | undefined;
   if (!row) { res.status(404).json({ error: 'Not found' }); return; }
   if (row.status === 'running') { res.status(400).json({ error: 'Cannot delete a running task — stop the session first' }); return; }
+
+  // Cascade: delete all subtasks (and null their session foreign keys first)
+  const subtaskIds = (db.prepare('SELECT id FROM tasks WHERE parent_task_id = ?').all(req.params.id) as { id: string }[]).map(r => r.id);
+  for (const sid of subtaskIds) {
+    db.prepare('UPDATE sessions SET work_task_id = NULL WHERE work_task_id = ?').run(sid);
+  }
+  if (subtaskIds.length > 0) {
+    const ph = subtaskIds.map(() => '?').join(',');
+    db.prepare(`DELETE FROM tasks WHERE id IN (${ph})`).run(...subtaskIds);
+  }
+
   db.prepare('UPDATE sessions SET work_task_id = NULL WHERE work_task_id = ?').run(req.params.id);
   db.prepare('DELETE FROM tasks WHERE id = ?').run(req.params.id);
   res.status(204).send();
@@ -287,7 +297,7 @@ router.post('/:id/assign', async (req: Request, res: Response) => {
     'INSERT INTO sessions (id, user_id, agent_id, project_id, work_task_id, provider, branch, worktree_path, workspace_mode, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   ).run(sessionId, uid, agent.id, project.id, task.id, agent.provider, branch, worktreePath, workspaceMode, 'idle', now);
 
-  assignTaskToSession(task.id, agent.id, sessionId, now);
+  assignTaskToSession(task.id, agent.id, now);
 
   const updatedTask    = db.prepare('SELECT * FROM tasks WHERE id = ?').get(task.id) as TaskRow;
   const updatedSession = db.prepare('SELECT * FROM sessions WHERE id = ?').get(sessionId) as SessionRow;

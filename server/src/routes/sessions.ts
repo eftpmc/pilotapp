@@ -360,9 +360,17 @@ router.delete('/:id', async (req: Request, res: Response) => {
   killAgent(row.id);
 
   if (row.work_task_id) {
-    const task = db.prepare('SELECT status FROM tasks WHERE id = ?').get(row.work_task_id) as TaskRow | undefined;
-    if (task?.status === 'running' || task?.status === 'failed' || task?.status === 'done') {
-      resetTaskAfterSessionDiscard(row.work_task_id);
+    const task = db.prepare('SELECT id, status, parent_task_id FROM tasks WHERE id = ?').get(row.work_task_id) as (TaskRow & { parent_task_id: string | null }) | undefined;
+    if (task) {
+      // Orphaned subtask — parent task was deleted; delete the subtask instead of resetting to pending
+      const isOrphan = task.parent_task_id &&
+        !db.prepare('SELECT id FROM tasks WHERE id = ?').get(task.parent_task_id);
+      if (isOrphan) {
+        db.prepare('UPDATE sessions SET work_task_id = NULL WHERE work_task_id = ?').run(task.id);
+        db.prepare('DELETE FROM tasks WHERE id = ?').run(task.id);
+      } else if (task.status === 'running' || task.status === 'failed' || task.status === 'done') {
+        resetTaskAfterSessionDiscard(row.work_task_id);
+      }
     }
   }
 

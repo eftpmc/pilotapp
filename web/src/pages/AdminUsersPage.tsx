@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils'
 
 function UserInitial({ user }: { user: AdminUser }) {
   const letter = (user.name || user.email)[0].toUpperCase()
-  const color  = user.role === 'admin' ? 'bg-amber-500/15 text-amber-500' : 'bg-primary/15 text-primary'
+  const color  = user.role === 'admin' ? 'bg-[color-mix(in_srgb,var(--amber)_15%,transparent)] text-[var(--amber)]' : 'bg-primary/15 text-primary'
   return (
     <span className={cn('w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-sm font-semibold', color)}>
       {letter}
@@ -142,7 +142,7 @@ function UserRow({ user, isSelf }: { user: AdminUser; isSelf: boolean }) {
               {user.name || user.email}
             </span>
             {user.role === 'admin' && (
-              <span className="text-[10px] font-bold uppercase tracking-wide text-amber-500">Admin</span>
+              <span className="text-[10px] font-bold uppercase tracking-wide text-[var(--amber)]">Admin</span>
             )}
             {user.disabled && (
               <span className="text-[10px] font-semibold text-destructive border border-destructive/30 rounded px-1">Disabled</span>
@@ -177,7 +177,7 @@ function UserRow({ user, isSelf }: { user: AdminUser; isSelf: boolean }) {
                 onClick={() => updateUser.mutate({ role: user.role === 'admin' ? 'user' : 'admin' })}>
                 Make {user.role === 'admin' ? 'user' : 'admin'}
               </Button>
-              <Button size="sm" variant="outline" className={cn('h-7 text-xs', user.disabled ? 'text-foreground' : 'text-amber-500')}
+              <Button size="sm" variant="outline" className={cn('h-7 text-xs', user.disabled ? 'text-foreground' : 'text-[var(--amber)]')}
                 onClick={() => updateUser.mutate({ disabled: !user.disabled })}>
                 {user.disabled ? 'Enable' : 'Disable'}
               </Button>

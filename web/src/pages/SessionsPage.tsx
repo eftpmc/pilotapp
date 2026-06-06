@@ -80,7 +80,7 @@ function TaskRow({
         {agents.length > 0 && (
           <div className="flex -space-x-1.5">
             {agents.slice(0, 3).map(a => (
-              <div key={a.id} className="rounded-full ring-2 ring-card">
+              <div key={a.id} className="rounded-[10px] ring-2 ring-card">
                 <AgentAvatar agent={a} size={22} running={overallStatus === 'running'} />
               </div>
             ))}
@@ -136,29 +136,26 @@ export default function SessionsPage() {
     }
   }
 
-  // Map: rootTask.sessionId → subtasks
-  const subtasksByLeadSession = new Map<string, Task[]>()
+  // Map: parentTaskId → subtasks
+  const subtasksByParent = new Map<string, Task[]>()
   for (const t of taskList) {
-    if (t.leadSessionId) {
-      const arr = subtasksByLeadSession.get(t.leadSessionId) ?? []
+    if (t.parentTaskId) {
+      const arr = subtasksByParent.get(t.parentTaskId) ?? []
       arr.push(t)
-      subtasksByLeadSession.set(t.leadSessionId, arr)
+      subtasksByParent.set(t.parentTaskId, arr)
     }
   }
 
   // Gather all sessions for a root task (root + all its subtasks)
   function sessionsForRoot(root: Task): Session[] {
-    const all = [...(sessionsByTask.get(root.id) ?? [])]
-    const subtasks = root.sessionId ? (subtasksByLeadSession.get(root.sessionId) ?? []) : []
-    for (const sub of subtasks) {
-      all.push(...(sessionsByTask.get(sub.id) ?? []))
-    }
-    return all
+    const subtasks = subtasksByParent.get(root.id) ?? []
+    const allTaskIds = [root.id, ...subtasks.map(t => t.id)]
+    return allTaskIds.flatMap(tid => sessionsByTask.get(tid) ?? [])
   }
 
-  // Only root tasks (no leadSessionId) that have been assigned (sessionId set on task record)
+  // Root tasks (no parentTaskId) that have been started (not pending)
   const activeTasks = taskList
-    .filter(t => !t.leadSessionId && t.sessionId)
+    .filter(t => !t.parentTaskId && t.status !== 'pending')
     .sort((a, b) => {
       const aLast = sessionsForRoot(a).map(s => s.createdAt).sort().at(-1) ?? a.createdAt
       const bLast = sessionsForRoot(b).map(s => s.createdAt).sort().at(-1) ?? b.createdAt

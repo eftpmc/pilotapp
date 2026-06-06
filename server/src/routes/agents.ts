@@ -160,7 +160,7 @@ router.delete('/:id', (req: Request, res: Response) => {
   const row = db.prepare('SELECT id FROM agents WHERE id = ? AND user_id = ?').get(req.params.id, userId(req));
   if (!row) { res.status(404).json({ error: 'Not found' }); return; }
   db.prepare('DELETE FROM sessions WHERE agent_id = ?').run(req.params.id);
-  db.prepare('UPDATE tasks SET agent_id = NULL, session_id = NULL WHERE agent_id = ?').run(req.params.id);
+  db.prepare('UPDATE tasks SET agent_id = NULL WHERE agent_id = ?').run(req.params.id);
   db.prepare('DELETE FROM agents WHERE id = ?').run(req.params.id);
   res.status(204).send();
 });

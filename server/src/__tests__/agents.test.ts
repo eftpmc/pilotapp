@@ -181,8 +181,8 @@ describe('lead agent', () => {
     fs.mkdirSync(wtPath, { recursive: true });
 
     const session = seedSession(user.id, leadAgent.id, project.id, { workTaskId: task.id, worktreePath: wtPath });
-    seedTask(user.id, project.id, { title: 'Auth routes',   prompt: 'Implement POST /auth/login', leadSessionId: session.id });
-    seedTask(user.id, project.id, { title: 'Auth frontend', prompt: 'Add login form',             leadSessionId: session.id });
+    seedTask(user.id, project.id, { title: 'Auth routes',   prompt: 'Implement POST /auth/login', parentTaskId: task.id });
+    seedTask(user.id, project.id, { title: 'Auth frontend', prompt: 'Add login form',             parentTaskId: task.id });
     mockSpawn.mockReturnValueOnce(makeFakeProcess([], 0));
 
     const { runAgent } = await import('../services/agents');
@@ -194,9 +194,9 @@ describe('lead agent', () => {
     expect(sessionRow.status).toBe('merged');
 
     // Delegated tasks are linked in the DB
-    const createdTasks = db.prepare('SELECT title, lead_session_id FROM tasks WHERE project_id = ? AND id != ?').all(project.id, task.id) as { title: string; lead_session_id: string }[];
+    const createdTasks = db.prepare('SELECT title, parent_task_id FROM tasks WHERE project_id = ? AND id != ?').all(project.id, task.id) as { title: string; parent_task_id: string }[];
     expect(createdTasks).toHaveLength(2);
-    expect(createdTasks.every(t => t.lead_session_id === session.id)).toBe(true);
+    expect(createdTasks.every(t => t.parent_task_id === task.id)).toBe(true);
     expect(createdTasks.map(t => t.title)).toEqual(expect.arrayContaining(['Auth routes', 'Auth frontend']));
   });
 

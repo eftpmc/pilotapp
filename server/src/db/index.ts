@@ -257,6 +257,16 @@ migrate('033_server_settings', `
   INSERT OR IGNORE INTO server_settings (key, value) VALUES ('allow_registration', 'false');
 `);
 migrate('034_reset_user_roles',  "UPDATE users SET role = 'user'");
+migrate('035_tasks_parent_task_id', 'ALTER TABLE tasks ADD COLUMN parent_task_id TEXT REFERENCES tasks(id)');
+migrate('036_tasks_backfill_parent_task_id', `
+  UPDATE tasks
+  SET parent_task_id = (
+    SELECT s.work_task_id FROM sessions s WHERE s.id = tasks.lead_session_id
+  )
+  WHERE lead_session_id IS NOT NULL
+`);
+migrate('037_tasks_drop_session_id',      'ALTER TABLE tasks DROP COLUMN session_id');
+migrate('038_tasks_drop_lead_session_id', 'ALTER TABLE tasks DROP COLUMN lead_session_id');
 migrate('035_users_disabled',    'ALTER TABLE users ADD COLUMN disabled INTEGER NOT NULL DEFAULT 0');
 migrate('026_sessions_tokens', `
   ALTER TABLE sessions ADD COLUMN input_tokens INTEGER;

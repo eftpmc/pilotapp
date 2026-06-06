@@ -30,8 +30,8 @@ export interface Agent {
 export interface Task {
   id: string; projectId: string; title: string; prompt: string;
   status: TaskStatus; priority: number;
-  size: TaskSize; attachedFiles: string[]; agentId?: string; sessionId?: string;
-  leadSessionId?: string; dependsOn?: string[];
+  size: TaskSize; attachedFiles: string[]; agentId?: string;
+  parentTaskId?: string; dependsOn?: string[];
   createdAt: string; startedAt?: string; completedAt?: string;
 }
 export interface Session {

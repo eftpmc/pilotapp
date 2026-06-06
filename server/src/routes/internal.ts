@@ -59,21 +59,24 @@ router.post('/tasks', async (req: Request, res: Response) => {
     baseBranch?: string; role?: string; priority?: number; dependsOn?: string[];
   };
 
-  if (!sessionId || !title || !prompt) {
-    res.status(400).json({ error: 'sessionId, title, and prompt are required' }); return;
+  if (!sessionId || !title) {
+    res.status(400).json({ error: 'sessionId and title are required' }); return;
   }
 
   const session = getSession(sessionId);
   if (!session) { res.status(404).json({ error: 'Session not found' }); return; }
+
+  // parentTaskId = the task this session is working on (the lead task)
+  const parentTaskId = session.work_task_id ?? null;
 
   const taskId = uuid();
   const now    = new Date().toISOString();
 
   const dependsOnJson = dependsOn.length > 0 ? JSON.stringify(dependsOn) : null;
   db.prepare(`
-    INSERT INTO tasks (id, user_id, project_id, title, prompt, base_branch, status, priority, size, lead_session_id, depends_on, created_at)
+    INSERT INTO tasks (id, user_id, project_id, title, prompt, base_branch, status, priority, size, parent_task_id, depends_on, created_at)
     VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, 'm', ?, ?, ?)
-  `).run(taskId, session.user_id, session.project_id, title.trim(), prompt.trim(), baseBranch, Math.min(10, Math.max(0, Math.round(priority))), sessionId, dependsOnJson, now);
+  `).run(taskId, session.user_id, session.project_id, title.trim(), (prompt ?? '').trim(), baseBranch, Math.min(10, Math.max(0, Math.round(priority))), parentTaskId, dependsOnJson, now);
 
   writeEvent(session.user_id, 'task.created', { taskId, projectId: session.project_id, agentId: session.agent_id });
 
@@ -112,8 +115,8 @@ router.post('/tasks', async (req: Request, res: Response) => {
 
           // Atomically claim the task — bail if another worker already took it
           const claimed = db.prepare(
-            "UPDATE tasks SET status = 'running', agent_id = ?, session_id = ?, started_at = ? WHERE id = ? AND status = 'pending'"
-          ).run(idleAgent.id, newSessionId, now, taskId);
+            "UPDATE tasks SET status = 'running', agent_id = ?, started_at = ? WHERE id = ? AND status = 'pending'"
+          ).run(idleAgent.id, now, taskId);
 
           if (claimed.changes === 0) {
             // Task already claimed by a concurrent auto-assign; clean up the worktree we just made
@@ -272,9 +275,9 @@ router.get('/tasks', (req: Request, res: Response) => {
     : allowedStatuses;
 
   const placeholders = statuses.map(() => '?').join(',');
-  interface TaskRow { id: string; title: string; status: string; priority: number; base_branch: string; created_at: string; lead_session_id: string | null }
+  interface TaskRow { id: string; title: string; status: string; priority: number; base_branch: string; created_at: string; parent_task_id: string | null }
   const tasks = db.prepare(`
-    SELECT id, title, status, priority, base_branch, created_at, lead_session_id
+    SELECT id, title, status, priority, base_branch, created_at, parent_task_id
     FROM tasks
     WHERE project_id = ? AND status IN (${placeholders})
     ORDER BY priority DESC, created_at ASC
@@ -288,7 +291,7 @@ router.get('/tasks', (req: Request, res: Response) => {
     priority:      t.priority,
     baseBranch:    t.base_branch,
     createdAt:     t.created_at,
-    isSubtask:     !!t.lead_session_id,
+    isSubtask:     !!t.parent_task_id,
   })));
 });
 
@@ -508,17 +511,19 @@ router.post('/sessions/:id/signal-lead', async (req: Request, res: Response) => 
   const session = getSession(param(req.params.id));
   if (!session) { res.status(404).json({ error: 'Session not found' }); return; }
 
-  // Walk up: session → task → lead_session_id
+  // Walk up: session → subtask → parent_task_id → lead's most recent session
   if (!session.work_task_id) {
     res.json({ ok: true, note: 'no task associated — signal ignored' }); return;
   }
-  const task = db.prepare('SELECT lead_session_id, title FROM tasks WHERE id = ?').get(session.work_task_id) as
-    { lead_session_id: string | null; title: string } | undefined;
-  if (!task?.lead_session_id) {
-    res.json({ ok: true, note: 'task has no lead — signal ignored' }); return;
+  const task = db.prepare('SELECT parent_task_id, title FROM tasks WHERE id = ?').get(session.work_task_id) as
+    { parent_task_id: string | null; title: string } | undefined;
+  if (!task?.parent_task_id) {
+    res.json({ ok: true, note: 'task has no parent — signal ignored' }); return;
   }
 
-  const lead = getSession(task.lead_session_id);
+  const lead = db.prepare(
+    "SELECT * FROM sessions WHERE work_task_id = ? AND parent_session_id IS NULL ORDER BY created_at DESC LIMIT 1"
+  ).get(task.parent_task_id) as ReturnType<typeof getSession>;
   if (!lead) { res.json({ ok: true, note: 'lead session not found — signal ignored' }); return; }
   if (!['done', 'error'].includes(lead.status)) {
     // Lead is still running — append to journal instead of queuing a turn

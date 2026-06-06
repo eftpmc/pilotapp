@@ -148,7 +148,7 @@ function ConnectionRow({ connection, agentCount, onUpdate, onDelete, onClearQuot
           {connection.model && <span className="font-mono text-[10px] text-muted-foreground">{connection.model}</span>}
           <Badge variant="outline" className={cn(
             'font-mono text-[10px]',
-            connection.hasKey ? 'text-muted-foreground' : 'text-green-500 border-green-500/30 bg-green-500/10'
+            connection.hasKey ? 'text-muted-foreground' : 'text-[var(--green)] border-[color-mix(in_srgb,var(--green)_30%,transparent)] bg-[color-mix(in_srgb,var(--green)_10%,transparent)]'
           )}>
             {connection.hasKey ? 'API key' : connection.type === 'claude' ? 'subscription' : 'machine auth'}
           </Badge>
@@ -159,7 +159,7 @@ function ConnectionRow({ connection, agentCount, onUpdate, onDelete, onClearQuot
         {connection.model && <span className="font-mono text-[10px] text-muted-foreground">{connection.model}</span>}
         <Badge variant="outline" className={cn(
           'font-mono text-[10px]',
-          connection.hasKey ? 'text-muted-foreground' : 'text-green-500 border-green-500/30 bg-green-500/10'
+          connection.hasKey ? 'text-muted-foreground' : 'text-[var(--green)] border-[color-mix(in_srgb,var(--green)_30%,transparent)] bg-[color-mix(in_srgb,var(--green)_10%,transparent)]'
         )}>
           {connection.hasKey ? 'API key' : connection.type === 'claude' ? 'subscription' : 'machine auth'}
         </Badge>
@@ -169,7 +169,7 @@ function ConnectionRow({ connection, agentCount, onUpdate, onDelete, onClearQuot
         {connection.quotaStatus === 'exceeded' && (
           <Button variant="ghost" size="sm" onClick={onClearQuota} className="p-0 h-auto hover:bg-transparent">
             <Badge variant="warning" className="text-[10px] gap-1 hover:opacity-80 transition-opacity">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--amber-dot)]" />
               Rate limited · clear
             </Badge>
           </Button>
@@ -235,7 +235,7 @@ function PairingDialog({ open, onClose }: { open: boolean; onClose: () => void }
               className="font-mono text-xs"
             />
             {isLocalhost && (
-              <p className="text-[11px] text-amber-500/80">
+              <p className="text-[11px] text-[var(--amber)]">
                 Localhost isn't reachable from a phone. Replace with your machine's IP address, e.g. <span className="font-mono">http://192.168.1.100:3000</span>
               </p>
             )}
@@ -417,7 +417,7 @@ export default function SettingsPage() {
                   <p className="text-sm font-medium text-foreground truncate">
                     {profile?.name || profile?.email || '—'}
                     {profile?.role === 'admin' && (
-                      <span className="ml-2 text-[10px] font-semibold text-amber-500 uppercase tracking-wide">Admin</span>
+                      <span className="ml-2 text-[10px] font-semibold text-[var(--amber)] uppercase tracking-wide">Admin</span>
                     )}
                   </p>
                   {profile?.name && (

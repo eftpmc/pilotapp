@@ -158,7 +158,7 @@ function ReviewerDropdown({ excludeAgentId, agentList, onPick }: {
 
 function MergeBar({
   session, project, isMerging, agentList, hasReview, isError,
-  onMerge, onMergePush, onRequestReview,
+  onMerge, onMergePush, onRequestReview, onDiscard,
 }: {
   session: Session
   project?: { workspaceMode: string; remoteUrl?: string }
@@ -169,6 +169,7 @@ function MergeBar({
   onMerge: (id: string) => void
   onMergePush: (id: string) => void
   onRequestReview: (sessionId: string, agentId: string) => void
+  onDiscard: (id: string) => void
 }) {
   const reviewInProgress = session.reviewVerdict === 'pending' || hasReview
   if (reviewInProgress) return null
@@ -185,6 +186,9 @@ function MergeBar({
           onPick={agentId => onRequestReview(session.id, agentId)}
         />
       )}
+      <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => onDiscard(session.id)} disabled={isMerging}>
+        Discard
+      </Button>
       {project?.workspaceMode === 'workspace' ? (
         <Button size="sm" variant="primary" onClick={() => onMerge(session.id)} disabled={isMerging}>
           {isMerging ? '…' : 'Complete ✓'}
@@ -213,16 +217,19 @@ function MergeBar({
 
 function SubtaskRow({
   task, sessionList, agentList, project, isMerging,
-  onMerge, onMergePush, onRequestReview, navigate,
+  onMerge, onMergePush, onRequestReview, onDiscard, navigate,
 }: {
   task: Task; sessionList: Session[]; agentList: Agent[]
   project?: { workspaceMode: string; remoteUrl?: string }
   isMerging: boolean
   onMerge: (id: string) => void; onMergePush: (id: string) => void
   onRequestReview: (sessionId: string, agentId: string) => void
+  onDiscard: (id: string) => void
   navigate: (path: string) => void
 }) {
-  const workSession   = task.sessionId ? sessionList.find(s => s.id === task.sessionId) : undefined
+  const workSession   = sessionList
+    .filter(s => s.workTaskId === task.id && !s.parentSessionId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0]
   const reviewSession = workSession ? sessionList.find(s => s.parentSessionId === workSession.id) : undefined
   const workAgent     = workSession ? agentList.find(a => a.id === workSession.agentId) : undefined
   const reviewAgent   = reviewSession ? agentList.find(a => a.id === reviewSession.agentId) : undefined
@@ -295,6 +302,7 @@ function SubtaskRow({
             onMerge={onMerge}
             onMergePush={onMergePush}
             onRequestReview={onRequestReview}
+            onDiscard={onDiscard}
           />
         </div>
       )}
@@ -346,13 +354,14 @@ function ReviewCard({ session, agent, onView }: { session: Session; agent?: Agen
 
 function WorkSessionCard({
   session, agent, project, isMerging, agentList, reviewSession,
-  onMerge, onMergePush, onRequestReview, onView,
+  onMerge, onMergePush, onRequestReview, onDiscard, onView,
 }: {
   session: Session; agent?: Agent
   project?: { workspaceMode: string; remoteUrl?: string }
   isMerging: boolean; agentList: Agent[]; reviewSession?: Session
   onMerge: (id: string) => void; onMergePush: (id: string) => void
   onRequestReview: (sessionId: string, agentId: string) => void
+  onDiscard: (id: string) => void
   onView: () => void
 }) {
   const isActive = session.status === 'running' || session.status === 'waiting' || session.status === 'idle'
@@ -396,6 +405,7 @@ function WorkSessionCard({
             onMerge={onMerge}
             onMergePush={onMergePush}
             onRequestReview={onRequestReview}
+            onDiscard={onDiscard}
           />
         </div>
       )}
@@ -434,6 +444,10 @@ export default function TaskPage() {
     mutationFn: ({ sessionId, agentId }: { sessionId: string; agentId: string }) => sessions.requestReview(sessionId, agentId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['sessions', projectId] }),
   })
+  const discardSession = useMutation({
+    mutationFn: (id: string) => sessions.delete(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sessions', projectId] }); qc.invalidateQueries({ queryKey: ['tasks', projectId] }) },
+  })
 
   if (!task) {
     return (
@@ -443,23 +457,27 @@ export default function TaskPage() {
     )
   }
 
-  const isMerging  = mergeSession.isPending || mergePushSession.isPending
+  const isMerging  = mergeSession.isPending || mergePushSession.isPending || discardSession.isPending
   const isLeadTask = !!(campaign?.subtasks.length)
 
-  const leadSession   = task.leadSessionId
-    ? sessionList.find(s => s.id === task.leadSessionId)
-    : isLeadTask && task.sessionId ? sessionList.find(s => s.id === task.sessionId) : undefined
+  // Most recent non-review session for the root task
+  const rootSessions = sessionList
+    .filter(s => s.workTaskId === task.id && !s.parentSessionId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  const latestRootSession = rootSessions[0]
 
-  const workSession   = !isLeadTask && task.sessionId ? sessionList.find(s => s.id === task.sessionId) : undefined
+  const leadSession   = isLeadTask ? latestRootSession : undefined
+  const workSession   = !isLeadTask ? latestRootSession : undefined
   const reviewSession = workSession ? sessionList.find(s => s.parentSessionId === workSession.id) : undefined
   const leadAgent     = leadSession ? agentList.find(a => a.id === leadSession.agentId) : undefined
   const workAgent     = workSession ? agentList.find(a => a.id === workSession.agentId) : undefined
   const reviewAgent   = reviewSession ? agentList.find(a => a.id === reviewSession.agentId) : undefined
 
   // All sessions across this campaign for status + roster
-  const allWorkSessions = [leadSession, workSession, ...(campaign?.subtasks.map(sub => {
-    return sub.sessionId ? sessionList.find(s => s.id === sub.sessionId) : undefined
-  }) ?? [])].filter(Boolean) as Session[]
+  const allTaskIds = new Set([task.id, ...(campaign?.subtasks.map(s => s.id) ?? [])])
+  const allWorkSessions = sessionList.filter(s =>
+    s.workTaskId && allTaskIds.has(s.workTaskId) && !s.parentSessionId && !s.specId
+  )
 
   const seenAgentIds = new Set<string>()
   const rosterAgents: Agent[] = []
@@ -528,7 +546,7 @@ export default function TaskPage() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-[760px] px-6 pt-8 pb-16 flex flex-col gap-8">
+        <div className="max-w-[760px] px-6 pt-10 pb-16 flex flex-col gap-8">
 
           {/* Phase: Plan */}
           {isLeadTask && leadSession && (
@@ -555,6 +573,7 @@ export default function TaskPage() {
                       onMerge={id => mergeSession.mutate(id)}
                       onMergePush={id => mergePushSession.mutate(id)}
                       onRequestReview={(sid, agentId) => requestReview.mutate({ sessionId: sid, agentId })}
+                      onDiscard={id => discardSession.mutate(id)}
                       navigate={navigate}
                     />
                   ))}
@@ -582,6 +601,7 @@ export default function TaskPage() {
                   onMerge={id => mergeSession.mutate(id)}
                   onMergePush={id => mergePushSession.mutate(id)}
                   onRequestReview={(sid, agentId) => requestReview.mutate({ sessionId: sid, agentId })}
+                  onDiscard={id => discardSession.mutate(id)}
                   onView={() => navigate(`/sessions/${workSession.id}`)}
                 />
               ) : (

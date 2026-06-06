@@ -131,26 +131,25 @@ export default function OverviewPage() {
     }
   }
 
-  // Map: leadSessionId → subtasks (for campaign grouping)
-  const subtasksByLeadSession = new Map<string, Task[]>()
+  // Map: parentTaskId → subtasks (for campaign grouping)
+  const subtasksByParent = new Map<string, Task[]>()
   for (const t of taskList) {
-    if (t.leadSessionId) {
-      const arr = subtasksByLeadSession.get(t.leadSessionId) ?? []
+    if (t.parentTaskId) {
+      const arr = subtasksByParent.get(t.parentTaskId) ?? []
       arr.push(t)
-      subtasksByLeadSession.set(t.leadSessionId, arr)
+      subtasksByParent.set(t.parentTaskId, arr)
     }
   }
 
   // Gather ALL sessions for a root task (root + campaign subtasks)
   function allCampaignSessions(root: Task): Session[] {
-    const all = [...(sessionsByTask.get(root.id) ?? [])]
-    const subtasks = root.sessionId ? (subtasksByLeadSession.get(root.sessionId) ?? []) : []
-    for (const sub of subtasks) all.push(...(sessionsByTask.get(sub.id) ?? []))
-    return all
+    const subtasks = subtasksByParent.get(root.id) ?? []
+    const allTaskIds = [root.id, ...subtasks.map(t => t.id)]
+    return allTaskIds.flatMap(tid => sessionsByTask.get(tid) ?? [])
   }
 
-  // Root tasks only — root tasks are tasks with no leadSessionId that have been started
-  const rootTasks = taskList.filter(t => !t.leadSessionId && t.sessionId)
+  // Root tasks only — tasks with no parentTaskId that have been started
+  const rootTasks = taskList.filter(t => !t.parentTaskId && t.status !== 'pending')
 
   // Running: root task where any campaign session is active
   const runningTasks = rootTasks.filter(t =>
@@ -169,7 +168,7 @@ export default function OverviewPage() {
   const taskSessionMap = new Map<string, Session[]>()
   for (const t of rootTasks) taskSessionMap.set(t.id, allCampaignSessions(t))
 
-  const queued = taskList.filter(t => !t.leadSessionId && t.status === 'pending')
+  const queued = taskList.filter(t => !t.parentTaskId && t.status === 'pending')
 
   // Recent: root tasks that were recently completed/merged, not currently running or in review
   const reviewRootIds = new Set(reviewTasks.map(t => t.id))

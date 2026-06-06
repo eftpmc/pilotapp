@@ -25,9 +25,9 @@ export function markSessionMerged(sessionId: string): void {
   setSessionStatus(sessionId, 'merged');
 }
 
-export function assignTaskToSession(taskId: string, agentId: string, sessionId: string, startedAt = new Date().toISOString()): void {
-  db.prepare('UPDATE tasks SET status = ?, agent_id = ?, session_id = ?, started_at = ? WHERE id = ?')
-    .run('running', agentId, sessionId, startedAt, taskId);
+export function assignTaskToSession(taskId: string, agentId: string, startedAt = new Date().toISOString()): void {
+  db.prepare('UPDATE tasks SET status = ?, agent_id = ?, started_at = ? WHERE id = ?')
+    .run('running', agentId, startedAt, taskId);
 }
 
 export function setLinkedTaskFinished(sessionId: string, exitCode: number, completedAt = new Date().toISOString()): void {
@@ -59,7 +59,7 @@ export function resetErroredSessionForRetry(sessionId: string): void {
 
 export function resetTaskAfterSessionDiscard(taskId: string): void {
   db.prepare(
-    "UPDATE tasks SET status = 'pending', agent_id = NULL, session_id = NULL, started_at = NULL, completed_at = NULL WHERE id = ?"
+    "UPDATE tasks SET status = 'pending', agent_id = NULL, started_at = NULL, completed_at = NULL WHERE id = ?"
   ).run(taskId);
 }
 
@@ -68,7 +68,7 @@ export function failInterruptedWork(): void {
   // Reset interrupted running tasks back to pending so they are auto-assigned on next boot.
   // Skip-task / complete-task set completed_at before exiting, so those are already 'done'/'failed'.
   db.prepare(`
-    UPDATE tasks SET status = 'pending', agent_id = NULL, session_id = NULL, started_at = NULL, completed_at = NULL
+    UPDATE tasks SET status = 'pending', agent_id = NULL, started_at = NULL, completed_at = NULL
     WHERE status = 'running'
   `).run();
 }

@@ -641,7 +641,7 @@ export default function SessionPage() {
               {agent && <span className="text-sm text-muted-foreground font-medium">{agent.name}</span>}
               {agent && session && <span className="text-muted-foreground/30">·</span>}
               {session && <StatusBadge status={session.status} />}
-              {activeRunning && <span className="text-xs font-mono text-green-500 tabular-nums">{fmtSecs(elapsedSecs)}</span>}
+              {activeRunning && <span className="text-xs font-mono text-[var(--green)] tabular-nums">{fmtSecs(elapsedSecs)}</span>}
               {hasTurns && (
                 <>
                   <span className="text-muted-foreground/30">·</span>
@@ -674,8 +674,7 @@ export default function SessionPage() {
           {(['output', 'diff'] as const).map(t => (
             <button key={t}
               onClick={() => t === 'diff' ? loadDiff() : setActiveTab('output')}
-              className={`proj-tab ${activeTab === t ? 'active' : ''}`}
-              style={{ textTransform: 'capitalize' }}
+              className={`proj-tab capitalize ${activeTab === t ? 'active' : ''}`}
             >
               {t === 'diff' && isWorkspace ? 'files' : t}
             </button>
@@ -794,8 +793,8 @@ export default function SessionPage() {
 
       {/* Merged / Completed banner */}
       {isMerged && (
-        <div className="border-t border-green-500/20 bg-green-500/5 px-6 py-3.5 flex items-center gap-3 flex-wrap">
-          <span className="text-sm font-semibold text-green-500">{isWorkspace ? 'Completed ✓' : 'Accepted ✓'}</span>
+        <div className="border-t border-[color-mix(in_srgb,var(--green)_20%,transparent)] bg-[color-mix(in_srgb,var(--green)_5%,transparent)] px-6 py-3.5 flex items-center gap-3 flex-wrap">
+          <span className="text-sm font-semibold text-[var(--green)]">{isWorkspace ? 'Completed ✓' : 'Accepted ✓'}</span>
           <div className="flex-1" />
           {!isWorkspace && project?.remoteUrl && !pushed && <Button size="sm" onClick={() => push.mutate()} disabled={push.isPending}>{push.isPending ? '…' : 'Push to remote'}</Button>}
           {!isWorkspace && project?.remoteUrl && pushed && <span className="text-sm font-semibold text-primary">Pushed ✓</span>}

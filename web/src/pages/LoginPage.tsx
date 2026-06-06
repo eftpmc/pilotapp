@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { auth } from '../api/client'
+import { Button } from '@/components/ui/button'
 
 export default function LoginPage() {
   const navigate   = useNavigate()
@@ -149,14 +150,14 @@ export default function LoginPage() {
             }}>{error}</p>
           )}
 
-          <button
+          <Button
             type="submit"
-            className="btn primary w-full justify-center mt-0.5 text-[14px]"
+            variant="primary"
+            className="w-full justify-center mt-0.5 text-[14px] py-[11px]"
             disabled={loading}
-            style={{ padding: '11px' }}
           >
             {loading ? '…' : mode === 'login' ? 'Sign in' : 'Create account'}
-          </button>
+          </Button>
 
           <p style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', margin: 0 }}>
             Self-hosted · Your keys stay on your server

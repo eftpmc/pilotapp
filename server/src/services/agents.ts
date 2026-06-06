@@ -418,7 +418,7 @@ async function assignAndRunTask(
     db.prepare(
       'INSERT INTO sessions (id, user_id, agent_id, project_id, work_task_id, provider, branch, worktree_path, workspace_mode, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     ).run(sessionId, userId, agent.id, projectId, taskId, agent.provider, branch, worktreePath, workspaceMode, 'idle', now);
-    assignTaskToSession(taskId, agent.id, sessionId, now);
+    assignTaskToSession(taskId, agent.id, now);
     if (!isGit) void seedWorkDirFromWorkspace(path.join(DATA_DIR, 'workspaces', projectId), worktreePath);
     void copyTaskFilesToWorkDir(path.join(DATA_DIR, 'task-files', taskId), worktreePath);
     void runAgent(

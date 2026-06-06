@@ -25,27 +25,26 @@ import { ChevronRight, Upload } from 'lucide-react'
 // ---------------------------------------------------------------------------
 
 export interface Campaign {
-  root:     Task       // user-created task; sessionId = lead's session
-  subtasks: Task[]     // tasks where leadSessionId = root.sessionId
+  root:     Task    // user-created root task
+  subtasks: Task[]  // tasks where parentTaskId === root.id
   allTasks: Task[]
 }
 
 export function buildCampaigns(taskList: Task[]): Campaign[] {
-  const subtaskMap = new Map<string, Task[]>()  // leadSessionId → subtasks
-  const rootTasks: Task[] = []
+  const subtaskMap = new Map<string, Task[]>()  // parentTaskId → subtasks
 
   for (const t of taskList) {
-    if (t.leadSessionId) {
-      const arr = subtaskMap.get(t.leadSessionId) ?? []
+    if (t.parentTaskId) {
+      const arr = subtaskMap.get(t.parentTaskId) ?? []
       arr.push(t)
-      subtaskMap.set(t.leadSessionId, arr)
-    } else {
-      rootTasks.push(t)
+      subtaskMap.set(t.parentTaskId, arr)
     }
   }
 
+  const rootTasks = taskList.filter(t => !t.parentTaskId)
+
   return rootTasks.map(root => {
-    const subtasks = root.sessionId ? (subtaskMap.get(root.sessionId) ?? []) : []
+    const subtasks = subtaskMap.get(root.id) ?? []
     return { root, subtasks, allTasks: [root, ...subtasks] }
   })
 }
@@ -206,7 +205,7 @@ function WorkingCard({
 
 function ReviewCard({
   campaign, involvedAgents, sessionList, project, isMerging,
-  onMerge, onMergePush, onRequestReview, onClick,
+  onMerge, onMergePush, onRequestReview, onDiscard, onClick,
 }: {
   campaign: Campaign
   involvedAgents: Agent[]
@@ -216,6 +215,7 @@ function ReviewCard({
   onMerge: (id: string) => void
   onMergePush: (id: string) => void
   onRequestReview: (sessionId: string, agentId: string) => void
+  onDiscard: (id: string) => void
   onClick: () => void
 }) {
   const { root } = campaign
@@ -266,24 +266,29 @@ function ReviewCard({
             />
           )}
           {(primarySession.status === 'done' || primarySession.status === 'error') && (
-            project?.workspaceMode === 'workspace' ? (
-              <Button size="sm" variant="primary" onClick={() => onMerge(primarySession.id)} disabled={isMerging}>
-                {isMerging ? '…' : 'Complete ✓'}
+            <>
+              <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => onDiscard(primarySession.id)} disabled={isMerging}>
+                Discard
               </Button>
-            ) : project?.remoteUrl ? (
-              <>
-                <Button size="sm" variant="outline" onClick={() => onMerge(primarySession.id)} disabled={isMerging}>
-                  {isMerging ? '…' : primarySession.status === 'error' ? 'Accept anyway' : 'Accept'}
+              {project?.workspaceMode === 'workspace' ? (
+                <Button size="sm" variant="primary" onClick={() => onMerge(primarySession.id)} disabled={isMerging}>
+                  {isMerging ? '…' : 'Complete ✓'}
                 </Button>
-                <Button size="sm" variant="primary" onClick={() => onMergePush(primarySession.id)} disabled={isMerging}>
-                  <Upload size={12} />{isMerging ? '…' : 'Push'}
+              ) : project?.remoteUrl ? (
+                <>
+                  <Button size="sm" variant="outline" onClick={() => onMerge(primarySession.id)} disabled={isMerging}>
+                    {isMerging ? '…' : primarySession.status === 'error' ? 'Accept anyway' : 'Accept'}
+                  </Button>
+                  <Button size="sm" variant="primary" onClick={() => onMergePush(primarySession.id)} disabled={isMerging}>
+                    <Upload size={12} />{isMerging ? '…' : 'Push'}
+                  </Button>
+                </>
+              ) : (
+                <Button size="sm" variant="primary" onClick={() => onMerge(primarySession.id)} disabled={isMerging}>
+                  {isMerging ? '…' : primarySession.status === 'error' ? 'Accept anyway' : 'Accept ✓'}
                 </Button>
-              </>
-            ) : (
-              <Button size="sm" variant="primary" onClick={() => onMerge(primarySession.id)} disabled={isMerging}>
-                {isMerging ? '…' : primarySession.status === 'error' ? 'Accept anyway' : 'Accept ✓'}
-              </Button>
-            )
+              )}
+            </>
           )}
         </div>
       )}
@@ -381,6 +386,10 @@ export default function ProjectDetailPage() {
     mutationFn: ({ sessionId, agentId }: { sessionId: string; agentId: string }) => sessions.requestReview(sessionId, agentId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['sessions', projectId] }),
   })
+  const discardSession = useMutation({
+    mutationFn: (id: string) => sessions.delete(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sessions', projectId] }); qc.invalidateQueries({ queryKey: ['tasks', projectId] }) },
+  })
 
   // WebSocket
   const invalidateRef = useRef<() => void>(() => {})
@@ -432,7 +441,7 @@ export default function ProjectDetailPage() {
     return () => document.removeEventListener('keydown', handler)
   }, [showNew, queued.length, idleAgents.length, agentList.length, runQueue.isPending])
 
-  const isMerging = mergeSession.isPending || mergePushSession.isPending
+  const isMerging = mergeSession.isPending || mergePushSession.isPending || discardSession.isPending
 
   function taskPageFor(c: Campaign) {
     return `/projects/${projectId}/tasks/${c.root.id}`
@@ -473,6 +482,7 @@ export default function ProjectDetailPage() {
           onMerge={id => mergeSession.mutate(id)}
           onMergePush={id => mergePushSession.mutate(id)}
           onRequestReview={(sid, agentId) => requestReview.mutate({ sessionId: sid, agentId })}
+          onDiscard={id => discardSession.mutate(id)}
           onClick={() => navigate(taskPageFor(c))} />
       )),
     },
@@ -539,7 +549,7 @@ export default function ProjectDetailPage() {
       {showNew && projectId && (
         <NewTaskDialog
           projectId={projectId}
-          hasIdleAgent={idleAgents.length > 0}
+          idleAgents={idleAgents}
           onClose={() => setShowNew(false)}
           onDone={() => {
             qc.invalidateQueries({ queryKey: ['tasks', projectId] })
@@ -564,8 +574,8 @@ const SIZES: { value: TaskSize; label: string; desc: string }[] = [
   { value: 'xl', label: 'XL', desc: '1d+'  },
 ]
 
-function NewTaskDialog({ projectId, hasIdleAgent, onClose, onDone }: {
-  projectId: string; hasIdleAgent: boolean; onClose: () => void; onDone: () => void
+function NewTaskDialog({ projectId, idleAgents, onClose, onDone }: {
+  projectId: string; idleAgents: Agent[]; onClose: () => void; onDone: () => void
 }) {
   const [title, setTitle]          = useState('')
   const [prompt, setPrompt]        = useState('')
@@ -587,7 +597,7 @@ function NewTaskDialog({ projectId, hasIdleAgent, onClose, onDone }: {
     try {
       const task = await tasks.create({ projectId, title: title.trim(), prompt, size })
       if (pendingFiles.length > 0) await tasks.uploadFiles(task.id, pendingFiles).catch(() => {})
-      if (andRun) await tasks.runQueue().catch(() => {})
+      if (andRun && idleAgents.length > 0) await tasks.assign(task.id, idleAgents[0].id).catch(() => {})
       onDone()
     } finally { setLoading(false) }
   }
@@ -625,7 +635,7 @@ function NewTaskDialog({ projectId, hasIdleAgent, onClose, onDone }: {
             <FileDropzone files={pendingFiles.map(f => f.name)} onAdd={addFiles}
               onRemove={name => setPending(prev => prev.filter(f => f.name !== name))} disabled={loading} />
           </Field>
-          {!hasIdleAgent && (
+          {idleAgents.length === 0 && (
             <FieldDescription>No idle agents right now. You can still queue the task.</FieldDescription>
           )}
           <div className="flex gap-2 pt-1">
@@ -633,7 +643,7 @@ function NewTaskDialog({ projectId, hasIdleAgent, onClose, onDone }: {
             <Button className="flex-1 justify-center" disabled={!isValid || loading} onClick={() => void submit(false)}>
               {loading ? <Spinner /> : 'Queue'}
             </Button>
-            <Button variant="primary" className="flex-1 justify-center" disabled={!isValid || loading || !hasIdleAgent} onClick={() => void submit(true)}>
+            <Button variant="primary" className="flex-1 justify-center" disabled={!isValid || loading || idleAgents.length === 0} onClick={() => void submit(true)}>
               {loading ? <Spinner /> : 'Dispatch'}
             </Button>
           </div>

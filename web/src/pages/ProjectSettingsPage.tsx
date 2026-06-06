@@ -46,7 +46,7 @@ export default function ProjectSettingsPage() {
 
   return (
     <div className="flex-1 overflow-y-auto bg-background">
-      <div className="max-w-[960px] px-6 pt-8 pb-10 flex flex-col gap-8">
+      <div className="max-w-[960px] px-6 pt-10 pb-10 flex flex-col gap-8">
 
         {/* Project info */}
         <section className="flex flex-col gap-3">
