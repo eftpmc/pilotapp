@@ -1,5 +1,5 @@
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { NavLink, Outlet, useLocation, useNavigate, Link } from 'react-router-dom'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { sessions, agents, projects, tasks, me } from '../api/client'
 import { Button } from '@/components/ui/button'
 import {
@@ -13,23 +13,10 @@ import {
 import { cn } from '@/lib/utils'
 import { useEffect, useState, useCallback } from 'react'
 import {
-  BookOpen, Building2, FolderOpen, Home, LogOut,
+  BookOpen, FolderOpen, Home, LogOut,
   Moon, Plus, Search, Settings, Sun, Users, Wrench,
 } from 'lucide-react'
-
-const BOTTOM_NAV = [
-  { label: 'Office',    path: '/',          end: true,  icon: Building2 },
-  { label: 'Today',     path: '/today',     end: false, icon: Home },
-  { label: 'Projects',  path: '/projects',  end: false, icon: FolderOpen },
-  { label: 'Agents',    path: '/agents',    end: false, icon: Users },
-]
-
-const NAV_ITEMS = [
-  { label: 'Office',    path: '/',          end: true,  icon: Building2 },
-  { label: 'Today',     path: '/today',     end: false, icon: Home },
-  { label: 'Projects',  path: '/projects',  end: false, icon: FolderOpen },
-  { label: 'Agents',    path: '/agents',    end: false, icon: Users },
-]
+import OfficeBg from '../pages/OfficeLabPage'
 
 // ── Theme ──────────────────────────────────────────────────────────────────────
 function getTheme(): 'light' | 'dark' {
@@ -108,8 +95,8 @@ function CommandPalette({ open, initialMode, onClose }: {
 
             <CommandSeparator />
             <CommandGroup heading="Go to">
-              <CommandItem onSelect={() => go('/')} keywords={['office', 'home', '3d']}>
-                <Building2 size={14} className="text-[var(--muted)]" />
+              <CommandItem onSelect={() => go('/office')} keywords={['office', 'home', '3d']}>
+                <Home size={14} className="text-[var(--muted)]" />
                 <span>Office</span>
               </CommandItem>
               <CommandItem onSelect={() => go('/today')} keywords={['home', 'overview']}>
@@ -211,15 +198,16 @@ function CompanyOnboarding({ onDone }: { onDone: () => void }) {
   const [name, setName] = useState('')
   const qc = useQueryClient()
 
-  const save = useMutation({
-    mutationFn: (n: string) => me.update({ name: n }),
-    onSuccess: (profile) => { qc.setQueryData(['me'], profile); onDone() },
-  })
+  const save = useCallback(async (n: string) => {
+    const profile = await me.update({ name: n })
+    qc.setQueryData(['me'], profile)
+    onDone()
+  }, [qc, onDone])
 
   function submit() {
     const trimmed = name.trim()
-    if (!trimmed || save.isPending) return
-    save.mutate(trimmed)
+    if (!trimmed) return
+    save(trimmed)
   }
 
   return (
@@ -242,9 +230,8 @@ function CompanyOnboarding({ onDone }: { onDone: () => void }) {
             onChange={e => setName(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') submit() }}
           />
-          {save.isError && <p className="text-xs text-destructive">{save.error.message}</p>}
-          <Button onClick={submit} disabled={!name.trim() || save.isPending} className="w-full" size="lg">
-            {save.isPending ? 'Saving…' : 'Get started →'}
+          <Button onClick={submit} disabled={!name.trim()} className="w-full" size="lg">
+            Get started →
           </Button>
         </div>
       </div>
@@ -252,187 +239,11 @@ function CompanyOnboarding({ onDone }: { onDone: () => void }) {
   )
 }
 
-// ── Desktop app bar ────────────────────────────────────────────────────────────
-function AppTopBar({
-  reviewCount, runningCount, theme, workspaceName, userInitial,
-  onNewTask, onOpenPalette, onToggleTheme, onSignOut,
-}: {
-  reviewCount: number; runningCount: number
-  theme: 'light' | 'dark'; workspaceName: string; userInitial: string
-  onNewTask: () => void; onOpenPalette: () => void; onToggleTheme: () => void; onSignOut: () => void
-}) {
-  const location = useLocation()
-  const navigate = useNavigate()
-
-  function isActive(path: string, end = false) {
-    return end ? location.pathname === path : location.pathname.startsWith(path)
-  }
-
-  return (
-    <header className="hidden md:flex h-14 shrink-0 items-center gap-4 border-b border-[var(--rule-soft)] bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80">
-      <button
-        type="button"
-        onClick={() => navigate('/')}
-        className="flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-sm font-semibold hover:bg-accent"
-      >
-        <span className="pilot-mark !size-7 !rounded-lg">p</span>
-        <span className="truncate">{workspaceName || 'pilot'}</span>
-      </button>
-
-      <nav className="flex min-w-0 flex-1 items-center gap-1">
-        {NAV_ITEMS.map(({ label, path, end, icon: Icon }) => (
-          <NavLink
-            key={label}
-            to={path}
-            end={end}
-            className={() => cn(
-              'relative inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium transition-colors',
-              isActive(path, end)
-                ? 'bg-accent text-foreground'
-                : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-            )}
-          >
-            <Icon size={15} strokeWidth={1.8} />
-            <span>{label}</span>
-            {label === 'Today' && reviewCount > 0 && (
-              <span className="ml-0.5 h-1.5 w-1.5 rounded-full bg-[var(--amber-dot)]" />
-            )}
-            {label === 'Today' && reviewCount === 0 && runningCount > 0 && (
-              <span className="ml-0.5 h-1.5 w-1.5 rounded-full bg-[var(--green-dot)]" />
-            )}
-          </NavLink>
-        ))}
-      </nav>
-
-      <div className="flex items-center gap-2">
-        <Button size="sm" onClick={onNewTask} className="h-8 gap-1.5">
-          <Plus size={14} />
-          New task
-        </Button>
-        <button
-          type="button"
-          onClick={onOpenPalette}
-          className="hidden lg:flex h-8 items-center gap-2 rounded-md border border-border bg-card px-2.5 text-xs text-muted-foreground hover:text-foreground"
-        >
-          <Search size={13} />
-          <span className="font-mono text-[10px] text-[var(--faint)]">⌘K</span>
-        </button>
-        <button
-          type="button"
-          onClick={onOpenPalette}
-          className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground lg:hidden"
-          title="Search"
-        >
-          <Search size={15} />
-        </button>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/15 text-sm font-semibold text-primary hover:bg-primary/20"
-              title={workspaceName || 'pilot'}
-            >
-              {userInitial}
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent side="bottom" align="end" className="w-56 mt-1">
-            <DropdownMenuItem asChild>
-              <NavLink to="/knowledge">
-                <BookOpen size={14} />
-                <span>Knowledge</span>
-              </NavLink>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <NavLink to="/tools">
-                <Wrench size={14} />
-                <span>Tools</span>
-              </NavLink>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <NavLink to="/settings">
-                <Settings size={14} />
-                <span>Settings</span>
-              </NavLink>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onToggleTheme}>
-              {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
-              <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onSignOut} className="destructive">
-              <LogOut size={14} />
-              <span>Sign out</span>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    </header>
-  )
-}
-
-function MobileMenu({
-  theme, userInitial, workspaceName, onNewTask, onToggleTheme, onSignOut,
-}: {
-  theme: 'light' | 'dark'
-  userInitial: string
-  workspaceName: string
-  onNewTask: () => void
-  onToggleTheme: () => void
-  onSignOut: () => void
-}) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/15 text-sm font-semibold text-primary hover:bg-primary/20"
-          title={workspaceName || 'Account'}
-        >
-          {userInitial}
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent side="bottom" align="end" className="w-52 mt-1">
-        <DropdownMenuItem onClick={onNewTask}>
-          <Plus size={14} />
-          <span>New task</span>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <NavLink to="/knowledge">
-            <BookOpen size={14} />
-            <span>Knowledge</span>
-          </NavLink>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <NavLink to="/tools">
-            <Wrench size={14} />
-            <span>Tools</span>
-          </NavLink>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <NavLink to="/settings">
-            <Settings size={14} />
-            <span>Settings</span>
-          </NavLink>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={onToggleTheme}>
-          {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
-          <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={onSignOut} className="destructive">
-          <LogOut size={14} />
-          <span>Sign out</span>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
-
 // ── Layout ─────────────────────────────────────────────────────────────────────
 export default function Layout() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const isOffice = location.pathname === '/office'
 
   const [theme, setTheme]               = useState<'light' | 'dark'>(getTheme)
   const [paletteOpen, setPalette]       = useState(false)
@@ -452,10 +263,7 @@ export default function Layout() {
     function handler(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault()
-        setPalette(p => {
-          if (!p) setPaletteMode('search')
-          return !p
-        })
+        setPalette(p => { if (!p) setPaletteMode('search'); return !p })
       }
     }
     document.addEventListener('keydown', handler)
@@ -466,11 +274,11 @@ export default function Layout() {
 
   const { data: userProfile } = useQuery({ queryKey: ['me'], queryFn: () => me.profile() })
   const { data: projectList = [] } = useQuery({ queryKey: ['projects'], queryFn: () => projects.list() })
-
   const { data: sessionList = [] } = useQuery({
     queryKey: ['sessions'], queryFn: () => sessions.list(),
     refetchInterval: 5000, staleTime: 3000,
   })
+
   const reviewCount  = sessionList.filter(s => !s.specId && (s.status === 'done' || s.status === 'error')).length
   const runningCount = sessionList.filter(s => s.status === 'running').length
 
@@ -484,64 +292,117 @@ export default function Layout() {
   }
 
   const showOnboarding = userProfile !== undefined && !userProfile?.name && !onboardingDone
+  if (showOnboarding) return <CompanyOnboarding onDone={() => setOnboarding(true)} />
 
-  if (showOnboarding) {
-    return <CompanyOnboarding onDone={() => setOnboarding(true)} />
-  }
+  const workspaceName = userProfile?.name ?? ''
+  const userInitial   = (userProfile?.name || userProfile?.email || '?')[0].toUpperCase()
 
   return (
-    <div className="h-screen overflow-hidden bg-background flex flex-col">
-      <AppTopBar
-        reviewCount={reviewCount}
-        runningCount={runningCount}
-        theme={theme}
-        workspaceName={userProfile?.name ?? ''}
-        userInitial={(userProfile?.name || userProfile?.email || '?')[0].toUpperCase()}
-        onNewTask={handleNewTask}
-        onOpenPalette={openPalette}
-        onToggleTheme={toggleTheme}
-        onSignOut={signOut}
-      />
+    <div className="h-screen overflow-hidden">
+      {/* 3D office — always rendered as background */}
+      <OfficeBg active={isOffice} />
 
-      <header className="mobile-topbar">
-        <button className="wordmark" onClick={() => navigate('/')}>
-          <span className="pilot-mark">p</span>
-          pilot
-        </button>
-        <div className="mobile-topbar-actions">
-          <button className="navtool" onClick={openPalette} title="Search">
+      {/* Page panel — frosted glass over the 3D, below the topnav */}
+      {!isOffice && (
+        <div className="office-panel fixed top-12 inset-x-0 bottom-0 z-10 flex flex-col">
+          <main className="flex-1 min-h-0 flex flex-col">
+            <Outlet />
+          </main>
+        </div>
+      )}
+
+      {/* Unified topnav — always on top of both office and panel */}
+      <nav className="topnav">
+        {/* Left: logo + workspace name — one unified ghost button */}
+        <Link
+          to="/office"
+          aria-label="Office"
+          className="flex items-center gap-2 shrink-0 mr-3 -ml-1 h-8 px-2 rounded-lg hover:bg-accent transition-colors"
+        >
+          <span className="pilot-mark !size-6 !rounded-md !text-[10px]">p</span>
+          <span className="text-[13px] font-semibold text-foreground hidden sm:inline leading-none tracking-tight">
+            {workspaceName || 'pilot'}
+          </span>
+        </Link>
+
+        {/* Center: primary nav */}
+        <div className="navlinks">
+          <NavLink
+            to="/today"
+            className={({ isActive }) => cn('navlink', isActive && 'active')}
+          >
+            Today
+            {reviewCount > 0 && <span className="badge">{reviewCount}</span>}
+            {reviewCount === 0 && runningCount > 0 && (
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--green-dot)] animate-pulse" />
+            )}
+          </NavLink>
+          <NavLink
+            to="/projects"
+            className={({ isActive }) => cn('navlink', isActive && 'active')}
+          >
+            Projects
+          </NavLink>
+          <NavLink
+            to="/agents"
+            className={({ isActive }) => cn('navlink', isActive && 'active')}
+          >
+            Agents
+          </NavLink>
+        </div>
+
+        {/* Right: actions */}
+        <div className="ml-auto flex items-center gap-1.5">
+          <Button
+            size="sm"
+            onClick={handleNewTask}
+            className="h-8 gap-1.5 hidden sm:flex"
+          >
+            <Plus size={13} />
+            New task
+          </Button>
+
+          <button
+            type="button"
+            onClick={openPalette}
+            className="h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            aria-label="Search"
+          >
             <Search size={15} />
           </button>
-          <MobileMenu
-            theme={theme}
-            userInitial={(userProfile?.name || userProfile?.email || '?')[0].toUpperCase()}
-            workspaceName={userProfile?.name ?? ''}
-            onNewTask={handleNewTask}
-            onToggleTheme={toggleTheme}
-            onSignOut={signOut}
-          />
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/15 text-sm font-semibold text-primary hover:bg-primary/25 transition-colors"
+                title={workspaceName || 'pilot'}
+              >
+                {userInitial}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="bottom" align="end" className="w-52 mt-1">
+              <DropdownMenuItem asChild>
+                <NavLink to="/knowledge"><BookOpen size={14} /><span>Knowledge</span></NavLink>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <NavLink to="/tools"><Wrench size={14} /><span>Tools</span></NavLink>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <NavLink to="/settings"><Settings size={14} /><span>Settings</span></NavLink>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={toggleTheme}>
+                {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+                <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={signOut} className="destructive">
+                <LogOut size={14} /><span>Sign out</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-      </header>
-
-      <main className="app-main min-h-0">
-        <Outlet />
-      </main>
-
-      <nav className="mobile-tabbar">
-        {BOTTOM_NAV.map(({ label, path, end, icon: Icon }) => (
-          <NavLink
-            key={label}
-            to={path}
-            end={end}
-            className={({ isActive }) => cn('mobile-tab', isActive && 'active')}
-          >
-            <div className="mobile-tab-icon">
-              <Icon size={20} />
-              {label === 'Today' && reviewCount > 0 && <span className="mobile-tab-badge" />}
-            </div>
-            <span>{label}</span>
-          </NavLink>
-        ))}
       </nav>
 
       <CommandPalette open={paletteOpen} initialMode={paletteMode} onClose={closePalette} />

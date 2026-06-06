@@ -14,7 +14,7 @@ export default function HireRosterPage() {
   const available = ROSTER.filter(r => !hiredSeeds.has(r.avatarSeed))
 
   return (
-    <div className="flex-1 overflow-y-auto bg-background">
+    <div className="flex-1 overflow-y-auto">
       <div className="max-w-[960px] px-6 pt-10 pb-16">
 
         <Button variant="ghost" size="sm" onClick={() => navigate('/agents')} className="mb-8 -ml-2 text-muted-foreground">

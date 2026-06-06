@@ -392,7 +392,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-background">
+    <div className="flex-1 overflow-y-auto">
       <div className="max-w-[960px] px-6 pt-10 pb-8 flex flex-col gap-8">
 
         <div>

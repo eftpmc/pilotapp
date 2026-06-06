@@ -620,7 +620,7 @@ export default function SessionPage() {
   }
 
   return (
-    <div className="flex-1 flex flex-col bg-background" style={{ minHeight: 0 }}>
+    <div className="flex-1 flex flex-col" style={{ minHeight: 0 }}>
 
       {/* Header */}
       <div className="bg-background border-b border-border px-6 pt-5 pb-0">

@@ -195,7 +195,7 @@ export default function OverviewPage() {
   const isEmpty = runningTasks.length === 0 && reviewTasks.length === 0
 
   return (
-    <div className="flex-1 overflow-y-auto bg-background">
+    <div className="flex-1 overflow-y-auto">
       <div className="max-w-[960px] px-6 pt-12 pb-10 flex flex-col gap-10">
 
         <div>

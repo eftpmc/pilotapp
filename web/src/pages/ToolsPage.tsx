@@ -569,7 +569,7 @@ export default function ToolsPage() {
   const installedByName = new Map(toolList.map(t => [t.name.toLowerCase(), t]))
 
   return (
-    <div className="flex-1 overflow-y-auto bg-background">
+    <div className="flex-1 overflow-y-auto">
       <div className="max-w-[1040px] px-6 pt-12 pb-10">
 
         {/* Header */}

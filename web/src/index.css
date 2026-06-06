@@ -91,6 +91,18 @@
   flex-direction: column;
 }
 
+/* ── Office panel (frosted glass sheet over 3D background) ─────────────────── */
+.office-panel {
+  background: color-mix(in oklch, var(--bg) 90%, transparent);
+  backdrop-filter: blur(32px) saturate(1.15);
+  animation: office-panel-in 0.22s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+@keyframes office-panel-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 /* ── Pilot logo mark ───────────────────────────────────────────────────────── */
 .pilot-mark {
   width: 28px;
@@ -193,12 +205,12 @@
 
 /* ── Page chrome ───────────────────────────────────────────────────────────── */
 .topnav {
-  position: sticky; top: 0; z-index: 40;
-  display: flex; align-items: center; gap: 24px;
-  padding: 0 28px; height: 54px;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter: blur(16px) saturate(1.2);
-  border-bottom: 1px solid var(--rule);
+  position: fixed; top: 0; left: 0; right: 0; z-index: 30;
+  display: flex; align-items: center;
+  padding: 0 20px; height: 48px;
+  background: color-mix(in oklch, var(--bg) 80%, transparent);
+  backdrop-filter: blur(24px) saturate(1.12);
+  border-bottom: 1px solid color-mix(in oklch, var(--ink) 7%, transparent);
 }
 
 .page-content {

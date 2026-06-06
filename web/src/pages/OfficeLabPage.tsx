@@ -4,12 +4,12 @@ import { useGLTF, OrbitControls, Html, useAnimations, Grid, Environment } from '
 import { SkeletonUtils, type OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
+import { cn } from '@/lib/utils'
 import { Leva, useControls } from 'leva'
 import { agents as agentsApi, projects as projectsApi, sessions as sessionsApi, tasks as tasksApi } from '@/api/client'
 import type { Agent, Project, Session, Task } from '@/api/client'
 import * as THREE from 'three'
-import { X, ArrowUpRight, Clock, GitBranch, FolderOpen } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { X, Clock, GitBranch, FolderOpen } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 
 // ─── Assets ──────────────────────────────────────────────────────────────────
@@ -35,8 +35,8 @@ const MANNEQUIN = '/kaykit/KayKit_Character_Animations_1.1/Mannequin%20Character
 // ─── Status ───────────────────────────────────────────────────────────────────
 
 const STATUS_COLOR: Record<string, string> = {
-  running: '#22c55e', waiting: '#f59e0b', done: '#3b82f6',
-  error: '#ef4444', idle: '#94a3b8', merged: '#8b5cf6',
+  running: '#35bb78', waiting: '#d49e40', done: '#ff6b35',
+  error: '#ec6b5c', idle: '#7a7770', merged: '#aca89f',
 }
 const STATUS_LABEL: Record<string, string> = {
   running: 'Working', waiting: 'Waiting', done: 'Done',
@@ -100,11 +100,14 @@ function WorkDesk({ worldPos, status }: { worldPos: THREE.Vector3; status: strin
 type AgentState = 'wander' | 'walk_to_desk' | 'sit' | 'leave_desk'
 
 function WalkingAgent({
-  agent, session, deskPos, bounds, isSelected, onSelect, walkSpeed, wanderSpeed,
+  agent, session, deskPos, bounds, isSelected, onSelect,
+  followRef, selectedIdRef, walkSpeed, wanderSpeed,
 }: {
   agent: Agent; session?: Session
   deskPos: THREE.Vector3; bounds: number
-  isSelected: boolean; onSelect: (position: THREE.Vector3) => void
+  isSelected: boolean; onSelect: () => void
+  followRef: React.MutableRefObject<THREE.Vector3 | null>
+  selectedIdRef: React.MutableRefObject<string | null>
   walkSpeed: number; wanderSpeed: number
 }) {
   const groupRef   = useRef<THREE.Group>(null)
@@ -172,29 +175,39 @@ function WalkingAgent({
     pickWanderTarget()
   }, [])
 
+  // Chair is at deskPos + [0, 0, 1.0]; character sits slightly in front at Z+0.65, Y+0.08
+  const chairPos = useMemo(
+    () => deskPos.clone().add(new THREE.Vector3(0, 0, 0.65)),
+    [deskPos],
+  )
+
   useFrame((_, dt) => {
     const g = groupRef.current
     if (!g) return
 
-    const ARRIVE_DIST  = 0.35
-    const ROT_SPEED    = dt * 10
+    const ARRIVE_DIST = 0.35
+    const ROT_SPEED   = dt * 10
 
     if (isWorking) {
-      // ── walk to desk ────────────────────────────────
+      // ── walk to chair, then sit ──────────────────────
       if (stateRef.current === 'sit') {
+        g.position.set(chairPos.x, 0.08, chairPos.z)
         play(animNames.sit || 'Sit_Chair_Idle')
       } else {
         stateRef.current = 'walk_to_desk'
-        const dist = pos.current.distanceTo(deskPos)
+        const dist = pos.current.distanceTo(chairPos)
         if (dist > ARRIVE_DIST) {
-          const dir = deskPos.clone().sub(pos.current).normalize()
+          const dir = chairPos.clone().sub(pos.current).normalize()
           pos.current.addScaledVector(dir, dt * walkSpeed)
           const targetAngle = Math.atan2(dir.x, dir.z)
           g.rotation.y = THREE.MathUtils.lerp(g.rotation.y, targetAngle, ROT_SPEED)
+          g.position.set(pos.current.x, 0, pos.current.z)
           play(animNames.walk || 'Idle_A')
         } else {
           stateRef.current = 'sit'
+          pos.current.copy(chairPos)
           g.rotation.y = Math.PI
+          g.position.set(chairPos.x, 0.08, chairPos.z)
           play(animNames.sit || 'Sit_Chair_Idle')
         }
       }
@@ -209,7 +222,6 @@ function WalkingAgent({
       const dist = pos.current.distanceTo(target.current)
       if (dist < ARRIVE_DIST || Date.now() > nextPickAt.current) {
         if (Math.random() < 0.4) {
-          // pause and idle
           play(animNames.idle || 'Idle_A')
           nextPickAt.current = Date.now() + 1500 + Math.random() * 3000
         } else {
@@ -223,13 +235,14 @@ function WalkingAgent({
         g.rotation.y = THREE.MathUtils.lerp(g.rotation.y, targetAngle, ROT_SPEED)
         play(animNames.walk || 'Idle_A')
       }
+      g.position.set(pos.current.x, 0, pos.current.z)
     }
 
-    g.position.copy(pos.current)
+    if (selectedIdRef.current === agent.id) followRef.current = pos.current
   })
 
   const color = STATUS_COLOR[status]
-  const select = useCallback(() => onSelect(pos.current.clone()), [onSelect])
+  const select = useCallback(() => onSelect(), [onSelect])
 
   return (
     <group
@@ -238,36 +251,29 @@ function WalkingAgent({
       onPointerEnter={() => { document.body.style.cursor = 'pointer' }}
       onPointerLeave={() => { document.body.style.cursor = 'default' }}
     >
-      <group ref={rigRef}>
+      <group ref={rigRef} scale={0.9}>
         <primitive object={clone} />
       </group>
       {/* Status orb */}
       <StatusOrb status={status} />
-      {/* Name + status label */}
+      {/* Name pill */}
       <Html position={[0, 2.4, 0]} center distanceFactor={14} zIndexRange={[10, 0]}>
         <button
           onClick={(e) => { e.stopPropagation(); select() }}
-          className="flex flex-col items-center gap-0.5 cursor-pointer group select-none outline-none"
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full whitespace-nowrap cursor-pointer select-none outline-none transition-all duration-150"
+          style={{
+            background: isSelected ? `${color}22` : 'rgba(14,13,11,0.88)',
+            color: isSelected ? color : '#c8c3ba',
+            border: `1px solid ${isSelected ? color + '55' : 'rgba(255,255,255,0.09)'}`,
+            backdropFilter: 'blur(12px)',
+            boxShadow: isSelected ? `0 0 12px ${color}30` : 'none',
+            fontSize: '11px',
+            fontWeight: 600,
+            letterSpacing: '0.02em',
+          }}
         >
-          <div
-            className="px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all duration-150"
-            style={{
-              background: isSelected ? `${color}22` : 'rgba(8,12,20,0.82)',
-              color: isSelected ? color : '#e2e8f0',
-              border: `1px solid ${isSelected ? color : '#1e293b'}`,
-              backdropFilter: 'blur(10px)',
-              boxShadow: isSelected ? `0 0 12px ${color}40` : 'none',
-              letterSpacing: '0.02em',
-            }}
-          >
-            {agent.name}
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-1.5 h-1.5 rounded-full" style={{ background: color }} />
-            <span className="text-[9px]" style={{ color: `${color}cc` }}>
-              {STATUS_LABEL[status] ?? status}
-            </span>
-          </div>
+          <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: color }} />
+          {agent.name}
         </button>
       </Html>
     </group>
@@ -302,11 +308,13 @@ function StatusOrb({ status }: { status: string }) {
 // ─── Scene ────────────────────────────────────────────────────────────────────
 
 function Scene({
-  agentList, sessionList, selectedId, onSelect,
+  agentList, sessionList, selectedId, onSelect, followRef, selectedIdRef,
   walkSpeed, wanderSpeed, bounds,
 }: {
   agentList: Agent[]; sessionList: Session[]
-  selectedId: string | null; onSelect: (id: string | null, position?: THREE.Vector3) => void
+  selectedId: string | null; onSelect: (id: string | null) => void
+  followRef: React.MutableRefObject<THREE.Vector3 | null>
+  selectedIdRef: React.MutableRefObject<string | null>
   walkSpeed: number; wanderSpeed: number; bounds: number
 }) {
   const activeByAgent = useMemo(() => {
@@ -329,12 +337,12 @@ function Scene({
 
   return (
     <>
-      <color attach="background" args={['#07080d']} />
-      <fog attach="fog" args={['#07080d', 18, 45]} />
+      <color attach="background" args={['#090908']} />
+      <fog attach="fog" args={['#090908', 18, 45]} />
 
       <ambientLight intensity={0.4} />
       <directionalLight position={[5, 14, 8]}  intensity={1.2} castShadow />
-      <directionalLight position={[-6, 8, -4]} intensity={0.4} color="#c8d8ff" />
+      <directionalLight position={[-6, 8, -4]} intensity={0.3} color="#ffe8d6" />
       <Environment preset="night" />
 
 
@@ -343,24 +351,22 @@ function Scene({
         position={[0, 0, 0]}
         args={[60, 60]}
         cellSize={1}
-        cellThickness={0.3}
-        cellColor="#0f172a"
+        cellThickness={0.6}
+        cellColor="#1e1e1c"
         sectionSize={5}
-        sectionThickness={0.6}
-        sectionColor="#1e293b"
+        sectionThickness={1.0}
+        sectionColor="#2c2c29"
         fadeDistance={35}
         fadeStrength={2}
         infiniteGrid
       />
 
-      {/* Desks — only rendered when agent has active work */}
+      {/* Desks — always present, screen glow active only when working */}
       {agentList.map((agent, i) => {
         const session = activeByAgent.get(agent.id)
-        const isWorking = session?.status === 'running' || session?.status === 'waiting'
-        if (!isWorking) return null
         return (
           <Suspense key={agent.id} fallback={null}>
-            <WorkDesk worldPos={deskPositions[i]} status={session!.status} />
+            <WorkDesk worldPos={deskPositions[i]} status={session?.status ?? 'idle'} />
           </Suspense>
         )
       })}
@@ -374,7 +380,9 @@ function Scene({
             deskPos={deskPositions[i]}
             bounds={bounds}
             isSelected={selectedId === agent.id}
-            onSelect={(position) => onSelect(selectedId === agent.id ? null : agent.id, position)}
+            onSelect={() => onSelect(selectedId === agent.id ? null : agent.id)}
+            followRef={followRef}
+            selectedIdRef={selectedIdRef}
             walkSpeed={walkSpeed}
             wanderSpeed={wanderSpeed}
           />
@@ -386,7 +394,9 @@ function Scene({
 
 // ─── Camera ──────────────────────────────────────────────────────────────────
 
-function LabCamera({ focus, freeCamera }: { focus: THREE.Vector3 | null; freeCamera: boolean }) {
+function LabCamera({ followRef, freeCamera }: {
+  followRef: React.MutableRefObject<THREE.Vector3 | null>; freeCamera: boolean
+}) {
   const controlsRef = useRef<OrbitControlsImpl | null>(null)
   const { camera } = useThree()
   const defaultTarget = useMemo(() => new THREE.Vector3(0, 0.5, 0), [])
@@ -400,9 +410,10 @@ function LabCamera({ focus, freeCamera }: { focus: THREE.Vector3 | null; freeCam
       return
     }
 
-    const target = focus ?? defaultTarget
+    const follow = followRef.current
+    const target = follow ?? defaultTarget
     const lookAt = new THREE.Vector3(target.x, 0.8, target.z)
-    const cameraOffset = focus
+    const cameraOffset = follow
       ? new THREE.Vector3(0, 10, 7.5)
       : new THREE.Vector3(0, 15, 11)
     const desiredPosition = lookAt.clone().add(cameraOffset)
@@ -429,9 +440,9 @@ function LabCamera({ focus, freeCamera }: { focus: THREE.Vector3 | null; freeCam
   )
 }
 
-// ─── Session panel ────────────────────────────────────────────────────────────
+// ─── Agent card (bottom-center) ──────────────────────────────────────────────
 
-function SessionPanel({ agent, session, project, task, onClose }: {
+function AgentCard({ agent, session, project, task, onClose }: {
   agent: Agent; session?: Session; project?: Project; task?: Task; onClose: () => void
 }) {
   const navigate = useNavigate()
@@ -439,99 +450,96 @@ function SessionPanel({ agent, session, project, task, onClose }: {
   const color  = STATUS_COLOR[status]
 
   return (
-    <div className="absolute right-4 top-4 bottom-4 w-72 flex flex-col gap-3 pointer-events-auto"
-      style={{ zIndex: 10 }}>
-      <div className="rounded-xl p-4 flex flex-col gap-3"
-        style={{ background: 'rgba(10,14,26,0.90)', border: '1px solid #1e293b', backdropFilter: 'blur(16px)' }}>
-        <div className="flex items-start justify-between">
-          <div className="flex flex-col gap-0.5">
+    <div
+      className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[420px] pointer-events-auto"
+      style={{ zIndex: 20 }}
+    >
+      <div
+        className="rounded-2xl p-5 flex flex-col gap-4"
+        style={{
+          background: 'rgba(16,14,12,0.95)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          backdropFilter: 'blur(20px)',
+          boxShadow: '0 8px 40px rgba(0,0,0,0.5)',
+        }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
             <span className="text-sm font-semibold text-[var(--foreground)]">{agent.name}</span>
-            <div className="flex items-center gap-1.5">
-              <div className="w-1.5 h-1.5 rounded-full" style={{ background: color }} />
-              <span className="text-xs" style={{ color }}>{STATUS_LABEL[status]}</span>
-            </div>
+            <span
+              className="text-[11px] px-2 py-0.5 rounded-full font-medium"
+              style={{ background: `${color}18`, color, border: `1px solid ${color}30` }}
+            >
+              {STATUS_LABEL[status]}
+            </span>
           </div>
-          <button onClick={onClose}
-            className="p-1 rounded-md text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-white/5 transition-colors">
+          <button
+            onClick={onClose}
+            className="p-1 rounded-md text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-white/5 transition-colors"
+          >
             <X size={14} />
           </button>
         </div>
-        <div className="text-xs text-[var(--muted-foreground)] font-mono">{agent.provider}</div>
-      </div>
 
-      {session ? (
-        <div className="rounded-xl p-4 flex flex-col gap-3 flex-1 min-h-0"
-          style={{ background: 'rgba(10,14,26,0.90)', border: `1px solid ${color}30`, backdropFilter: 'blur(16px)' }}>
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-[var(--muted-foreground)] uppercase tracking-wider">
-              Current Session
-            </span>
-            <button
-              onClick={() => navigate(`/sessions/${session.id}`)}
-              className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-md transition-colors hover:bg-white/5"
-              style={{ color }}>
-              Open <ArrowUpRight size={11} />
-            </button>
-          </div>
-          <div className="flex flex-col gap-2">
-            {task && (
-              <button
-                type="button"
-                onClick={() => navigate(`/projects/${task.projectId}/tasks/${task.id}`)}
-                className="text-left rounded-lg border border-white/5 bg-white/[0.025] px-3 py-2 transition-colors hover:bg-white/[0.045]"
-              >
-                <div className="text-[10px] uppercase tracking-wider text-[var(--muted-foreground)]">Task</div>
-                <div className="mt-0.5 text-sm font-medium text-[var(--foreground)] line-clamp-2">{task.title}</div>
-              </button>
-            )}
-            {project && (
-              <button
-                type="button"
-                onClick={() => navigate(`/projects/${project.id}`)}
-                className="flex items-center gap-1.5 text-xs text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
-              >
-                <FolderOpen size={11} />
-                <span className="truncate">{project.name}</span>
-              </button>
-            )}
-            {session.branch && (
-              <div className="flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
-                <GitBranch size={11} />
-                <span className="font-mono truncate">{session.branch}</span>
-              </div>
-            )}
-            {session.createdAt && (
-              <div className="flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
-                <Clock size={11} />
-                <span>{new Date(session.createdAt).toLocaleTimeString()}</span>
-              </div>
-            )}
-          </div>
-          <div className="mt-auto pt-3 border-t border-white/5">
-            <div className="flex items-center gap-2">
-              <div className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: color }} />
-              <span className="text-xs" style={{ color: `${color}bb` }}>
-                {status === 'running' ? 'Agent is working…' :
-                 status === 'waiting' ? 'Waiting for response…' :
-                 status === 'done'    ? 'Ready to review' :
-                 status === 'error'   ? 'Needs attention' : STATUS_LABEL[status]}
-              </span>
-            </div>
-          </div>
-        </div>
-      ) : (
-        <div className="rounded-xl p-4 flex flex-col gap-3"
-          style={{ background: 'rgba(10,14,26,0.90)', border: '1px solid #1e293b', backdropFilter: 'blur(16px)' }}>
-          <span className="text-xs text-[var(--muted-foreground)]">No active session</span>
+        {/* Task block */}
+        {task ? (
           <button
             type="button"
-            onClick={() => navigate(`/agents/${agent.id}`)}
-            className="inline-flex items-center gap-1 text-xs text-[var(--muted-foreground)] transition-colors hover:text-[var(--foreground)]"
+            onClick={() => navigate(`/projects/${task.projectId}/tasks/${task.id}`)}
+            className="text-left rounded-xl px-4 py-3 transition-colors hover:bg-white/[0.05] group"
+            style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
           >
-            View agent <ArrowUpRight size={11} />
+            <div className="text-[10px] uppercase tracking-wider text-[var(--muted-foreground)] mb-1">Current task</div>
+            <div className="text-sm font-medium text-[var(--foreground)] line-clamp-2 group-hover:text-white transition-colors">
+              {task.title}
+            </div>
+            {project && (
+              <div className="mt-1.5 flex items-center gap-1 text-xs text-[var(--muted-foreground)]">
+                <FolderOpen size={10} />
+                <span className="truncate">{project.name}</span>
+              </div>
+            )}
           </button>
+        ) : (
+          <div className="text-xs text-[var(--muted-foreground)] px-1">No active task</div>
+        )}
+
+        {/* Meta + actions */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3 text-xs text-[var(--muted-foreground)]">
+            {session?.branch && (
+              <span className="flex items-center gap-1 font-mono">
+                <GitBranch size={10} />
+                {session.branch}
+              </span>
+            )}
+            {session?.createdAt && (
+              <span className="flex items-center gap-1">
+                <Clock size={10} />
+                {new Date(session.createdAt).toLocaleTimeString()}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate(`/agents/${agent.id}`)}
+              className="text-xs px-3 py-1.5 rounded-lg border border-white/10 text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-white/5 transition-colors"
+            >
+              Agent
+            </button>
+            {session && (
+              <button
+                onClick={() => navigate(`/sessions/${session.id}`)}
+                className="text-xs px-3 py-1.5 rounded-lg font-medium transition-opacity hover:opacity-80"
+                style={{ background: color, color: '#fff' }}
+              >
+                Open session →
+              </button>
+            )}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }
@@ -593,9 +601,10 @@ function OfficeHud({ agentList, sessionList }: {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function OfficeLabPage() {
+export default function OfficeBg({ active }: { active: boolean }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [cameraFocus, setCameraFocus] = useState<THREE.Vector3 | null>(null)
+  const followRef = useRef<THREE.Vector3 | null>(null)
+  const selectedIdRef = useRef<string | null>(null)
   const [freeCamera, setFreeCamera] = useState(false)
   const qc = useQueryClient()
 
@@ -643,16 +652,17 @@ export default function OfficeLabPage() {
     ? taskList.find(t => t.id === selectedSession.workTaskId)
     : undefined
 
-  function selectAgent(id: string | null, position?: THREE.Vector3) {
+  function selectAgent(id: string | null) {
     setSelectedId(id)
-    setCameraFocus(id && position ? position : null)
+    selectedIdRef.current = id
+    if (!id) followRef.current = null
   }
 
   return (
-    <div className="relative flex-1 overflow-hidden bg-background">
+    <div className={cn('fixed inset-0 z-0', !active && 'pointer-events-none')}>
       <Leva hidden />
 
-      {/* 3D canvas — fills entire area */}
+      {/* 3D canvas */}
       <div className="absolute inset-0">
         <Canvas
           camera={{ position: [0, 15, 11], fov: 45 }}
@@ -666,34 +676,45 @@ export default function OfficeLabPage() {
               sessionList={sessionList}
               selectedId={selectedId}
               onSelect={selectAgent}
+              followRef={followRef}
+              selectedIdRef={selectedIdRef}
               walkSpeed={walkSpeed}
               wanderSpeed={wanderSpeed}
               bounds={bounds}
             />
           </Suspense>
-          <LabCamera focus={cameraFocus} freeCamera={freeCamera} />
+          <LabCamera followRef={followRef} freeCamera={freeCamera} />
         </Canvas>
       </div>
 
-      {/* Status pills bottom-left */}
-      <OfficeHud agentList={agentList} sessionList={sessionList} />
+      {/* Dim overlay when backgrounded */}
+      {!active && <div className="absolute inset-0 bg-black/50" />}
 
-      {/* Top-right controls */}
-      <div className="absolute top-4 right-4 flex items-center gap-2">
-        <Button variant="outline" size="sm" onClick={() => setFreeCamera(v => !v)}>
-          {freeCamera ? 'Guided' : 'Free camera'}
-        </Button>
-      </div>
+      {/* Active office UI */}
+      {active && (
+        <>
+          <OfficeHud agentList={agentList} sessionList={sessionList} />
 
-      {/* Agent panel */}
-      {selectedAgent && (
-        <SessionPanel
-          agent={selectedAgent}
-          session={selectedSession}
-          project={selectedProject}
-          task={selectedTask}
-          onClose={() => selectAgent(null)}
-        />
+          <div className="absolute top-16 right-4 z-20">
+            <button
+              type="button"
+              onClick={() => setFreeCamera(v => !v)}
+              className="h-8 rounded-md border border-border bg-card px-2.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+            >
+              {freeCamera ? 'Guided' : 'Free camera'}
+            </button>
+          </div>
+
+          {selectedAgent && (
+            <AgentCard
+              agent={selectedAgent}
+              session={selectedSession}
+              project={selectedProject}
+              task={selectedTask}
+              onClose={() => selectAgent(null)}
+            />
+          )}
+        </>
       )}
     </div>
   )

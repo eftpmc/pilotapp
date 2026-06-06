@@ -489,7 +489,7 @@ export default function ProjectDetailPage() {
   ]
 
   return (
-    <div className="flex-1 overflow-y-auto bg-background">
+    <div className="flex-1 overflow-y-auto">
       <div className="px-6 pt-8 pb-10">
 
         {(working.length > 0 || queued.length > 0) && (

@@ -499,7 +499,7 @@ export default function TaskPage() {
   const mergeError = mergeSession.error ?? mergePushSession.error
 
   return (
-    <div className="flex-1 flex flex-col bg-background" style={{ minHeight: 0 }}>
+    <div className="flex-1 flex flex-col" style={{ minHeight: 0 }}>
 
       {/* Header — matches SessionPage pattern */}
       <div className="shrink-0 bg-background px-6 pt-5 pb-4">

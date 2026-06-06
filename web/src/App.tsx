@@ -26,8 +26,6 @@ import AdminServerPage from './pages/AdminServerPage'
 import AdminCharactersPage from './pages/AdminCharactersPage'
 import DepartmentPage from './pages/DepartmentPage'
 import TaskPage from './pages/TaskPage'
-import OfficePage from './pages/OfficePage'
-import OfficeLabPage from './pages/OfficeLabPage'
 
 const qc = new QueryClient({ defaultOptions: { queries: { staleTime: 10_000 } } })
 
@@ -61,7 +59,8 @@ export default function App() {
 
           {/* User shell */}
           <Route path="/" element={<RequireUser><Layout /></RequireUser>}>
-            <Route index                element={<OfficeLabPage />} />
+            <Route index                element={<Navigate to="/office" replace />} />
+            <Route path="office"        element={null} />
             <Route path="today"         element={<OverviewPage />} />
             <Route path="agents"              element={<AgentsPage />} />
             <Route path="agents/new"          element={<NewAgentPage />} />
@@ -69,7 +68,6 @@ export default function App() {
             <Route path="agents/hire/:presetId" element={<HireAgentPage />} />
             <Route path="agents/:id"          element={<AgentPage />} />
             <Route path="departments/:id"     element={<DepartmentPage />} />
-            <Route path="office"        element={<OfficePage />} />
             <Route path="projects"      element={<ProjectsPage />} />
             <Route path="knowledge"     element={<KnowledgePage />} />
             <Route path="tools"         element={<ToolsPage />} />

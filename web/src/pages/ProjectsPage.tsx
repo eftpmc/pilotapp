@@ -56,7 +56,7 @@ export default function ProjectsPage() {
 
   if (projectList.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-background">
+      <div className="flex-1 flex items-center justify-center">
         <Empty className="w-full max-w-md border-none bg-transparent px-6">
           <EmptyHeader>
             <EmptyTitle className="text-2xl font-bold">pilot</EmptyTitle>
@@ -91,7 +91,7 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-background">
+    <div className="flex-1 overflow-y-auto">
       <div className="max-w-[1040px] px-6 pt-12 pb-10">
 
         <div className="flex items-start justify-between mb-10">

@@ -174,7 +174,7 @@ export default function KnowledgePage() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-background">
+    <div className="flex-1 overflow-y-auto">
       <div className="max-w-[960px] px-6 pt-12 pb-10 flex flex-col gap-10">
 
         <div className="flex items-start justify-between">
