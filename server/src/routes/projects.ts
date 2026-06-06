@@ -6,9 +6,10 @@ import fsSync from 'fs';
 import { spawn, type ChildProcess } from 'child_process';
 import { z } from 'zod';
 import { db } from '../db';
-import { initRepo, cloneRepo, importLocalRepo, pushToRemote, listFilesRecursive } from '../services/git';
+import { initRepo, cloneRepo, importLocalRepo, pushToRemote, listFilesRecursive, removeWorktree, removeWorkDir } from '../services/git';
 import simpleGit from 'simple-git';
 import { authMiddleware, userId } from '../middleware/auth';
+import { killAgent } from '../services/agents';
 
 const router = Router();
 router.use(authMiddleware);
@@ -525,6 +526,21 @@ router.delete('/:id', async (req: Request, res: Response) => {
   const row = db.prepare('SELECT * FROM projects WHERE id = ? AND user_id = ?').get(req.params.id, userId(req)) as Row | undefined;
   if (!row) { res.status(404).json({ error: 'Not found' }); return; }
 
+  const project = { id: row.id as string, name: row.name as string, repoPath: row.repo_path as string, role: (row.role ?? 'project') as string, createdAt: row.created_at as string };
+
+  // Kill running agents and clean up worktrees for all sessions under this project
+  const sessions = db.prepare('SELECT id, worktree_path, workspace_mode FROM sessions WHERE project_id = ?').all(req.params.id) as { id: string; worktree_path: string; workspace_mode: string | null }[];
+  for (const session of sessions) {
+    killAgent(session.id);
+    fs.unlink(path.join(DATA_DIR, `${session.id}.log`)).catch(() => {});
+    if ((session.workspace_mode ?? 'git') === 'workspace') {
+      removeWorkDir(session.worktree_path).catch(() => {});
+    } else {
+      removeWorktree(project as any, session.worktree_path).catch(() => {});
+    }
+  }
+
+  db.prepare('DELETE FROM sessions WHERE project_id = ?').run(req.params.id);
   db.prepare('DELETE FROM projects WHERE id = ?').run(req.params.id);
   await fs.rm(row.repo_path as string, { recursive: true, force: true }).catch(() => {});
   res.status(204).send();
