@@ -6,6 +6,7 @@ import type { Agent } from '../api/client'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { AgentAvatar } from '@/components/AgentAvatar'
 import { StatusBadge } from '@/components/StatusBadge'
@@ -214,7 +215,7 @@ function OutputLines({ lines, done, exitCode, elapsedSecs, isRunning, tokens }: 
   const bottomRef = useRef<HTMLDivElement>(null)
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [lines])
   return (
-    <div>
+    <div role="log" aria-live="polite" aria-label="Session output">
       {lines.length === MAX_LINES && (
         <p className="text-[11px] font-mono text-muted-foreground/40 mb-4 pb-3 border-b border-border">
           ↑ earlier output truncated — showing last {MAX_LINES} lines
@@ -423,6 +424,43 @@ export default function SessionPage() {
     onSuccess: () => { setContinue(''); refetchSession() },
   })
 
+  // Keyboard shortcuts: m=merge, d=discard, Esc=back; 1–9=pick clarification option
+  useEffect(() => {
+    function handler(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement).tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || e.metaKey || e.ctrlKey) return
+
+      if (clarification) {
+        if (clarification.options) {
+          const n = parseInt(e.key)
+          if (n >= 1 && n <= clarification.options.length) {
+            e.preventDefault()
+            submitClarification(clarification.id, clarification.options[n - 1])
+          }
+        }
+        return
+      }
+
+      if (confirmDiscard) return
+
+      if (e.key === 'm' && (isDone || isError) && !isMerged && !session?.parentSessionId && !merge.isPending) {
+        e.preventDefault()
+        merge.mutate()
+      }
+      if (e.key === 'd' && !isMerged) {
+        e.preventDefault()
+        setConfirmDiscard(true)
+      }
+      if (e.key === 'Escape') {
+        if (task && session?.projectId) navigate(`/projects/${session.projectId}/tasks/${task.id}`)
+        else if (session?.projectId) navigate(`/projects/${session.projectId}`)
+        else navigate(-1 as never)
+      }
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [isDone, isError, isMerged, session, confirmDiscard, clarification, merge.isPending, task, navigate])
+
   useEffect(() => { if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission() }, [])
   useEffect(() => {
     if (!done || notifiedRef.current || !session) return
@@ -601,6 +639,13 @@ export default function SessionPage() {
 
   const isWorkspace = session?.workspaceMode === 'workspace'
 
+  // Prior sessions on this task — tells us if this session received a handoff
+  const priorSessions = session?.workTaskId && !session.parentSessionId
+    ? projectSessions
+        .filter(s => s.workTaskId === session.workTaskId && s.id !== id && !s.parentSessionId && s.createdAt < session.createdAt)
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    : []
+
   const canContinue = isDone && !!session?.runnerSessionId && !isMerged && !session?.parentSessionId
   const isWaiting   = (session?.status as string) === 'waiting'
 
@@ -648,6 +693,18 @@ export default function SessionPage() {
                 <>
                   <span className="text-muted-foreground/30">·</span>
                   <span className="text-xs text-muted-foreground">{turns.length} turn{turns.length !== 1 ? 's' : ''}</span>
+                </>
+              )}
+              {priorSessions.length > 0 && (
+                <>
+                  <span className="text-muted-foreground/30">·</span>
+                  <button
+                    onClick={() => task && session?.projectId && navigate(`/projects/${session.projectId}/tasks/${task.id}`)}
+                    className="text-xs text-muted-foreground/60 hover:text-foreground transition-colors"
+                    title="View task history"
+                  >
+                    Resumed · {priorSessions.length} prior
+                  </button>
                 </>
               )}
             </div>
@@ -763,9 +820,27 @@ export default function SessionPage() {
       <div className="flex-1 overflow-y-auto bg-muted/30" style={{ minHeight: 0 }}>
         <div style={{ maxWidth: 780, margin: '0 auto', padding: '24px 28px' }}>
           {activeTab === 'journal' ? (
-            session?.journal
-              ? <JournalView text={session.journal} />
-              : <p className="text-xs font-mono text-muted-foreground">Agent hasn't written anything yet…</p>
+            <>
+              {priorSessions.filter(s => s.journal).map((s, i) => {
+                const a = agentList.find(ag => ag.id === s.agentId)
+                return (
+                  <div key={s.id} style={{ marginBottom: 28 }}>
+                    <p style={{ fontSize: 10, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 12 }}>
+                      Handoff {priorSessions.filter(s => s.journal).length > 1 ? `· ${priorSessions.filter(ps => ps.journal).length - i} sessions ago` : '· previous session'}
+                      {a && <span style={{ fontWeight: 400, marginLeft: 8 }}>{a.name}</span>}
+                    </p>
+                    <div style={{ opacity: 0.6 }}>
+                      <JournalView text={s.journal!} />
+                    </div>
+                    <div style={{ height: 1, background: 'var(--rule-soft)', margin: '20px 0 0' }} />
+                  </div>
+                )
+              })}
+              {session?.journal
+                ? <JournalView text={session.journal} />
+                : <p className="text-xs font-mono text-muted-foreground">Agent hasn't written anything yet…</p>
+              }
+            </>
           ) : activeTab === 'diff' ? (
             diffLoading
               ? <p className="text-xs font-mono text-muted-foreground">loading…</p>
@@ -886,54 +961,65 @@ export default function SessionPage() {
       )}
 
       {/* Clarification dialog — blocks interaction until user responds */}
-      {clarification && (
-        <div className="fixed inset-0 z-50 bg-black/55 backdrop-blur flex items-center justify-center p-6">
-          <div className="bg-background border border-border rounded-2xl p-7 max-w-lg w-full [box-shadow:var(--shadow-dialog)]">
-            <p className="text-[11px] font-semibold text-[var(--amber)] uppercase tracking-wider mb-3">
-              Agent needs your input
-            </p>
-            <p className="text-[15px] font-medium text-foreground leading-snug mb-5">
-              {clarification.question}
-            </p>
+      <Dialog open={!!clarification} onOpenChange={() => {}}>
+        <DialogContent
+          hideClose
+          onEscapeKeyDown={e => e.preventDefault()}
+          onPointerDownOutside={e => e.preventDefault()}
+          onInteractOutside={e => e.preventDefault()}
+        >
+          <div className="flex items-center gap-2.5 mb-5">
+            <span className="dot amber pulse shrink-0" style={{ width: 7, height: 7 }} />
+            <span className="text-[11px] font-semibold tracking-wider uppercase" style={{ color: 'var(--amber)' }}>
+              Needs your input
+            </span>
+          </div>
+          <DialogPrimitive.Title className="text-[15px] font-semibold text-foreground leading-snug mb-5">
+            {clarification?.question}
+          </DialogPrimitive.Title>
 
-            {clarification.options ? (
-              <div className="flex flex-col gap-2">
-                {clarification.options.map(opt => (
-                  <Button
-                    key={opt}
-                    variant="outline"
-                    className="justify-start text-left"
-                    onClick={() => submitClarification(clarification.id, opt)}
-                  >
-                    {opt}
-                  </Button>
-                ))}
-              </div>
-            ) : (
-              <div className="flex flex-col gap-3">
-                <Textarea
-                  value={clarificationInput}
-                  onChange={e => setClarInput(e.target.value)}
-                  placeholder="Type your answer…"
-                  rows={3}
-                  autoFocus
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && clarificationInput.trim()) {
-                      submitClarification(clarification.id, clarificationInput)
-                    }
-                  }}
-                />
+          {clarification?.options ? (
+            <div className="flex flex-col gap-2" role="list" aria-label="Options">
+              {clarification.options.map((opt, i) => (
                 <Button
-                  onClick={() => submitClarification(clarification.id, clarificationInput)}
+                  key={opt}
+                  variant="outline"
+                  className="justify-start text-left h-auto py-2.5 gap-3"
+                  role="listitem"
+                  onClick={() => submitClarification(clarification.id, opt)}
+                >
+                  <span className="text-[10px] font-mono text-muted-foreground tabular-nums w-3 shrink-0" aria-hidden="true">{i + 1}</span>
+                  <span>{opt}</span>
+                </Button>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              <Textarea
+                value={clarificationInput}
+                onChange={e => setClarInput(e.target.value)}
+                placeholder="Type your answer…"
+                rows={3}
+                autoFocus
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && clarificationInput.trim()) {
+                    submitClarification(clarification!.id, clarificationInput)
+                  }
+                }}
+              />
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">⌘↵ to send</span>
+                <Button
+                  onClick={() => submitClarification(clarification!.id, clarificationInput)}
                   disabled={!clarificationInput.trim()}
                 >
                   Send
                 </Button>
               </div>
-            )}
-          </div>
-        </div>
-      )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { tasks, agents, sessions, projects } from '../api/client'
@@ -7,7 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { AgentAvatar } from '@/components/AgentAvatar'
 import { useElapsed, fmtSecs, timeAgo } from '@/lib/time'
 import { cn } from '@/lib/utils'
-import { ArrowLeft, ChevronRight, Upload, CheckCircle, XCircle, Clock } from 'lucide-react'
+import { ArrowLeft, ChevronDown, ChevronRight, Upload, CheckCircle, XCircle, Clock } from 'lucide-react'
 import { buildCampaigns } from './ProjectDetailPage'
 
 // ---------------------------------------------------------------------------
@@ -414,6 +415,45 @@ function WorkSessionCard({
 }
 
 // ---------------------------------------------------------------------------
+// Prior session row (task history)
+// ---------------------------------------------------------------------------
+
+function PriorSessionRow({ session, agent, onView }: { session: Session; agent?: Agent; onView: () => void }) {
+  const isMerged = session.status === 'merged'
+  const isError  = session.status === 'error'
+  const isDone   = session.status === 'done'
+
+  const statusCls = isMerged ? 'text-muted-foreground/40'
+                  : isError  ? 'text-[var(--red)]'
+                  : isDone   ? 'text-[var(--green)]'
+                  : 'text-muted-foreground/40'
+  const dotCls    = isMerged ? 'idle' : isError ? 'red' : isDone ? 'green' : 'idle'
+  const label     = isMerged ? 'Accepted' : isError ? 'Error' : isDone ? 'Done' : session.status
+
+  return (
+    <div className="flex items-start gap-3 px-4 py-3 rounded-xl border border-border/40 bg-card/30">
+      <AgentAvatar agent={agent} size={26} />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-xs font-medium text-foreground/70">{agent?.name ?? '—'}</span>
+          <span className={cn('flex items-center gap-1 text-[11px] font-medium', statusCls)}>
+            <span className={cn('dot', dotCls)} style={{ width: 5, height: 5 }} />{label}
+          </span>
+          <span className="text-[11px] text-muted-foreground/30 ml-auto">{timeAgo(session.createdAt)}</span>
+        </div>
+        {session.journal
+          ? <JournalSummary text={session.journal} />
+          : <p className="text-[11px] text-muted-foreground/30 italic">No journal written</p>
+        }
+      </div>
+      <button onClick={onView} className="shrink-0 text-muted-foreground/30 hover:text-foreground transition-colors mt-0.5">
+        <ChevronRight size={13} />
+      </button>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -457,6 +497,7 @@ export default function TaskPage() {
     )
   }
 
+  const [showHistory, setShowHistory] = useState(false)
   const isMerging  = mergeSession.isPending || mergePushSession.isPending || discardSession.isPending
   const isLeadTask = !!(campaign?.subtasks.length)
 
@@ -608,6 +649,37 @@ export default function TaskPage() {
                 <p className="text-sm text-muted-foreground/50 py-2">
                   No session yet — assign this task to an agent from the board.
                 </p>
+              )}
+            </div>
+          )}
+
+          {/* Phase: History — prior attempts on this task */}
+          {!isLeadTask && rootSessions.length > 1 && (
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => setShowHistory(h => !h)}
+                className="flex items-center gap-3 w-full text-left group"
+              >
+                <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/40 shrink-0 group-hover:text-muted-foreground/60 transition-colors">
+                  History · {rootSessions.length - 1}
+                </span>
+                <div className="flex-1 h-px bg-border/40" />
+                <ChevronDown
+                  size={12}
+                  className={cn('text-muted-foreground/30 shrink-0 transition-transform', showHistory && 'rotate-180')}
+                />
+              </button>
+              {showHistory && (
+                <div className="flex flex-col gap-2">
+                  {rootSessions.slice(1).map(s => (
+                    <PriorSessionRow
+                      key={s.id}
+                      session={s}
+                      agent={agentList.find(a => a.id === s.agentId)}
+                      onView={() => navigate(`/sessions/${s.id}`)}
+                    />
+                  ))}
+                </div>
               )}
             </div>
           )}

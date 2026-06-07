@@ -18,15 +18,17 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 
 const DialogContent = forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & { hideClose?: boolean }
+>(({ className, children, hideClose, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content ref={ref} className={cn('dialog-panel', className)} {...props}>
       {children}
-      <DialogPrimitive.Close className="dialog-close">
-        <X size={16} />
-      </DialogPrimitive.Close>
+      {!hideClose && (
+        <DialogPrimitive.Close className="dialog-close" aria-label="Close">
+          <X size={16} />
+        </DialogPrimitive.Close>
+      )}
     </DialogPrimitive.Content>
   </DialogPortal>
 ))
