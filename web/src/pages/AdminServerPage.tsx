@@ -28,7 +28,7 @@ export default function AdminServerPage() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-[960px] px-6 pt-10 pb-8 flex flex-col gap-8">
+      <div className="max-w-[960px] mx-auto px-6 pt-10 pb-8 flex flex-col gap-8">
 
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Server</h1>

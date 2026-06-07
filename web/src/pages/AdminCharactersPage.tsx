@@ -267,7 +267,7 @@ export default function AdminCharactersPage() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-[1100px] px-6 pt-10 pb-12 flex flex-col gap-10">
+      <div className="max-w-[1100px] mx-auto px-6 pt-10 pb-12 flex flex-col gap-10">
 
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Characters</h1>

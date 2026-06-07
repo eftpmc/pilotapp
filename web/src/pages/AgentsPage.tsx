@@ -286,7 +286,7 @@ export default function AgentsPage() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-[960px] px-6 pt-12 pb-10">
+      <div className="max-w-[960px] mx-auto px-6 pt-12 pb-10">
 
         <div className="flex items-start justify-between mb-8">
           <div>
@@ -297,8 +297,8 @@ export default function AgentsPage() {
             </p>
           </div>
           <div className="flex gap-2 shrink-0">
-            <Button size="sm" variant="ghost" className="text-muted-foreground" onClick={() => setDeptDialog({ open: true })}>+ Team</Button>
-            <Button size="sm" onClick={() => goNewAgent()}>Hire agent</Button>
+            <Button variant="ghost" className="text-muted-foreground" onClick={() => setDeptDialog({ open: true })}>+ Team</Button>
+            <Button onClick={() => goNewAgent()}>Hire agent</Button>
           </div>
         </div>
 

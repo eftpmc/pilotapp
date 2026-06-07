@@ -5,7 +5,7 @@ import { SkeletonUtils, type OrbitControls as OrbitControlsImpl } from 'three-st
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { cn } from '@/lib/utils'
-import { Leva, useControls } from 'leva'
+import { getOfficeSettings } from '@/lib/officeSettings'
 import { agents as agentsApi, projects as projectsApi, sessions as sessionsApi, tasks as tasksApi } from '@/api/client'
 import type { Agent, Project, Session, Task } from '@/api/client'
 import * as THREE from 'three'
@@ -686,10 +686,7 @@ function LabCamera({ followRef, panRef, freeCamera }: {
     const controls = controlsRef.current
     if (!controls) return
 
-    if (freeCamera) {
-      controls.update()
-      return
-    }
+    if (freeCamera) { controls.update(); return }
 
     const follow = followRef.current
     const target = follow ?? defaultTarget.clone().add(panRef.current)
@@ -888,10 +885,8 @@ function OfficeHud({ agentList, sessionList }: {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function OfficeBg({ active, freeCamera, setFreeCamera, theme }: {
+export default function OfficeBg({ active, theme }: {
   active: boolean
-  freeCamera: boolean
-  setFreeCamera: (v: boolean | ((prev: boolean) => boolean)) => void
   theme: 'light' | 'dark'
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -907,11 +902,13 @@ export default function OfficeBg({ active, freeCamera, setFreeCamera, theme }: {
   const { data: projectList = [] } = useQuery({ queryKey: ['projects'],        queryFn: projectsApi.list })
   const { data: taskList    = [] } = useQuery({ queryKey: ['tasks'],           queryFn: () => tasksApi.list(), refetchInterval: 30_000 })
 
-  const { walkSpeed, wanderSpeed, bounds } = useControls('Movement', {
-    walkSpeed:   { value: 2.5, min: 0.5, max: 6,  step: 0.1, label: 'Walk Speed' },
-    wanderSpeed: { value: 1.8, min: 0.3, max: 4,  step: 0.1, label: 'Wander Speed' },
-    bounds:      { value: 7,   min: 2,   max: 9,  step: 0.5, label: 'Wander Bounds' },
-  }, { collapsed: true })
+  const [officeSt, setOfficeSt] = useState(getOfficeSettings)
+  useEffect(() => {
+    const h = () => setOfficeSt(getOfficeSettings())
+    window.addEventListener('pilot-office', h)
+    return () => window.removeEventListener('pilot-office', h)
+  }, [])
+  const { walkSpeed, wanderSpeed, bounds, freeCamera } = officeSt
 
   // WebSocket live updates
   useEffect(() => {
@@ -988,8 +985,6 @@ export default function OfficeBg({ active, freeCamera, setFreeCamera, theme }: {
 
   return (
     <div className={cn('fixed inset-0 z-0', !active && 'pointer-events-none')}>
-      <Leva hidden />
-
       {/* 3D canvas */}
       <div
         className={cn(

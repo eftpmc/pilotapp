@@ -546,7 +546,7 @@ export default function TaskPage() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-[760px] px-6 pt-10 pb-16 flex flex-col gap-8">
+        <div className="max-w-[760px] mx-auto px-6 pt-10 pb-16 flex flex-col gap-8">
 
           {/* Phase: Plan */}
           {isLeadTask && leadSession && (

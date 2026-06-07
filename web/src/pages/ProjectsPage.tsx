@@ -92,9 +92,9 @@ export default function ProjectsPage() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-[1040px] px-6 pt-12 pb-10">
+      <div className="max-w-[960px] mx-auto px-6 pt-12 pb-10">
 
-        <div className="flex items-start justify-between mb-10">
+        <div className="flex items-start justify-between mb-8">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
             <p className="text-sm text-muted-foreground mt-1">{projectList.length} project{projectList.length !== 1 ? 's' : ''}</p>

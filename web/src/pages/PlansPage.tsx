@@ -233,7 +233,7 @@ export default function PlansPage() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-[960px] px-6 pt-10 pb-10 flex flex-col gap-6">
+      <div className="max-w-[960px] mx-auto px-6 pt-10 pb-10 flex flex-col gap-6">
 
         <div className="flex items-center justify-between">
           <p className="text-xs text-muted-foreground/50">{specList.length > 0 ? `${specList.length} plan${specList.length !== 1 ? 's' : ''}` : 'No plans yet'}</p>

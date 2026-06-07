@@ -490,7 +490,7 @@ export default function ProjectDetailPage() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="px-6 pt-8 pb-10">
+      <div className="max-w-[1180px] mx-auto px-6 pt-8 pb-10">
 
         {(working.length > 0 || queued.length > 0) && (
           <div className="flex items-center gap-4 mb-6">

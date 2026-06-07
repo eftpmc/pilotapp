@@ -164,7 +164,7 @@ export default function SessionsPage() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-[960px] px-6 pt-10 pb-10 flex flex-col gap-6">
+      <div className="max-w-[960px] mx-auto px-6 pt-10 pb-10 flex flex-col gap-6">
 
         <p className="text-xs text-muted-foreground/50">
           {activeTasks.length} task{activeTasks.length !== 1 ? 's' : ''}

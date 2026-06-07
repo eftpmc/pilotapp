@@ -71,7 +71,7 @@ export default function HireAgentPage() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-[720px] px-6 pt-10 pb-16">
+      <div className="max-w-[720px] mx-auto px-6 pt-10 pb-16">
 
         {/* Back */}
         <Button variant="ghost" size="sm" onClick={() => navigate('/agents/hire')} className="mb-8 -ml-2 text-muted-foreground">

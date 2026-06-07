@@ -196,17 +196,19 @@ export default function OverviewPage() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-[960px] px-6 pt-12 pb-10 flex flex-col gap-10">
+      <div className="max-w-[960px] mx-auto px-6 pt-12 pb-10 flex flex-col gap-10">
 
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Today</h1>
-          <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Today</h1>
+            <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>
+          </div>
         </div>
 
         {/* Onboarding */}
         {isEmpty && projectList.length === 0 && (
           <section className="flex flex-col gap-2">
-            <p className="text-xs text-muted-foreground/50 mb-1">Get started</p>
+            <p className="text-xs font-semibold text-[var(--muted)] mb-2">Get started</p>
             <ItemGroup className="gap-3">
               {[
                 { n: '1', label: 'Add a project',  desc: 'Connect a GitHub repo or local path.', path: '/projects' },
@@ -232,7 +234,7 @@ export default function OverviewPage() {
         {/* Needs review */}
         {reviewTasks.length > 0 && (
           <section>
-            <p className="text-xs text-muted-foreground/50 mb-3">Needs review</p>
+            <p className="text-xs font-semibold text-[var(--muted)] mb-3">Needs review</p>
             <ItemGroup className="gap-3">
               {reviewTasks.map(task => (
                 <TaskItem
@@ -251,7 +253,7 @@ export default function OverviewPage() {
         {/* In progress */}
         {runningTasks.length > 0 && (
           <section>
-            <p className="text-xs text-muted-foreground/50 mb-3">In progress</p>
+            <p className="text-xs font-semibold text-[var(--muted)] mb-3">In progress</p>
             <ItemGroup className="gap-3">
               {runningTasks.map(task => (
                 <TaskItem
@@ -271,7 +273,7 @@ export default function OverviewPage() {
         {/* Recent work */}
         {isEmpty && recentTasks.length > 0 && (
           <section>
-            <p className="text-xs font-medium text-muted-foreground/60 mb-3">Recent work</p>
+            <p className="text-xs font-semibold text-[var(--muted)] mb-3">Recent work</p>
             <ItemGroup className="gap-3">
               {recentTasks.map(task => (
                 <TaskItem
@@ -303,7 +305,7 @@ export default function OverviewPage() {
           if (!deduped.length) return null
           return (
             <section>
-              <p className="text-xs font-medium text-muted-foreground/60 mb-3">Recent activity</p>
+              <p className="text-xs font-semibold text-[var(--muted)] mb-3">Recent activity</p>
               <ItemGroup className="gap-1">
                 {deduped.map(ev => {
                   const name = ev.data.employeeName ?? ''

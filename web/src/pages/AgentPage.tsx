@@ -137,7 +137,7 @@ export default function AgentPage() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-[960px] px-6 pt-10 pb-16">
+      <div className="max-w-[960px] mx-auto px-6 pt-10 pb-16">
 
         {/* Back */}
         <Button variant="ghost" size="sm" onClick={() => navigate('/agents')} className="mb-8 -ml-2 text-muted-foreground">

@@ -107,7 +107,7 @@ export default function ProjectOutputsPage() {
   )
 
   return (
-    <div className="p-6 max-w-2xl">
+    <div className="p-6 max-w-2xl mx-auto">
       <ItemGroup className="rounded-xl border border-border/70 bg-card/70 p-1">
         {files.map(f => <FileRow key={f} file={f} projectId={id!} />)}
       </ItemGroup>

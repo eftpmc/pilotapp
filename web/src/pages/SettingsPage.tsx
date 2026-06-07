@@ -12,6 +12,78 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { ProviderBadge } from '@/components/ProviderBadge'
 import { cn } from '@/lib/utils'
 import { timeAgo } from '@/lib/time'
+import { getOfficeSettings, saveOfficeSettings } from '@/lib/officeSettings'
+import type { OfficeSettings } from '@/lib/officeSettings'
+
+type ThemePref = 'light' | 'system' | 'dark'
+
+function getStoredTheme(): ThemePref {
+  const v = localStorage.getItem('pilot.theme')
+  if (v === 'light' || v === 'dark') return v
+  return 'system'
+}
+
+function applyThemePref(t: ThemePref) {
+  const resolved = t === 'system'
+    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+    : t
+  if (t === 'system') localStorage.removeItem('pilot.theme')
+  else localStorage.setItem('pilot.theme', t)
+  document.documentElement.classList.toggle('dark', resolved === 'dark')
+  document.documentElement.classList.toggle('light', resolved === 'light')
+  window.dispatchEvent(new CustomEvent('pilot-theme', { detail: resolved }))
+}
+
+function SectionHead({ label }: { label: string }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted)', whiteSpace: 'nowrap' }}>
+        {label}
+      </span>
+      <div style={{ flex: 1, height: 1, background: 'var(--rule)' }} />
+    </div>
+  )
+}
+
+function SettingRow({ label, description, children, border = true }: {
+  label: string; description?: string; children: React.ReactNode; border?: boolean
+}) {
+  return (
+    <div className={cn('flex items-center gap-4 px-4 py-3', border && 'border-b border-[var(--rule-soft)] last:border-0')}>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-[var(--ink)]">{label}</p>
+        {description && <p className="text-xs text-[var(--muted)] mt-0.5">{description}</p>}
+      </div>
+      <div className="shrink-0">{children}</div>
+    </div>
+  )
+}
+
+function SliderRow({ label, description, value, min, max, step, format, onChange }: {
+  label: string; description?: string
+  value: number; min: number; max: number; step: number
+  format?: (v: number) => string
+  onChange: (v: number) => void
+}) {
+  return (
+    <div className="flex items-center gap-4 px-4 py-3 border-b border-[var(--rule-soft)] last:border-0">
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-[var(--ink)]">{label}</p>
+        {description && <p className="text-xs text-[var(--muted)] mt-0.5">{description}</p>}
+      </div>
+      <div className="flex items-center gap-3 shrink-0">
+        <input
+          type="range" min={min} max={max} step={step} value={value}
+          onChange={e => onChange(+e.target.value)}
+          className="w-28 accent-[var(--ember)]"
+        />
+        <span className="text-xs font-mono text-[var(--muted)] w-8 text-right tabular-nums">
+          {format ? format(value) : value}
+        </span>
+      </div>
+    </div>
+  )
+}
 
 // ---------------------------------------------------------------------------
 // Add Connection dialog
@@ -322,6 +394,12 @@ export default function SettingsPage() {
   const [confirmPassword,  setConfirmPassword]   = useState('')
   const [passwordError,    setPasswordError]     = useState('')
 
+  // Appearance
+  const [themePref, setThemePref] = useState<ThemePref>(getStoredTheme)
+
+  // Office / camera settings
+  const [office, setOffice] = useState<OfficeSettings>(getOfficeSettings)
+
   const { data: profile         } = useQuery({ queryKey: ['me'],           queryFn: () => me.profile() })
   const { data: deviceList = [] } = useQuery({ queryKey: ['me/devices'],   queryFn: () => me.devices() })
   const { data: connectionList = [] } = useQuery({ queryKey: ['connections'], queryFn: () => connections.list() })
@@ -375,6 +453,17 @@ export default function SettingsPage() {
     },
   })
 
+  function changeTheme(t: ThemePref) {
+    setThemePref(t)
+    applyThemePref(t)
+  }
+
+  function updateOffice(patch: Partial<OfficeSettings>) {
+    const next = { ...office, ...patch }
+    setOffice(next)
+    saveOfficeSettings(patch)
+  }
+
   function agentCountForBrain(brainId: string): number {
     return (agentList as Agent[]).filter(e => e.connectionId === brainId).length
   }
@@ -393,182 +482,177 @@ export default function SettingsPage() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-[960px] px-6 pt-10 pb-8 flex flex-col gap-8">
+      <div className="max-w-[680px] mx-auto px-6 pt-10 pb-12 flex flex-col gap-8">
 
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
-          <p className="text-sm text-muted-foreground mt-1">Account, connections, and workspace configuration.</p>
-        </div>
+        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
 
-        {/* ── Account Profile ── */}
+        {/* ── Account ── */}
         <section className="flex flex-col gap-3">
-          <p className="text-xs text-muted-foreground/50">Account</p>
-          <div className="bg-card/80 rounded-xl border border-border/60 overflow-hidden">
+          <SectionHead label="Account" />
+          <div className="card overflow-hidden">
 
-            {/* Profile info / edit */}
             {!editingProfile ? (
-              <div className="flex items-center gap-3 px-4 py-3">
-                <div className="w-9 h-9 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
-                  <span className="text-sm font-semibold text-primary">
+              <div className="flex items-center gap-3 px-4 py-3 border-b border-[var(--rule-soft)]">
+                <div className="w-8 h-8 rounded-full bg-[var(--ember-wash)] flex items-center justify-center shrink-0">
+                  <span className="text-sm font-semibold text-[var(--ember)]">
                     {(profile?.name || profile?.email || '?')[0].toUpperCase()}
                   </span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">
+                  <p className="text-sm font-medium text-[var(--ink)] truncate">
                     {profile?.name || profile?.email || '—'}
                     {profile?.role === 'admin' && (
                       <span className="ml-2 text-[10px] font-semibold text-[var(--amber)] uppercase tracking-wide">Admin</span>
                     )}
                   </p>
-                  {profile?.name && (
-                    <p className="text-xs text-muted-foreground truncate">{profile.email}</p>
-                  )}
+                  {profile?.name && <p className="text-xs text-[var(--muted)] truncate">{profile.email}</p>}
                 </div>
-                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs shrink-0"
-                  onClick={() => setEditingProfile(true)}>
+                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs shrink-0" onClick={() => setEditingProfile(true)}>
                   Edit
                 </Button>
               </div>
             ) : (
-              <div className="flex flex-col gap-3 px-4 py-3.5 bg-muted/20">
+              <div className="flex flex-col gap-3 px-4 py-3.5 bg-[var(--panel-2)] border-b border-[var(--rule-soft)]">
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1">
                     <Label className="text-xs">Display name</Label>
-                    <Input value={profileName} onChange={e => setProfileName(e.target.value)}
-                      placeholder="Your name" className="h-8 text-xs" autoFocus />
+                    <Input value={profileName} onChange={e => setProfileName(e.target.value)} placeholder="Your name" className="h-8 text-xs" autoFocus />
                   </div>
                   <div className="flex flex-col gap-1">
                     <Label className="text-xs">Email</Label>
-                    <Input value={profileEmail} onChange={e => setProfileEmail(e.target.value)}
-                      type="email" className="h-8 text-xs" />
+                    <Input value={profileEmail} onChange={e => setProfileEmail(e.target.value)} type="email" className="h-8 text-xs" />
                   </div>
                 </div>
-                {updateProfile.error && (
-                  <p className="text-xs text-destructive">{updateProfile.error.message}</p>
-                )}
+                {updateProfile.error && <p className="text-xs text-destructive">{updateProfile.error.message}</p>}
                 <div className="flex gap-2 justify-end">
-                  <Button size="sm" variant="outline" onClick={() => {
-                    setEditingProfile(false)
-                    setProfileName(profile?.name ?? '')
-                    setProfileEmail(profile?.email ?? '')
-                  }}>Cancel</Button>
-                  <Button size="sm" disabled={updateProfile.isPending} onClick={() =>
-                    updateProfile.mutate({ name: profileName, email: profileEmail })
-                  }>Save</Button>
+                  <Button size="sm" variant="outline" onClick={() => { setEditingProfile(false); setProfileName(profile?.name ?? ''); setProfileEmail(profile?.email ?? '') }}>Cancel</Button>
+                  <Button size="sm" disabled={updateProfile.isPending} onClick={() => updateProfile.mutate({ name: profileName, email: profileEmail })}>Save</Button>
                 </div>
               </div>
             )}
 
-            {/* Divider */}
-            <div className="border-t border-border/40" />
-
-            {/* Change password */}
             {!changingPassword ? (
-              <div className="flex items-center gap-3 px-4 py-3">
-                <span className="text-sm text-foreground flex-1">Password</span>
-                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
-                  onClick={() => setChangingPassword(true)}>
+              <SettingRow label="Password">
+                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-[var(--muted)] hover:text-[var(--ink)]" onClick={() => setChangingPassword(true)}>
                   Change
                 </Button>
-              </div>
+              </SettingRow>
             ) : (
-              <div className="flex flex-col gap-3 px-4 py-3.5 bg-muted/20">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="flex flex-col gap-3 px-4 py-3.5 bg-[var(--panel-2)] border-b border-[var(--rule-soft)]">
+                <div className="grid grid-cols-3 gap-3">
                   <div className="flex flex-col gap-1">
-                    <Label className="text-xs">Current password</Label>
-                    <Input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)}
-                      className="h-8 text-xs" autoFocus />
+                    <Label className="text-xs">Current</Label>
+                    <Input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} className="h-8 text-xs" autoFocus />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <Label className="text-xs">New password</Label>
-                    <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)}
-                      className="h-8 text-xs" />
+                    <Label className="text-xs">New</Label>
+                    <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="h-8 text-xs" />
                   </div>
                   <div className="flex flex-col gap-1">
                     <Label className="text-xs">Confirm</Label>
-                    <Input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
-                      className="h-8 text-xs"
-                      onKeyDown={e => { if (e.key === 'Enter') handleSavePassword() }} />
+                    <Input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} className="h-8 text-xs" onKeyDown={e => { if (e.key === 'Enter') handleSavePassword() }} />
                   </div>
                 </div>
-                {(passwordError || updateProfile.error) && (
-                  <p className="text-xs text-destructive">{passwordError || updateProfile.error?.message}</p>
-                )}
+                {(passwordError || updateProfile.error) && <p className="text-xs text-destructive">{passwordError || updateProfile.error?.message}</p>}
                 <div className="flex gap-2 justify-end">
-                  <Button size="sm" variant="outline" onClick={() => {
-                    setChangingPassword(false)
-                    setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); setPasswordError('')
-                  }}>Cancel</Button>
-                  <Button size="sm" disabled={updateProfile.isPending} onClick={handleSavePassword}>
-                    {updateProfile.isPending ? '…' : 'Update password'}
-                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => { setChangingPassword(false); setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); setPasswordError('') }}>Cancel</Button>
+                  <Button size="sm" disabled={updateProfile.isPending} onClick={handleSavePassword}>{updateProfile.isPending ? '…' : 'Update'}</Button>
                 </div>
               </div>
             )}
 
-            {/* Divider */}
-            <div className="border-t border-border/40" />
-
-            {/* Sign out */}
-            <div className="flex items-center gap-3 px-4 py-3">
-              <span className="text-sm text-foreground flex-1">Sign out of pilot</span>
+            <SettingRow label="Sign out" border={false}>
               <Button size="sm" variant="destructive" onClick={signOut}>Sign out</Button>
-            </div>
+            </SettingRow>
           </div>
         </section>
 
-        {/* ── Devices ── */}
+        {/* ── Appearance ── */}
         <section className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground/50">Connected devices</p>
-            <div className="flex gap-2">
-              {deviceList.length > 0 && !confirmRevokeAll && (
-                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
-                  onClick={() => setConfirmRevokeAll(true)}>
-                  Sign out all
-                </Button>
-              )}
-              {confirmRevokeAll && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">Sign out everywhere?</span>
-                  <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => setConfirmRevokeAll(false)}>Cancel</Button>
-                  <Button size="sm" variant="destructive" className="h-7 px-2 text-xs"
-                    onClick={() => revokeAll.mutate()}>Confirm</Button>
-                </div>
-              )}
-              <Button size="sm" onClick={() => setShowPairing(true)}>+ Connect device</Button>
-            </div>
-          </div>
-          <div className="bg-card/80 rounded-xl border border-border/60 overflow-hidden">
-            {deviceList.length === 0 ? (
-              <div className="px-4 py-6 text-center">
-                <p className="text-sm text-muted-foreground">No registered devices.</p>
-                <p className="text-xs text-muted-foreground/60 mt-1">
-                  Connect the Pilot mobile or desktop app using the QR code.
-                </p>
+          <SectionHead label="Appearance" />
+          <div className="card overflow-hidden">
+            <SettingRow label="Theme" description="Controls the interface and office lighting" border={false}>
+              <div className="flex rounded-lg overflow-hidden border border-[var(--rule)]">
+                {(['light', 'system', 'dark'] as ThemePref[]).map(t => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => changeTheme(t)}
+                    className={cn(
+                      'px-3 py-1.5 text-[11px] font-semibold capitalize border-r border-[var(--rule)] last:border-0 transition-colors',
+                      themePref === t
+                        ? 'bg-[var(--ember)] text-[var(--on-ember)]'
+                        : 'bg-transparent text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--panel-2)]'
+                    )}
+                  >
+                    {t}
+                  </button>
+                ))}
               </div>
-            ) : (
-              deviceList.map((device, i) => (
-                <div key={device.id} className={i > 0 ? 'border-t border-border/40' : ''}>
-                  <DeviceRow device={device} onRevoke={() => revokeDevice.mutate(device.id)} />
-                </div>
-              ))
-            )}
+            </SettingRow>
+          </div>
+        </section>
+
+        {/* ── Office ── */}
+        <section className="flex flex-col gap-3">
+          <SectionHead label="Office" />
+          <div className="card overflow-hidden">
+            <SliderRow
+              label="Walk speed"
+              description="How fast agents walk between tasks"
+              value={office.walkSpeed} min={0.5} max={6} step={0.1}
+              format={v => v.toFixed(1)}
+              onChange={v => updateOffice({ walkSpeed: v })}
+            />
+            <SliderRow
+              label="Wander speed"
+              description="How fast agents move while idle"
+              value={office.wanderSpeed} min={0.3} max={4} step={0.1}
+              format={v => v.toFixed(1)}
+              onChange={v => updateOffice({ wanderSpeed: v })}
+            />
+            <SliderRow
+              label="Wander radius"
+              description="How far agents roam from center"
+              value={office.bounds} min={2} max={9} step={0.5}
+              format={v => v.toFixed(1)}
+              onChange={v => updateOffice({ bounds: v })}
+            />
+            <SettingRow label="Camera" description="Free camera lets you orbit, zoom, and pan freely" border={false}>
+              <div className="flex rounded-lg overflow-hidden border border-[var(--rule)]">
+                {([false, true] as const).map(free => (
+                  <button
+                    key={String(free)}
+                    type="button"
+                    onClick={() => updateOffice({ freeCamera: free })}
+                    className={cn(
+                      'px-3 py-1.5 text-[11px] font-semibold border-r border-[var(--rule)] last:border-0 transition-colors',
+                      office.freeCamera === free
+                        ? 'bg-[var(--ember)] text-[var(--on-ember)]'
+                        : 'bg-transparent text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--panel-2)]'
+                    )}
+                  >
+                    {free ? 'Free' : 'Guided'}
+                  </button>
+                ))}
+              </div>
+            </SettingRow>
           </div>
         </section>
 
         {/* ── Connections ── */}
         <section className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground/50">Connections · API credentials agents use to run tasks</p>
-            <Button size="sm" onClick={() => setShowAddBrain(true)}>+ Add</Button>
+          <div className="flex items-center gap-3">
+            <SectionHead label="Connections" />
+            <Button size="sm" className="shrink-0" onClick={() => setShowAddBrain(true)}>Add</Button>
           </div>
+          <p className="text-xs text-[var(--muted)] -mt-1">API credentials agents use to run tasks.</p>
           {connectionList.length === 0 ? (
-            <p className="text-sm text-muted-foreground/50">No connections yet.</p>
+            <p className="text-sm text-[var(--faint)]">No connections yet.</p>
           ) : (
-            <div className="bg-card/80 rounded-xl border border-border/60 overflow-hidden">
+            <div className="card overflow-hidden">
               {connectionList.map((b, i) => (
-                <div key={b.id} className={i > 0 ? 'border-t border-border/40' : ''}>
+                <div key={b.id} className={i > 0 ? 'border-t border-[var(--rule-soft)]' : ''}>
                   <ConnectionRow
                     connection={b}
                     agentCount={agentCountForBrain(b.id)}
@@ -582,6 +666,44 @@ export default function SettingsPage() {
           )}
         </section>
 
+        {/* ── Devices ── */}
+        <section className="flex flex-col gap-3">
+          <div className="flex items-center gap-3">
+            <SectionHead label="Devices" />
+            <div className="flex items-center gap-2 shrink-0">
+              {deviceList.length > 0 && !confirmRevokeAll && (
+                <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-[var(--muted)] hover:text-destructive"
+                  onClick={() => setConfirmRevokeAll(true)}>
+                  Sign out all
+                </Button>
+              )}
+              {confirmRevokeAll && (
+                <>
+                  <span className="text-xs text-[var(--muted)]">Sign out everywhere?</span>
+                  <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => setConfirmRevokeAll(false)}>Cancel</Button>
+                  <Button size="sm" variant="destructive" className="h-7 px-2 text-xs" onClick={() => revokeAll.mutate()}>Confirm</Button>
+                </>
+              )}
+              <Button size="sm" onClick={() => setShowPairing(true)}>Connect</Button>
+            </div>
+          </div>
+          <p className="text-xs text-[var(--muted)] -mt-1">Mobile and desktop apps connected to this server.</p>
+          <div className="card overflow-hidden">
+            {deviceList.length === 0 ? (
+              <div className="px-4 py-6 text-center">
+                <p className="text-sm text-[var(--muted)]">No devices connected.</p>
+                <p className="text-xs text-[var(--faint)] mt-1">Use the Pilot app and scan the QR code to pair.</p>
+              </div>
+            ) : (
+              deviceList.map((device, i) => (
+                <div key={device.id} className={i > 0 ? 'border-t border-[var(--rule-soft)]' : ''}>
+                  <DeviceRow device={device} onRevoke={() => revokeDevice.mutate(device.id)} />
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+
       </div>
 
       <AddConnectionDialog
@@ -591,11 +713,7 @@ export default function SettingsPage() {
         loading={createConnection.isPending}
         error={createConnection.error?.message}
       />
-
-      <PairingDialog
-        open={showPairing}
-        onClose={() => setShowPairing(false)}
-      />
+      <PairingDialog open={showPairing} onClose={() => setShowPairing(false)} />
     </div>
   )
 }

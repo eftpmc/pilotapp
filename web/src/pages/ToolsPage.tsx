@@ -570,7 +570,7 @@ export default function ToolsPage() {
 
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="max-w-[1040px] px-6 pt-12 pb-10">
+      <div className="max-w-[1040px] mx-auto px-6 pt-12 pb-10">
 
         {/* Header */}
         <div className="flex items-start justify-between mb-8">

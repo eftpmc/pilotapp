@@ -13,7 +13,7 @@ import {
 import { cn } from '@/lib/utils'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import {
-  BookOpen, Camera, FolderOpen, Home, LogOut,
+  BookOpen, FolderOpen, Home, LogOut,
   Moon, Plus, Search, Settings, Sun, Users, Wrench,
 } from 'lucide-react'
 import OfficeBg from '../pages/OfficeLabPage'
@@ -249,7 +249,6 @@ export default function Layout() {
   const [paletteOpen, setPalette]       = useState(false)
   const [paletteMode, setPaletteMode]   = useState<PaletteMode>('search')
   const [onboardingDone, setOnboarding] = useState(false)
-  const [freeCamera, setFreeCamera]     = useState(false)
 
   // Panel enter/exit animation
   const [panelMounted, setPanelMounted]   = useState(!isOffice)
@@ -279,6 +278,12 @@ export default function Layout() {
   useEffect(() => { applyTheme(theme) }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    function onTheme(e: Event) { setTheme((e as CustomEvent<'light' | 'dark'>).detail) }
+    window.addEventListener('pilot-theme', onTheme)
+    return () => window.removeEventListener('pilot-theme', onTheme)
+  }, [])
+
+  useEffect(() => {
     if (isOffice && !prevIsOffice.current) {
       // Navigating TO office — animate panel out then unmount
       setPanelExiting(true)
@@ -291,7 +296,6 @@ export default function Layout() {
     } else if (!isOffice && prevIsOffice.current) {
       // Navigating FROM office — mount panel (enter animation plays via CSS)
       setPanelMounted(true)
-      setFreeCamera(false)
       prevIsOffice.current = false
     }
   }, [isOffice])
@@ -324,7 +328,7 @@ export default function Layout() {
   return (
     <div className="h-screen overflow-hidden office-shell">
       {/* 3D office — always in background */}
-      <OfficeBg active={isOffice} freeCamera={freeCamera} setFreeCamera={setFreeCamera} theme={theme} />
+      <OfficeBg active={isOffice} theme={theme} />
 
       {/* Fixed left — logo + title, always visible, toggles office ↔ today */}
       <div className="hud-left">
@@ -338,20 +342,6 @@ export default function Layout() {
         </button>
       </div>
 
-      {/* Camera button — below hud-right, office only */}
-      {isOffice && (
-        <div className="fixed right-0 z-30 flex flex-col items-center pr-[16px]" style={{ top: 56 }}>
-          <button
-            type="button"
-            onClick={() => setFreeCamera(v => !v)}
-            className={cn('hud-pill !p-0 w-8 h-8 flex items-center justify-center', !freeCamera && 'text-[var(--muted)]')}
-            aria-label={freeCamera ? 'Free camera' : 'Guided camera'}
-            title={freeCamera ? 'Free camera' : 'Guided camera'}
-          >
-            <Camera size={15} />
-          </button>
-        </div>
-      )}
 
       {/* Fixed right — controls, always visible */}
       <div className="hud-right">
