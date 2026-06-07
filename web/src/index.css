@@ -91,6 +91,26 @@
   flex-direction: column;
 }
 
+/* ── Office shell ──────────────────────────────────────────────────────────── */
+.office-shell {
+  --bg: #111110;
+  --panel: #1a1917;
+  --panel-2: #222120;
+  --ink: #e8e3da;
+  --ink-2: #aca89f;
+  --muted: #7a7770;
+  --faint: #504e48;
+  --rule: rgba(255,255,255,0.09);
+  --rule-soft: rgba(255,255,255,0.055);
+  --ember: #ff6b35;
+  --ember-2: #ff8c5a;
+  --ember-wash: rgba(255,107,53,0.14);
+  --on-ember: #1a0a00;
+  --shadow-sm: 0 1px 0 rgba(255,255,255,0.04), 0 2px 6px rgba(0,0,0,.45);
+  --shadow-md: 0 1px 0 rgba(255,255,255,0.04), 0 4px 16px rgba(0,0,0,.55);
+  --shadow-dialog: 0 24px 80px rgba(0,0,0,.65);
+}
+
 /* ── Office panel (frosted glass sheet over 3D background) ─────────────────── */
 .office-panel {
   background: color-mix(in oklch, var(--bg) 90%, transparent);

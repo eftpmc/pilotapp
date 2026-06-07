@@ -3,18 +3,18 @@
 
 
 :root {
-  --bg: #fafaf9;
-  --panel: #f4f4f2;
-  --panel-2: #ededea;
+  --bg: #f7f7f5;
+  --panel: #ffffff;
+  --panel-2: #f0f0ed;
   --ink: #111110;
   --ink-2: #444341;
-  --muted: #86857f;
-  --faint: #b5b4ae;
-  --rule: #e5e5e1;
-  --rule-soft: #ececea;
+  --muted: #6f6d66;
+  --faint: #a9a69e;
+  --rule: #ddddda;
+  --rule-soft: #e9e9e5;
   --ember: #e5511a;
-  --ember-2: #c94415;
-  --ember-wash: #fff2ec;
+  --ember-2: #c44010;
+  --ember-wash: #fff3ee;
   --on-ember: #ffffff;
   --green: #16794a;
   --green-dot: #1e9e5c;
@@ -66,9 +66,9 @@
     --rule: rgba(255,255,255,0.09);
     --rule-soft: rgba(255,255,255,0.055);
     --ember: #ff6b35;
-    --ember-2: #ff8a5c;
+    --ember-2: #ff8c5a;
     --ember-wash: rgba(255,107,53,0.14);
-    --on-ember: #140900;
+    --on-ember: #1a0a00;
     --green: #5cc993;
     --green-dot: #35bb78;
     --amber: #d9a84e;
@@ -92,9 +92,9 @@ html.dark {
   --rule: rgba(255,255,255,0.09);
   --rule-soft: rgba(255,255,255,0.055);
   --ember: #ff6b35;
-  --ember-2: #ff8a5c;
+  --ember-2: #ff8c5a;
   --ember-wash: rgba(255,107,53,0.14);
-  --on-ember: #140900;
+  --on-ember: #1a0a00;
   --green: #5cc993;
   --green-dot: #35bb78;
   --amber: #d9a84e;
@@ -107,18 +107,18 @@ html.dark {
 }
 
 html.light {
-  --bg: #fafaf9;
-  --panel: #f4f4f2;
-  --panel-2: #ededea;
+  --bg: #f7f7f5;
+  --panel: #ffffff;
+  --panel-2: #f0f0ed;
   --ink: #111110;
   --ink-2: #444341;
-  --muted: #86857f;
-  --faint: #b5b4ae;
-  --rule: #e5e5e1;
-  --rule-soft: #ececea;
+  --muted: #6f6d66;
+  --faint: #a9a69e;
+  --rule: #ddddda;
+  --rule-soft: #e9e9e5;
   --ember: #e5511a;
-  --ember-2: #c94415;
-  --ember-wash: #fff2ec;
+  --ember-2: #c44010;
+  --ember-wash: #fff3ee;
   --on-ember: #ffffff;
   --green: #16794a;
   --green-dot: #1e9e5c;

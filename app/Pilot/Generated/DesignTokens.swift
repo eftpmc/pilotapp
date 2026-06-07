@@ -7,17 +7,17 @@ extension Color {
     static let bg = Color(UIColor { t in
         t.userInterfaceStyle == .dark
             ? UIColor(red: 0.0667,  green: 0.0667,  blue: 0.0627,  alpha: 1)
-            : UIColor(red: 0.9804, green: 0.9804, blue: 0.9765, alpha: 1)
+            : UIColor(red: 0.9686, green: 0.9686, blue: 0.9608, alpha: 1)
     })
     static let panel = Color(UIColor { t in
         t.userInterfaceStyle == .dark
             ? UIColor(red: 0.102,  green: 0.098,  blue: 0.0902,  alpha: 1)
-            : UIColor(red: 0.9569, green: 0.9569, blue: 0.949, alpha: 1)
+            : UIColor(red: 1, green: 1, blue: 1, alpha: 1)
     })
     static let panel2 = Color(UIColor { t in
         t.userInterfaceStyle == .dark
             ? UIColor(red: 0.1333,  green: 0.1294,  blue: 0.1255,  alpha: 1)
-            : UIColor(red: 0.9294, green: 0.9294, blue: 0.9176, alpha: 1)
+            : UIColor(red: 0.9412, green: 0.9412, blue: 0.9294, alpha: 1)
     })
     static let ink = Color(UIColor { t in
         t.userInterfaceStyle == .dark
@@ -32,22 +32,22 @@ extension Color {
     static let muted = Color(UIColor { t in
         t.userInterfaceStyle == .dark
             ? UIColor(red: 0.4784,  green: 0.4667,  blue: 0.4392,  alpha: 1)
-            : UIColor(red: 0.5255, green: 0.5216, blue: 0.498, alpha: 1)
+            : UIColor(red: 0.4353, green: 0.4275, blue: 0.4, alpha: 1)
     })
     static let faint = Color(UIColor { t in
         t.userInterfaceStyle == .dark
             ? UIColor(red: 0.3137,  green: 0.3059,  blue: 0.2824,  alpha: 1)
-            : UIColor(red: 0.7098, green: 0.7059, blue: 0.6824, alpha: 1)
+            : UIColor(red: 0.6627, green: 0.651, blue: 0.6196, alpha: 1)
     })
     static let rule = Color(UIColor { t in
         t.userInterfaceStyle == .dark
             ? UIColor(red: 1,  green: 1,  blue: 1,  alpha: 0.09)
-            : UIColor(red: 0.898, green: 0.898, blue: 0.8824, alpha: 1)
+            : UIColor(red: 0.8667, green: 0.8667, blue: 0.8549, alpha: 1)
     })
     static let ruleSoft = Color(UIColor { t in
         t.userInterfaceStyle == .dark
             ? UIColor(red: 1,  green: 1,  blue: 1,  alpha: 0.055)
-            : UIColor(red: 0.9255, green: 0.9255, blue: 0.9176, alpha: 1)
+            : UIColor(red: 0.9137, green: 0.9137, blue: 0.898, alpha: 1)
     })
     static let ember = Color(UIColor { t in
         t.userInterfaceStyle == .dark
@@ -56,17 +56,17 @@ extension Color {
     })
     static let ember2 = Color(UIColor { t in
         t.userInterfaceStyle == .dark
-            ? UIColor(red: 1,  green: 0.5412,  blue: 0.3608,  alpha: 1)
-            : UIColor(red: 0.7882, green: 0.2667, blue: 0.0824, alpha: 1)
+            ? UIColor(red: 1,  green: 0.549,  blue: 0.3529,  alpha: 1)
+            : UIColor(red: 0.7686, green: 0.251, blue: 0.0627, alpha: 1)
     })
     static let emberWash = Color(UIColor { t in
         t.userInterfaceStyle == .dark
             ? UIColor(red: 1,  green: 0.4196,  blue: 0.2078,  alpha: 0.14)
-            : UIColor(red: 1, green: 0.949, blue: 0.9255, alpha: 1)
+            : UIColor(red: 1, green: 0.9529, blue: 0.9333, alpha: 1)
     })
     static let onEmber = Color(UIColor { t in
         t.userInterfaceStyle == .dark
-            ? UIColor(red: 0.0784,  green: 0.0353,  blue: 0,  alpha: 1)
+            ? UIColor(red: 0.102,  green: 0.0392,  blue: 0,  alpha: 1)
             : UIColor(red: 1, green: 1, blue: 1, alpha: 1)
     })
     static let green = Color(UIColor { t in

@@ -17,20 +17,24 @@ import { Badge } from '@/components/ui/badge'
 const F = '/kaykit/KayKit_Furniture_Bits_1.0_EXTRA/Assets/gltf/'
 const A = '/kaykit/KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium/'
 
-const DESK     = F + 'desk.gltf'
-const CHAIR    = F + 'chair_desk_A.gltf'
-const MONITOR  = F + 'monitor.gltf'
-const KEYBOARD = F + 'keyboard.gltf'
+// Desk furniture
+const DESK    = F + 'desk.gltf'
+const CHAIR   = F + 'chair_desk_A.gltf'
+const MONITOR = F + 'monitor.gltf'
 
-const RIG_SIM  = A + 'Rig_Medium_Simulation.glb'
-const RIG_MOVE = A + 'Rig_Medium_MovementBasic.glb'
-const RIG_GEN  = A + 'Rig_Medium_General.glb'
+// Character rigs
+const RIG_SIM   = A + 'Rig_Medium_Simulation.glb'
+const RIG_MOVE  = A + 'Rig_Medium_MovementBasic.glb'
+const RIG_GEN   = A + 'Rig_Medium_General.glb'
+const RIG_TOOLS = A + 'Rig_Medium_Tools.glb'
 
 // Mannequin_Medium.glb is the proper base mesh — it has the embedded texture
 // that the Rig files omit. Bone names are identical so animations cross-apply.
 const MANNEQUIN = '/kaykit/KayKit_Character_Animations_1.1/Mannequin%20Character/characters/Mannequin_Medium.glb'
 
-;[DESK, CHAIR, MONITOR, KEYBOARD, MANNEQUIN, RIG_SIM, RIG_MOVE, RIG_GEN].forEach(u => useGLTF.preload(u))
+;[DESK, CHAIR, MONITOR,
+  MANNEQUIN, RIG_SIM, RIG_MOVE, RIG_GEN, RIG_TOOLS,
+].forEach(u => useGLTF.preload(u))
 
 // ─── Status ───────────────────────────────────────────────────────────────────
 
@@ -85,11 +89,10 @@ function ScreenGlow({ status }: { status: string }) {
 
 function WorkDesk({ worldPos, status }: { worldPos: THREE.Vector3; status: string }) {
   return (
-    <group position={worldPos.toArray()}>
+    <group position={worldPos.toArray()} onPointerDown={(e) => e.stopPropagation()}>
       <Model url={DESK} />
-      <Model url={CHAIR}    position={[0, 0,     1.0]}  rotation={[0, Math.PI, 0]} />
-      <Model url={MONITOR}  position={[0, 0.95, -0.28]} />
-      <Model url={KEYBOARD} position={[0, 0.78,  0.1]}  />
+      <Model url={CHAIR}    position={[0, 0,      1.0]}  rotation={[0, Math.PI, 0]} />
+      <Model url={MONITOR}  position={[0, 0.95,  -0.28]} />
       <ScreenGlow status={status} />
     </group>
   )
@@ -112,13 +115,11 @@ function WalkingAgent({
 }) {
   const groupRef   = useRef<THREE.Group>(null)
   const rigRef     = useRef<THREE.Group>(null)
-  const posRef     = useRef(() => {
-    // start scattered around the scene
-    const a = Math.random() * Math.PI * 2
-    const r = bounds * 0.3 + Math.random() * bounds * 0.4
-    return new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r)
-  })
-  const pos        = useRef(posRef.current())
+  const pos        = useRef(new THREE.Vector3(
+    (Math.random() - 0.5) * bounds,
+    0,
+    (Math.random() - 0.5) * bounds,
+  ))
   const target     = useRef(new THREE.Vector3())
   const stateRef   = useRef<AgentState>('wander')
   const nextPickAt = useRef(0)
@@ -133,11 +134,12 @@ function WalkingAgent({
   const { animations: simAnims }          = useGLTF(RIG_SIM)
   const { animations: moveAnims }         = useGLTF(RIG_MOVE)
   const { animations: genAnims }          = useGLTF(RIG_GEN)
+  const { animations: toolAnims }         = useGLTF(RIG_TOOLS)
 
   const clone    = useMemo(() => SkeletonUtils.clone(mannequinScene), [mannequinScene])
   const allAnims = useMemo(
-    () => [...simAnims, ...moveAnims, ...genAnims],
-    [simAnims, moveAnims, genAnims],
+    () => [...simAnims, ...moveAnims, ...genAnims, ...toolAnims],
+    [simAnims, moveAnims, genAnims, toolAnims],
   )
   const { actions } = useAnimations(allAnims, rigRef)
 
@@ -158,10 +160,13 @@ function WalkingAgent({
       return ''
     }
     return {
-      walk:    find(/^Walking_A$/i, /^Walk$/i, /walking/i, /walk/i),
-      run:     find(/^Running_A$/i, /^Run$/i,  /running/i, /run/i),
-      idle:    find(/^Idle_A$/i,    /idle_a/i, /idle/i),
-      sit:     find(/^Sit_Chair_Idle$/i, /sit_chair/i),
+      walk:  find(/^Walking_A$/i, /^Walk$/i, /walking/i, /walk/i),
+      run:   find(/^Running_A$/i, /^Run$/i,  /running/i, /run/i),
+      idle:  find(/^Idle_A$/i,    /idle_a/i, /idle/i),
+      idle2: find(/^Idle_B$/i,    /idle_b/i),
+      sit:   find(/^Sit_Chair_Idle$/i, /sit_chair_idle/i, /sit_chair/i),
+      work:  find(/^Working_A$/i, /^Work_A$/i, /working/i, /work/i),
+      wave:  find(/^Waving$/i, /waving/i),
     }
   }, [allAnims])
 
@@ -189,10 +194,14 @@ function WalkingAgent({
     const ROT_SPEED   = dt * 10
 
     if (isWorking) {
-      // ── walk to chair, then sit ──────────────────────
+      // ── walk to chair, then sit / work ──────────────
       if (stateRef.current === 'sit') {
         g.position.set(chairPos.x, 0.08, chairPos.z)
-        play(animNames.sit || 'Sit_Chair_Idle')
+        // running agents visibly work at keyboard; waiting agents sit quietly
+        const deskAnim = status === 'running'
+          ? (animNames.work || animNames.sit || 'Sit_Chair_Idle')
+          : (animNames.sit  || 'Sit_Chair_Idle')
+        play(deskAnim)
       } else {
         stateRef.current = 'walk_to_desk'
         const dist = pos.current.distanceTo(chairPos)
@@ -247,6 +256,7 @@ function WalkingAgent({
   return (
     <group
       ref={groupRef}
+      onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => { e.stopPropagation(); select() }}
       onPointerEnter={() => { document.body.style.cursor = 'pointer' }}
       onPointerLeave={() => { document.body.style.cursor = 'default' }}
@@ -309,12 +319,13 @@ function StatusOrb({ status }: { status: string }) {
 
 function Scene({
   agentList, sessionList, selectedId, onSelect, followRef, selectedIdRef,
-  walkSpeed, wanderSpeed, bounds,
+  onFloorPanStart, walkSpeed, wanderSpeed, bounds,
 }: {
   agentList: Agent[]; sessionList: Session[]
   selectedId: string | null; onSelect: (id: string | null) => void
   followRef: React.MutableRefObject<THREE.Vector3 | null>
   selectedIdRef: React.MutableRefObject<string | null>
+  onFloorPanStart: (x: number, y: number) => void
   walkSpeed: number; wanderSpeed: number; bounds: number
 }) {
   const activeByAgent = useMemo(() => {
@@ -338,13 +349,13 @@ function Scene({
   return (
     <>
       <color attach="background" args={['#090908']} />
-      <fog attach="fog" args={['#090908', 18, 45]} />
+      <fog attach="fog" args={['#090908', 20, 38]} />
 
-      <ambientLight intensity={0.4} />
+      <ambientLight intensity={0.45} />
       <directionalLight position={[5, 14, 8]}  intensity={1.2} castShadow />
-      <directionalLight position={[-6, 8, -4]} intensity={0.3} color="#ffe8d6" />
+      <directionalLight position={[-6, 8, -4]} intensity={0.35} color="#ffe8d6" />
+      <pointLight position={[0, 6, -8]} intensity={0.6} color="#ffd6a0" distance={18} decay={2} />
       <Environment preset="night" />
-
 
       {/* Ground grid */}
       <Grid
@@ -352,14 +363,25 @@ function Scene({
         args={[60, 60]}
         cellSize={1}
         cellThickness={0.6}
-        cellColor="#1e1e1c"
+        cellColor="#1a1a18"
         sectionSize={5}
         sectionThickness={1.0}
-        sectionColor="#2c2c29"
-        fadeDistance={35}
-        fadeStrength={2}
+        sectionColor="#272724"
+        fadeDistance={30}
+        fadeStrength={2.5}
         infiniteGrid
       />
+      <mesh
+        position={[0, -0.02, 0]}
+        rotation={[-Math.PI / 2, 0, 0]}
+        onPointerDown={(e) => {
+          e.stopPropagation()
+          onFloorPanStart(e.nativeEvent.clientX, e.nativeEvent.clientY)
+        }}
+      >
+        <planeGeometry args={[60, 60]} />
+        <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+      </mesh>
 
       {/* Desks — always present, screen glow active only when working */}
       {agentList.map((agent, i) => {
@@ -394,8 +416,10 @@ function Scene({
 
 // ─── Camera ──────────────────────────────────────────────────────────────────
 
-function LabCamera({ followRef, freeCamera }: {
-  followRef: React.MutableRefObject<THREE.Vector3 | null>; freeCamera: boolean
+function LabCamera({ followRef, panRef, freeCamera }: {
+  followRef: React.MutableRefObject<THREE.Vector3 | null>
+  panRef: React.MutableRefObject<THREE.Vector3>
+  freeCamera: boolean
 }) {
   const controlsRef = useRef<OrbitControlsImpl | null>(null)
   const { camera } = useThree()
@@ -411,7 +435,7 @@ function LabCamera({ followRef, freeCamera }: {
     }
 
     const follow = followRef.current
-    const target = follow ?? defaultTarget
+    const target = follow ?? defaultTarget.clone().add(panRef.current)
     const lookAt = new THREE.Vector3(target.x, 0.8, target.z)
     const cameraOffset = follow
       ? new THREE.Vector3(0, 10, 7.5)
@@ -604,8 +628,11 @@ function OfficeHud({ agentList, sessionList }: {
 export default function OfficeBg({ active }: { active: boolean }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const followRef = useRef<THREE.Vector3 | null>(null)
+  const panRef = useRef(new THREE.Vector3())
   const selectedIdRef = useRef<string | null>(null)
+  const dragRef = useRef({ active: false, moved: false, x: 0, y: 0 })
   const [freeCamera, setFreeCamera] = useState(false)
+  const [isPanning, setIsPanning] = useState(false)
   const qc = useQueryClient()
 
   const { data: agentList   = [] } = useQuery({ queryKey: ['agents'],          queryFn: agentsApi.list })
@@ -658,16 +685,61 @@ export default function OfficeBg({ active }: { active: boolean }) {
     if (!id) followRef.current = null
   }
 
+  function startFloorPan(x: number, y: number) {
+    if (!active || freeCamera) return
+    dragRef.current = { active: true, moved: false, x, y }
+    setIsPanning(true)
+    selectAgent(null)
+  }
+
+  function handlePanMove(e: React.PointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current
+    if (!drag.active || freeCamera) return
+
+    const dx = e.clientX - drag.x
+    const dy = e.clientY - drag.y
+    if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true
+
+    drag.x = e.clientX
+    drag.y = e.clientY
+
+    const PAN_SCALE = 0.025
+    const PAN_LIMIT = Math.max(10, bounds * 1.15)
+    panRef.current.x -= dx * PAN_SCALE
+    panRef.current.z -= dy * PAN_SCALE
+    panRef.current.x = THREE.MathUtils.clamp(panRef.current.x, -PAN_LIMIT, PAN_LIMIT)
+    panRef.current.z = THREE.MathUtils.clamp(panRef.current.z, -PAN_LIMIT, PAN_LIMIT)
+  }
+
+  function handlePanEnd(e: React.PointerEvent<HTMLDivElement>) {
+    const wasDragging = dragRef.current.moved
+    dragRef.current.active = false
+    setIsPanning(false)
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId)
+    if (wasDragging) e.preventDefault()
+  }
+
   return (
     <div className={cn('fixed inset-0 z-0', !active && 'pointer-events-none')}>
       <Leva hidden />
 
       {/* 3D canvas */}
-      <div className="absolute inset-0">
+      <div
+        className={cn(
+          'absolute inset-0',
+          active && !freeCamera && (isPanning ? 'cursor-grabbing' : 'cursor-grab'),
+        )}
+        onPointerMove={handlePanMove}
+        onPointerUp={handlePanEnd}
+        onPointerCancel={handlePanEnd}
+      >
         <Canvas
           camera={{ position: [0, 15, 11], fov: 45 }}
           gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.15 }}
-          onClick={() => selectAgent(null)}
+          onClick={() => {
+            if (dragRef.current.moved) return
+            selectAgent(null)
+          }}
           style={{ width: '100%', height: '100%' }}
         >
           <Suspense fallback={null}>
@@ -678,12 +750,13 @@ export default function OfficeBg({ active }: { active: boolean }) {
               onSelect={selectAgent}
               followRef={followRef}
               selectedIdRef={selectedIdRef}
+              onFloorPanStart={startFloorPan}
               walkSpeed={walkSpeed}
               wanderSpeed={wanderSpeed}
               bounds={bounds}
             />
           </Suspense>
-          <LabCamera followRef={followRef} freeCamera={freeCamera} />
+          <LabCamera followRef={followRef} panRef={panRef} freeCamera={freeCamera} />
         </Canvas>
       </div>
 
@@ -695,11 +768,11 @@ export default function OfficeBg({ active }: { active: boolean }) {
         <>
           <OfficeHud agentList={agentList} sessionList={sessionList} />
 
-          <div className="absolute top-16 right-4 z-20">
+          <div className="absolute right-4 top-16 z-20">
             <button
               type="button"
               onClick={() => setFreeCamera(v => !v)}
-              className="h-8 rounded-md border border-border bg-card px-2.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+              className="h-9 rounded-lg border border-border bg-card/95 px-3 text-xs font-medium text-foreground shadow-lg backdrop-blur-xl transition-colors hover:bg-accent"
             >
               {freeCamera ? 'Guided' : 'Free camera'}
             </button>

@@ -298,7 +298,7 @@ export default function Layout() {
   const userInitial   = (userProfile?.name || userProfile?.email || '?')[0].toUpperCase()
 
   return (
-    <div className="h-screen overflow-hidden">
+    <div className={cn('h-screen overflow-hidden', isOffice && 'office-shell')}>
       {/* 3D office — always rendered as background */}
       <OfficeBg active={isOffice} />
 
