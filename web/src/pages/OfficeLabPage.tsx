@@ -1,4 +1,4 @@
-import { Suspense, useRef, useMemo, useEffect, useState, useCallback } from 'react'
+import React, { Suspense, useRef, useMemo, useEffect, useState, useCallback } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { useGLTF, OrbitControls, Html, useAnimations, Grid, Environment } from '@react-three/drei'
 import { SkeletonUtils, type OrbitControls as OrbitControlsImpl } from 'three-stdlib'
@@ -9,18 +9,32 @@ import { Leva, useControls } from 'leva'
 import { agents as agentsApi, projects as projectsApi, sessions as sessionsApi, tasks as tasksApi } from '@/api/client'
 import type { Agent, Project, Session, Task } from '@/api/client'
 import * as THREE from 'three'
-import { X, Clock, GitBranch, FolderOpen } from 'lucide-react'
+import { X, Clock, GitBranch, FolderOpen, ArrowRight } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { AgentAvatar } from '@/components/AgentAvatar'
 
 // ─── Assets ──────────────────────────────────────────────────────────────────
 
 const F = '/kaykit/KayKit_Furniture_Bits_1.0_EXTRA/Assets/gltf/'
+const P = '/kaykit/KayKit_Prototype_Bits_1.1_EXTRA/Assets/gltf/'
 const A = '/kaykit/KayKit_Character_Animations_1.1/Animations/gltf/Rig_Medium/'
 
 // Desk furniture
 const DESK    = F + 'desk.gltf'
 const CHAIR   = F + 'chair_desk_A.gltf'
 const MONITOR = F + 'monitor.gltf'
+
+// Break room furniture
+const COUCH   = F + 'couch_pillows.gltf'
+const TABLE_L = F + 'table_low.gltf'
+const CACTUS  = F + 'cactus_medium_A.gltf'
+const RUG     = F + 'rug_rectangle_A.gltf'
+
+// Room architecture (from Prototype Bits)
+const WALL_TILE  = P + 'Wall.gltf'
+const WALL_WIN   = P + 'Wall_Window_Open.gltf'
+const WALL_DOOR  = P + 'Wall_Doorway.gltf'
+const FLOOR_TILE = P + 'Floor.gltf'
 
 // Character rigs
 const RIG_SIM   = A + 'Rig_Medium_Simulation.glb'
@@ -33,8 +47,18 @@ const RIG_TOOLS = A + 'Rig_Medium_Tools.glb'
 const MANNEQUIN = '/kaykit/KayKit_Character_Animations_1.1/Mannequin%20Character/characters/Mannequin_Medium.glb'
 
 ;[DESK, CHAIR, MONITOR,
+  COUCH, TABLE_L, CACTUS, RUG,
+  WALL_TILE, WALL_WIN, WALL_DOOR, FLOOR_TILE,
   MANNEQUIN, RIG_SIM, RIG_MOVE, RIG_GEN, RIG_TOOLS,
 ].forEach(u => useGLTF.preload(u))
+
+// ─── Room dimensions ──────────────────────────────────────────────────────────
+const TILE    = 4
+const FLOOR_Y = -0.5
+const ROOM_W  = 8
+const ROOM_D  = 6
+const HALF_W  = (ROOM_W * TILE) / 2
+const HALF_D  = (ROOM_D * TILE) / 2
 
 // ─── Status ───────────────────────────────────────────────────────────────────
 
@@ -47,18 +71,26 @@ const STATUS_LABEL: Record<string, string> = {
   error: 'Error', idle: 'Idle', merged: 'Merged',
 }
 
-// ─── Desk grid ────────────────────────────────────────────────────────────────
+// ─── Desk zone ────────────────────────────────────────────────────────────────
+// Desks live in the center-right quadrant, clear of the break room partition.
+// With DESK_SPACING=5 and 3 cols × 2 rows the grid spans ~10×5 units centered
+// at WORK_ZONE. MAX_DESKS is the capacity for this room size; agents beyond
+// that index are still created but share the last desk slot visually.
 
 const DESK_SPACING = 5.0
+const MAX_DESKS    = 6
+const WORK_ZONE    = new THREE.Vector3(3, 0, 0)
 
 function deskPosition(index: number, total: number): THREE.Vector3 {
-  const cols = Math.min(total, 3)
-  const col  = index % cols
-  const row  = Math.floor(index / cols)
-  const rowCount = Math.ceil(total / cols)
-  const rowAgents = index < Math.floor(total / cols) * cols ? cols : total % cols || cols
-  const x = col * DESK_SPACING - (rowAgents - 1) * DESK_SPACING * 0.5
-  const z = row * DESK_SPACING - (rowCount - 1) * DESK_SPACING * 0.5
+  const count     = Math.min(total, MAX_DESKS)
+  const clamped   = Math.min(index, count - 1)
+  const cols      = Math.min(count, 3)
+  const col       = clamped % cols
+  const row       = Math.floor(clamped / cols)
+  const rowCount  = Math.ceil(count / cols)
+  const colsInRow = clamped < Math.floor(count / cols) * cols ? cols : count % cols || cols
+  const x = WORK_ZONE.x + col * DESK_SPACING - (colsInRow - 1) * DESK_SPACING * 0.5
+  const z = WORK_ZONE.z + row * DESK_SPACING - (rowCount  - 1) * DESK_SPACING * 0.5
   return new THREE.Vector3(x, 0, z)
 }
 
@@ -72,6 +104,38 @@ function Model({ url, position = [0,0,0] as T3, rotation = [0,0,0] as T3, scale 
   return <primitive object={clone} position={position} rotation={rotation} scale={scale} />
 }
 type T3 = [number, number, number]
+
+// ─── Room ─────────────────────────────────────────────────────────────────────
+
+function Room() {
+  const floor = [] as React.ReactElement[]
+  const walls = [] as React.ReactElement[]
+
+  for (let x = 0; x < ROOM_W; x++) {
+    for (let z = 0; z < ROOM_D; z++) {
+      const px = x * TILE - HALF_W + TILE / 2
+      const pz = z * TILE - HALF_D + TILE / 2
+      floor.push(<Model key={`f${x}_${z}`} url={FLOOR_TILE} position={[px, FLOOR_Y, pz]} />)
+    }
+  }
+
+  for (let x = 0; x < ROOM_W; x++) {
+    const px = x * TILE - HALF_W + TILE / 2
+    const mid = Math.floor(ROOM_W / 2)
+    walls.push(<Model key={`wn${x}`} url={WALL_TILE} position={[px, 0, -HALF_D]} rotation={[0, Math.PI, 0]} />)
+    const sUrl = x === mid ? WALL_DOOR : (x === 1 || x === ROOM_W - 2) ? WALL_WIN : WALL_TILE
+    walls.push(<Model key={`ws${x}`} url={sUrl} position={[px, 0, HALF_D]} rotation={[0, 0, 0]} />)
+  }
+
+  for (let z = 0; z < ROOM_D; z++) {
+    const pz = z * TILE - HALF_D + TILE / 2
+    const wUrl = z === Math.floor(ROOM_D / 2) ? WALL_WIN : WALL_TILE
+    walls.push(<Model key={`ww${z}`} url={wUrl} position={[-HALF_W, 0, pz]} rotation={[0,  Math.PI / 2, 0]} />)
+    walls.push(<Model key={`we${z}`} url={wUrl} position={[ HALF_W, 0, pz]} rotation={[0, -Math.PI / 2, 0]} />)
+  }
+
+  return <>{floor}{walls}</>
+}
 
 // ─── Screen glow ─────────────────────────────────────────────────────────────
 
@@ -98,13 +162,41 @@ function WorkDesk({ worldPos, status }: { worldPos: THREE.Vector3; status: strin
   )
 }
 
+// ─── Break room ───────────────────────────────────────────────────────────────
+
+function BreakRoom() {
+  // Tucked into back-left corner
+  return (
+    <group position={[-11, 0, -8]}>
+      {/* Rug underneath everything */}
+      <Model url={RUG}   position={[0, 0.01, 0.5]} rotation={[0, Math.PI / 2, 0]} />
+      {/* Couch against the back-left wall, facing into the room */}
+      <Model url={COUCH}   position={[0, 0, -1.5]} rotation={[0, 0, 0]} />
+      {/* Low coffee table in front of couch */}
+      <Model url={TABLE_L} position={[0, 0,  0.8]} />
+      {/* Plant in the corner */}
+      <Model url={CACTUS}  position={[-2.2, 0, -2.2]} />
+    </group>
+  )
+}
+
 // ─── Walking agent character ──────────────────────────────────────────────────
 
-type AgentState = 'wander' | 'walk_to_desk' | 'sit' | 'leave_desk'
+type AgentState = 'wander' | 'walk_to_desk' | 'sit' | 'leave_desk' | 'walk_to_break' | 'lounge'
+
+const SEP_RADIUS  = 1.5  // agent-agent separation distance
+const DESK_RADIUS = 2.4  // how far to start swerving around other desks
+
+// Two seats on the break room couch — face into the room (facing = 0 → +Z)
+const LOUNGE_SEATS = [
+  { pos: new THREE.Vector3(-11.5, 0.08, -9.2), facing: 0 },
+  { pos: new THREE.Vector3(-10.5, 0.08, -9.2), facing: 0 },
+]
 
 function WalkingAgent({
   agent, session, deskPos, bounds, isSelected, onSelect,
   followRef, selectedIdRef, walkSpeed, wanderSpeed,
+  agentIndex, sharedPositions, allDeskPositions, occupiedSeats,
 }: {
   agent: Agent; session?: Session
   deskPos: THREE.Vector3; bounds: number
@@ -112,18 +204,33 @@ function WalkingAgent({
   followRef: React.MutableRefObject<THREE.Vector3 | null>
   selectedIdRef: React.MutableRefObject<string | null>
   walkSpeed: number; wanderSpeed: number
+  agentIndex: number
+  sharedPositions: THREE.Vector3[]
+  allDeskPositions: THREE.Vector3[]
+  occupiedSeats: React.MutableRefObject<Set<number>>
 }) {
-  const groupRef   = useRef<THREE.Group>(null)
-  const rigRef     = useRef<THREE.Group>(null)
-  const pos        = useRef(new THREE.Vector3(
+  const groupRef    = useRef<THREE.Group>(null)
+  const rigRef      = useRef<THREE.Group>(null)
+  const pos         = useRef(new THREE.Vector3(
     (Math.random() - 0.5) * bounds,
     0,
     (Math.random() - 0.5) * bounds,
   ))
-  const target     = useRef(new THREE.Vector3())
-  const stateRef   = useRef<AgentState>('wander')
-  const nextPickAt = useRef(0)
-  const curAnim    = useRef('')
+  const target      = useRef(new THREE.Vector3())
+  const stateRef    = useRef<AgentState>('wander')
+  const nextPickAt  = useRef(0)
+  const curAnim     = useRef('')
+  const seatRef     = useRef<typeof LOUNGE_SEATS[number] | null>(null)
+  const seatIndexRef = useRef<number>(-1)
+  const loungeUntil = useRef(0)
+
+  function releaseSeat() {
+    if (seatIndexRef.current !== -1) {
+      occupiedSeats.current.delete(seatIndexRef.current)
+      seatIndexRef.current = -1
+    }
+    seatRef.current = null
+  }
 
   const status = session?.status ?? 'idle'
   const isWorking = status === 'running' || status === 'waiting'
@@ -171,13 +278,27 @@ function WalkingAgent({
   }, [allAnims])
 
   function pickWanderTarget() {
-    const a = Math.random() * Math.PI * 2
-    const r = bounds * 0.1 + Math.random() * bounds * 0.7
-    target.current.set(Math.cos(a) * r, 0, Math.sin(a) * r)
+    const otherDesks = allDeskPositions.filter((_, i) => i !== agentIndex)
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const a = Math.random() * Math.PI * 2
+      const r = bounds * 0.1 + Math.random() * bounds * 0.7
+      const cx = Math.cos(a) * r, cz = Math.sin(a) * r
+      const blocked = otherDesks.some(dp => {
+        const dx = cx - dp.x, dz = cz - dp.z
+        return dx * dx + dz * dz < DESK_RADIUS * DESK_RADIUS
+      })
+      if (!blocked) { target.current.set(cx, 0, cz); return }
+    }
+    // fallback: middle of room
+    target.current.set(
+      (Math.random() - 0.5) * bounds * 0.4, 0,
+      (Math.random() - 0.5) * bounds * 0.4,
+    )
   }
 
   useEffect(() => {
     pickWanderTarget()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Chair is at deskPos + [0, 0, 1.0]; character sits slightly in front at Z+0.65, Y+0.08
@@ -186,9 +307,51 @@ function WalkingAgent({
     [deskPos],
   )
 
+  // Compute combined avoidance steering (agent separation + optional desk repulsion)
+  function avoidanceForce(includeDeskAvoidance: boolean): THREE.Vector3 {
+    const av = new THREE.Vector3()
+
+    // Agent-agent separation
+    for (let i = 0; i < sharedPositions.length; i++) {
+      if (i === agentIndex) continue
+      const other = sharedPositions[i]
+      const dx = pos.current.x - other.x
+      const dz = pos.current.z - other.z
+      const dist2 = dx * dx + dz * dz
+      if (dist2 < SEP_RADIUS * SEP_RADIUS && dist2 > 0.0001) {
+        const dist = Math.sqrt(dist2)
+        const strength = (SEP_RADIUS - dist) / SEP_RADIUS
+        av.x += (dx / dist) * strength * 2.0
+        av.z += (dz / dist) * strength * 2.0
+      }
+    }
+
+    // Desk avoidance — skip own desk so the agent isn't repelled from their seat
+    if (includeDeskAvoidance) {
+      for (let i = 0; i < allDeskPositions.length; i++) {
+        if (i === agentIndex) continue
+        const dp = allDeskPositions[i]
+        const dx = pos.current.x - dp.x
+        const dz = pos.current.z - dp.z
+        const dist2 = dx * dx + dz * dz
+        if (dist2 < DESK_RADIUS * DESK_RADIUS && dist2 > 0.0001) {
+          const dist = Math.sqrt(dist2)
+          const strength = (DESK_RADIUS - dist) / DESK_RADIUS
+          av.x += (dx / dist) * strength * 1.5
+          av.z += (dz / dist) * strength * 1.5
+        }
+      }
+    }
+
+    return av
+  }
+
   useFrame((_, dt) => {
     const g = groupRef.current
     if (!g) return
+
+    // Always publish current position so siblings can read it
+    sharedPositions[agentIndex].copy(pos.current)
 
     const ARRIVE_DIST = 0.35
     const ROT_SPEED   = dt * 10
@@ -197,16 +360,21 @@ function WalkingAgent({
       // ── walk to chair, then sit / work ──────────────
       if (stateRef.current === 'sit') {
         g.position.set(chairPos.x, 0.08, chairPos.z)
-        // running agents visibly work at keyboard; waiting agents sit quietly
         const deskAnim = status === 'running'
           ? (animNames.work || animNames.sit || 'Sit_Chair_Idle')
           : (animNames.sit  || 'Sit_Chair_Idle')
         play(deskAnim)
       } else {
+        releaseSeat()
         stateRef.current = 'walk_to_desk'
         const dist = pos.current.distanceTo(chairPos)
         if (dist > ARRIVE_DIST) {
           const dir = chairPos.clone().sub(pos.current).normalize()
+          // Agent-only separation while walking to desk (no desk repulsion — heading there intentionally)
+          const av = avoidanceForce(false)
+          dir.x += av.x; dir.z += av.z
+          const len = Math.sqrt(dir.x * dir.x + dir.z * dir.z)
+          if (len > 0.01) { dir.x /= len; dir.z /= len }
           pos.current.addScaledVector(dir, dt * walkSpeed)
           const targetAngle = Math.atan2(dir.x, dir.z)
           g.rotation.y = THREE.MathUtils.lerp(g.rotation.y, targetAngle, ROT_SPEED)
@@ -221,30 +389,82 @@ function WalkingAgent({
         }
       }
     } else {
-      // ── wander ──────────────────────────────────────
+      // ── idle: wander / break room ────────────────────
       if (stateRef.current === 'sit' || stateRef.current === 'walk_to_desk') {
         stateRef.current = 'leave_desk'
         pickWanderTarget()
       }
       if (stateRef.current === 'leave_desk') stateRef.current = 'wander'
 
-      const dist = pos.current.distanceTo(target.current)
-      if (dist < ARRIVE_DIST || Date.now() > nextPickAt.current) {
-        if (Math.random() < 0.4) {
-          play(animNames.idle || 'Idle_A')
-          nextPickAt.current = Date.now() + 1500 + Math.random() * 3000
-        } else {
+      if (stateRef.current === 'lounge') {
+        // ── sitting on couch ──
+        const seat = seatRef.current!
+        g.position.set(seat.pos.x, seat.pos.y, seat.pos.z)
+        g.rotation.y = seat.facing
+        play(animNames.sit || 'Idle_A')
+        if (Date.now() > loungeUntil.current) {
+          releaseSeat()
+          stateRef.current = 'wander'
           pickWanderTarget()
-          nextPickAt.current = Date.now() + 4000 + Math.random() * 6000
+        }
+      } else if (stateRef.current === 'walk_to_break') {
+        // ── walking to couch ──
+        const seat = seatRef.current!
+        const dist = pos.current.distanceTo(seat.pos)
+        if (dist > ARRIVE_DIST) {
+          const dir = seat.pos.clone().sub(pos.current).normalize()
+          const av = avoidanceForce(false)
+          dir.x += av.x; dir.z += av.z
+          const len = Math.sqrt(dir.x * dir.x + dir.z * dir.z)
+          if (len > 0.01) { dir.x /= len; dir.z /= len }
+          pos.current.addScaledVector(dir, dt * walkSpeed)
+          g.rotation.y = THREE.MathUtils.lerp(g.rotation.y, Math.atan2(dir.x, dir.z), ROT_SPEED)
+          g.position.set(pos.current.x, 0, pos.current.z)
+          play(animNames.walk || 'Idle_A')
+        } else {
+          stateRef.current = 'lounge'
+          pos.current.copy(seat.pos)
+          g.rotation.y = seat.facing
+          g.position.set(seat.pos.x, seat.pos.y, seat.pos.z)
+          play(animNames.sit || 'Idle_A')
+          loungeUntil.current = Date.now() + 8000 + Math.random() * 10000
         }
       } else {
-        const dir = target.current.clone().sub(pos.current).normalize()
-        pos.current.addScaledVector(dir, dt * wanderSpeed)
-        const targetAngle = Math.atan2(dir.x, dir.z)
-        g.rotation.y = THREE.MathUtils.lerp(g.rotation.y, targetAngle, ROT_SPEED)
-        play(animNames.walk || 'Idle_A')
+        // ── wander ──
+        const dist = pos.current.distanceTo(target.current)
+        if (dist < ARRIVE_DIST || Date.now() > nextPickAt.current) {
+          const roll = Math.random()
+          if (roll < 0.2) {
+            // head to the break room — only if a seat is free
+            const freeIdx = LOUNGE_SEATS.findIndex((_, i) => !occupiedSeats.current.has(i))
+            if (freeIdx !== -1) {
+              occupiedSeats.current.add(freeIdx)
+              seatIndexRef.current = freeIdx
+              seatRef.current = LOUNGE_SEATS[freeIdx]
+              stateRef.current = 'walk_to_break'
+            } else {
+              pickWanderTarget()
+              nextPickAt.current = Date.now() + 4000 + Math.random() * 6000
+            }
+          } else if (roll < 0.5) {
+            play(animNames.idle || 'Idle_A')
+            nextPickAt.current = Date.now() + 1500 + Math.random() * 3000
+          } else {
+            pickWanderTarget()
+            nextPickAt.current = Date.now() + 4000 + Math.random() * 6000
+          }
+        } else {
+          const dir = target.current.clone().sub(pos.current).normalize()
+          const av = avoidanceForce(true)
+          dir.x += av.x; dir.z += av.z
+          const len = Math.sqrt(dir.x * dir.x + dir.z * dir.z)
+          if (len > 0.01) { dir.x /= len; dir.z /= len }
+          pos.current.addScaledVector(dir, dt * wanderSpeed)
+          g.rotation.y = THREE.MathUtils.lerp(g.rotation.y, Math.atan2(dir.x, dir.z), ROT_SPEED)
+          play(animNames.walk || 'Idle_A')
+        }
+        g.position.set(pos.current.x, 0, pos.current.z)
       }
-      g.position.set(pos.current.x, 0, pos.current.z)
     }
 
     if (selectedIdRef.current === agent.id) followRef.current = pos.current
@@ -346,42 +566,50 @@ function Scene({
     [agentList],
   )
 
+  // Shared mutable positions — each WalkingAgent writes its pos here every frame
+  // so siblings can read it for separation steering. Sized to agent count.
+  const sharedPositions = useMemo(
+    () => agentList.map(() => new THREE.Vector3()),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [agentList.length],
+  )
+
+  // Shared set of occupied lounge seat indices — prevents double-booking
+  const occupiedSeats = useRef(new Set<number>())
+
   return (
     <>
       <color attach="background" args={['#090908']} />
-      <fog attach="fog" args={['#090908', 20, 38]} />
 
-      <ambientLight intensity={0.45} />
-      <directionalLight position={[5, 14, 8]}  intensity={1.2} castShadow />
-      <directionalLight position={[-6, 8, -4]} intensity={0.35} color="#ffe8d6" />
-      <pointLight position={[0, 6, -8]} intensity={0.6} color="#ffd6a0" distance={18} decay={2} />
+      {/* Interior lighting */}
+      <ambientLight intensity={0.6} />
+      <pointLight position={[-6, 5, -4]} intensity={1.4} color="#fff4e0" distance={22} decay={2} />
+      <pointLight position={[ 6, 5, -4]} intensity={1.4} color="#fff4e0" distance={22} decay={2} />
+      <pointLight position={[ 0, 5,  5]} intensity={0.9} color="#ffe8d0" distance={18} decay={2} />
       <Environment preset="night" />
 
-      {/* Ground grid */}
-      <Grid
-        position={[0, 0, 0]}
-        args={[60, 60]}
-        cellSize={1}
-        cellThickness={0.6}
-        cellColor="#1a1a18"
-        sectionSize={5}
-        sectionThickness={1.0}
-        sectionColor="#272724"
-        fadeDistance={30}
-        fadeStrength={2.5}
-        infiniteGrid
-      />
+      {/* Room */}
+      <Suspense fallback={null}>
+        <Room />
+      </Suspense>
+
+      {/* Invisible floor plane for click/pan detection */}
       <mesh
-        position={[0, -0.02, 0]}
+        position={[0, 0.01, 0]}
         rotation={[-Math.PI / 2, 0, 0]}
         onPointerDown={(e) => {
           e.stopPropagation()
           onFloorPanStart(e.nativeEvent.clientX, e.nativeEvent.clientY)
         }}
       >
-        <planeGeometry args={[60, 60]} />
+        <planeGeometry args={[HALF_W * 2, HALF_D * 2]} />
         <meshBasicMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
+
+      {/* Break room */}
+      <Suspense fallback={null}>
+        <BreakRoom />
+      </Suspense>
 
       {/* Desks — always present, screen glow active only when working */}
       {agentList.map((agent, i) => {
@@ -407,6 +635,10 @@ function Scene({
             selectedIdRef={selectedIdRef}
             walkSpeed={walkSpeed}
             wanderSpeed={wanderSpeed}
+            agentIndex={i}
+            sharedPositions={sharedPositions}
+            allDeskPositions={deskPositions}
+            occupiedSeats={occupiedSeats}
           />
         </Suspense>
       ))}
@@ -475,93 +707,99 @@ function AgentCard({ agent, session, project, task, onClose }: {
 
   return (
     <div
-      className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[420px] pointer-events-auto"
+      className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[380px] pointer-events-auto"
       style={{ zIndex: 20 }}
     >
       <div
-        className="rounded-2xl p-5 flex flex-col gap-4"
+        className="rounded-2xl flex flex-col gap-0 overflow-hidden"
         style={{
-          background: 'rgba(16,14,12,0.95)',
-          border: '1px solid rgba(255,255,255,0.1)',
-          backdropFilter: 'blur(20px)',
-          boxShadow: '0 8px 40px rgba(0,0,0,0.5)',
+          background: 'rgba(14,12,10,0.96)',
+          border: '1px solid rgba(255,255,255,0.09)',
+          backdropFilter: 'blur(24px)',
+          boxShadow: '0 16px 48px rgba(0,0,0,0.6)',
         }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-semibold text-[var(--foreground)]">{agent.name}</span>
+        <div className="flex items-center gap-3 px-4 pt-4 pb-3">
+          <AgentAvatar agent={agent} size={40} running={status === 'running'} />
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-semibold text-[var(--ink)] leading-tight">{agent.name}</div>
+            <div className="text-xs text-[var(--muted)] mt-0.5">{agent.model ?? agent.provider}</div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
             <span
               className="text-[11px] px-2 py-0.5 rounded-full font-medium"
-              style={{ background: `${color}18`, color, border: `1px solid ${color}30` }}
+              style={{ background: `${color}1a`, color, border: `1px solid ${color}28` }}
             >
               {STATUS_LABEL[status]}
             </span>
+            <button
+              onClick={onClose}
+              className="w-6 h-6 flex items-center justify-center rounded-md text-[var(--muted)] hover:text-[var(--ink)] hover:bg-white/5 transition-colors"
+            >
+              <X size={13} />
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-md text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-white/5 transition-colors"
-          >
-            <X size={14} />
-          </button>
         </div>
 
-        {/* Task block */}
-        {task ? (
-          <button
-            type="button"
-            onClick={() => navigate(`/projects/${task.projectId}/tasks/${task.id}`)}
-            className="text-left rounded-xl px-4 py-3 transition-colors hover:bg-white/[0.05] group"
-            style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}
-          >
-            <div className="text-[10px] uppercase tracking-wider text-[var(--muted-foreground)] mb-1">Current task</div>
-            <div className="text-sm font-medium text-[var(--foreground)] line-clamp-2 group-hover:text-white transition-colors">
-              {task.title}
-            </div>
-            {project && (
-              <div className="mt-1.5 flex items-center gap-1 text-xs text-[var(--muted-foreground)]">
-                <FolderOpen size={10} />
-                <span className="truncate">{project.name}</span>
-              </div>
-            )}
-          </button>
-        ) : (
-          <div className="text-xs text-[var(--muted-foreground)] px-1">No active task</div>
-        )}
+        {/* Divider */}
+        <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '0 16px' }} />
 
-        {/* Meta + actions */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3 text-xs text-[var(--muted-foreground)]">
-            {session?.branch && (
-              <span className="flex items-center gap-1 font-mono">
-                <GitBranch size={10} />
-                {session.branch}
-              </span>
-            )}
-            {session?.createdAt && (
-              <span className="flex items-center gap-1">
-                <Clock size={10} />
-                {new Date(session.createdAt).toLocaleTimeString()}
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
+        {/* Task block */}
+        <div className="px-4 py-3">
+          {task ? (
             <button
-              onClick={() => navigate(`/agents/${agent.id}`)}
-              className="text-xs px-3 py-1.5 rounded-lg border border-white/10 text-[var(--muted-foreground)] hover:text-[var(--foreground)] hover:bg-white/5 transition-colors"
+              type="button"
+              onClick={() => navigate(`/sessions/${session?.id ?? ''}`)}
+              className="w-full text-left rounded-xl px-3 py-2.5 transition-colors hover:bg-white/[0.04] group"
+              style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.055)' }}
             >
-              Agent
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-[10px] uppercase tracking-wider text-[var(--faint)] mb-1">Current task</div>
+                  <div className="text-sm font-medium text-[var(--ink)] line-clamp-2 leading-snug">
+                    {task.title}
+                  </div>
+                </div>
+                <ArrowRight size={13} className="text-[var(--faint)] mt-4 shrink-0 group-hover:text-[var(--muted)] transition-colors" />
+              </div>
+              {project && (
+                <div className="mt-2 flex items-center gap-1 text-[11px] text-[var(--faint)]">
+                  <FolderOpen size={10} />
+                  <span className="truncate">{project.name}</span>
+                  {session?.branch && (
+                    <>
+                      <span className="mx-1 opacity-40">·</span>
+                      <GitBranch size={10} />
+                      <span className="font-mono truncate">{session.branch}</span>
+                    </>
+                  )}
+                </div>
+              )}
             </button>
-            {session && (
-              <button
-                onClick={() => navigate(`/sessions/${session.id}`)}
-                className="text-xs px-3 py-1.5 rounded-lg font-medium transition-opacity hover:opacity-80"
-                style={{ background: color, color: '#fff' }}
-              >
-                Open session →
-              </button>
-            )}
-          </div>
+          ) : (
+            <div className="text-xs text-[var(--faint)] py-1">No active task</div>
+          )}
+        </div>
+
+        {/* Footer actions */}
+        <div className="flex items-center gap-2 px-4 pb-4">
+          <button
+            onClick={() => navigate(`/agents/${agent.id}`)}
+            className="flex-1 text-xs py-2 rounded-lg border text-[var(--muted)] hover:text-[var(--ink)] transition-colors"
+            style={{ border: '1px solid rgba(255,255,255,0.09)', background: 'transparent' }}
+          >
+            View agent
+          </button>
+          {session && (
+            <button
+              onClick={() => navigate(`/sessions/${session.id}`)}
+              className="flex-1 text-xs py-2 rounded-lg font-medium transition-opacity hover:opacity-85"
+              style={{ background: color, color: '#0e0c0a' }}
+            >
+              Open session
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -625,13 +863,16 @@ function OfficeHud({ agentList, sessionList }: {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function OfficeBg({ active }: { active: boolean }) {
+export default function OfficeBg({ active, freeCamera, setFreeCamera }: {
+  active: boolean
+  freeCamera: boolean
+  setFreeCamera: (v: boolean | ((prev: boolean) => boolean)) => void
+}) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const followRef = useRef<THREE.Vector3 | null>(null)
   const panRef = useRef(new THREE.Vector3())
   const selectedIdRef = useRef<string | null>(null)
   const dragRef = useRef({ active: false, moved: false, x: 0, y: 0 })
-  const [freeCamera, setFreeCamera] = useState(false)
   const [isPanning, setIsPanning] = useState(false)
   const qc = useQueryClient()
 
@@ -643,7 +884,7 @@ export default function OfficeBg({ active }: { active: boolean }) {
   const { walkSpeed, wanderSpeed, bounds } = useControls('Movement', {
     walkSpeed:   { value: 2.5, min: 0.5, max: 6,  step: 0.1, label: 'Walk Speed' },
     wanderSpeed: { value: 1.8, min: 0.3, max: 4,  step: 0.1, label: 'Wander Speed' },
-    bounds:      { value: 10,  min: 4,   max: 25, step: 1,   label: 'Wander Bounds' },
+    bounds:      { value: 7,   min: 2,   max: 9,  step: 0.5, label: 'Wander Bounds' },
   }, { collapsed: true })
 
   // WebSocket live updates
@@ -767,16 +1008,6 @@ export default function OfficeBg({ active }: { active: boolean }) {
       {active && (
         <>
           <OfficeHud agentList={agentList} sessionList={sessionList} />
-
-          <div className="absolute right-4 top-16 z-20">
-            <button
-              type="button"
-              onClick={() => setFreeCamera(v => !v)}
-              className="h-9 rounded-lg border border-border bg-card/95 px-3 text-xs font-medium text-foreground shadow-lg backdrop-blur-xl transition-colors hover:bg-accent"
-            >
-              {freeCamera ? 'Guided' : 'Free camera'}
-            </button>
-          </div>
 
           {selectedAgent && (
             <AgentCard
