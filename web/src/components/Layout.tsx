@@ -324,7 +324,7 @@ export default function Layout() {
   return (
     <div className="h-screen overflow-hidden office-shell">
       {/* 3D office — always in background */}
-      <OfficeBg active={isOffice} freeCamera={freeCamera} setFreeCamera={setFreeCamera} />
+      <OfficeBg active={isOffice} freeCamera={freeCamera} setFreeCamera={setFreeCamera} theme={theme} />
 
       {/* Fixed left — logo + title, always visible, toggles office ↔ today */}
       <div className="hud-left">

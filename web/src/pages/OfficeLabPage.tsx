@@ -492,9 +492,9 @@ function WalkingAgent({
           onClick={(e) => { e.stopPropagation(); select() }}
           className="flex items-center gap-1.5 px-2.5 py-1 rounded-full whitespace-nowrap cursor-pointer select-none outline-none transition-all duration-150"
           style={{
-            background: isSelected ? `${color}22` : 'rgba(14,13,11,0.88)',
-            color: isSelected ? color : '#c8c3ba',
-            border: `1px solid ${isSelected ? color + '55' : 'rgba(255,255,255,0.09)'}`,
+            background: isSelected ? `${color}22` : 'var(--panel)',
+            color: isSelected ? color : 'var(--ink-2)',
+            border: `1px solid ${isSelected ? color + '55' : 'var(--rule)'}`,
             backdropFilter: 'blur(12px)',
             boxShadow: isSelected ? `0 0 12px ${color}30` : 'none',
             fontSize: '11px',
@@ -535,11 +535,40 @@ function StatusOrb({ status }: { status: string }) {
   )
 }
 
+// ─── Scene lighting ──────────────────────────────────────────────────────────
+
+const BG_NIGHT = new THREE.Color('#0e0c0a')
+const BG_DAY   = new THREE.Color('#4e6878')
+
+function SceneLighting({ isDay }: { isDay: boolean }) {
+  const { scene } = useThree()
+  const current = useRef(new THREE.Color(isDay ? BG_DAY : BG_NIGHT))
+
+  useEffect(() => { scene.background = current.current }, [scene])
+
+  useFrame((_, dt) => {
+    const target = isDay ? BG_DAY : BG_NIGHT
+    const k = 1 - Math.exp(-3 * dt)
+    current.current.lerp(target, k)
+    scene.background = current.current
+  })
+
+  return (
+    <>
+      <ambientLight intensity={0.6} />
+      <pointLight position={[-6, 5, -4]} intensity={1.4} color="#fff4e0" distance={22} decay={2} />
+      <pointLight position={[ 6, 5, -4]} intensity={1.4} color="#fff4e0" distance={22} decay={2} />
+      <pointLight position={[ 0, 5,  5]} intensity={0.9} color="#ffe8d0" distance={18} decay={2} />
+      <Environment preset="night" />
+    </>
+  )
+}
+
 // ─── Scene ────────────────────────────────────────────────────────────────────
 
 function Scene({
   agentList, sessionList, selectedId, onSelect, followRef, selectedIdRef,
-  onFloorPanStart, walkSpeed, wanderSpeed, bounds,
+  onFloorPanStart, walkSpeed, wanderSpeed, bounds, theme,
 }: {
   agentList: Agent[]; sessionList: Session[]
   selectedId: string | null; onSelect: (id: string | null) => void
@@ -547,6 +576,7 @@ function Scene({
   selectedIdRef: React.MutableRefObject<string | null>
   onFloorPanStart: (x: number, y: number) => void
   walkSpeed: number; wanderSpeed: number; bounds: number
+  theme: 'light' | 'dark'
 }) {
   const activeByAgent = useMemo(() => {
     const map = new Map<string, Session>()
@@ -577,16 +607,11 @@ function Scene({
   // Shared set of occupied lounge seat indices — prevents double-booking
   const occupiedSeats = useRef(new Set<number>())
 
+  const isDay = theme === 'light'
+
   return (
     <>
-      <color attach="background" args={['#090908']} />
-
-      {/* Interior lighting */}
-      <ambientLight intensity={0.6} />
-      <pointLight position={[-6, 5, -4]} intensity={1.4} color="#fff4e0" distance={22} decay={2} />
-      <pointLight position={[ 6, 5, -4]} intensity={1.4} color="#fff4e0" distance={22} decay={2} />
-      <pointLight position={[ 0, 5,  5]} intensity={0.9} color="#ffe8d0" distance={18} decay={2} />
-      <Environment preset="night" />
+      <SceneLighting isDay={isDay} />
 
       {/* Room */}
       <Suspense fallback={null}>
@@ -713,10 +738,10 @@ function AgentCard({ agent, session, project, task, onClose }: {
       <div
         className="rounded-2xl flex flex-col gap-0 overflow-hidden"
         style={{
-          background: 'rgba(14,12,10,0.96)',
-          border: '1px solid rgba(255,255,255,0.09)',
+          background: 'var(--panel)',
+          border: '1px solid var(--rule)',
           backdropFilter: 'blur(24px)',
-          boxShadow: '0 16px 48px rgba(0,0,0,0.6)',
+          boxShadow: 'var(--shadow-dialog)',
         }}
       >
         {/* Header */}
@@ -735,7 +760,7 @@ function AgentCard({ agent, session, project, task, onClose }: {
             </span>
             <button
               onClick={onClose}
-              className="w-6 h-6 flex items-center justify-center rounded-md text-[var(--muted)] hover:text-[var(--ink)] hover:bg-white/5 transition-colors"
+              className="w-6 h-6 flex items-center justify-center rounded-md text-[var(--muted)] hover:text-[var(--ink)] hover:bg-[var(--panel-2)] transition-colors"
             >
               <X size={13} />
             </button>
@@ -743,7 +768,7 @@ function AgentCard({ agent, session, project, task, onClose }: {
         </div>
 
         {/* Divider */}
-        <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', margin: '0 16px' }} />
+        <div style={{ height: 1, background: 'var(--rule-soft)', margin: '0 16px' }} />
 
         {/* Task block */}
         <div className="px-4 py-3">
@@ -751,8 +776,8 @@ function AgentCard({ agent, session, project, task, onClose }: {
             <button
               type="button"
               onClick={() => navigate(`/sessions/${session?.id ?? ''}`)}
-              className="w-full text-left rounded-xl px-3 py-2.5 transition-colors hover:bg-white/[0.04] group"
-              style={{ background: 'rgba(255,255,255,0.025)', border: '1px solid rgba(255,255,255,0.055)' }}
+              className="w-full text-left rounded-xl px-3 py-2.5 transition-colors hover:bg-[var(--panel-2)] group"
+              style={{ background: 'var(--panel-2)', border: '1px solid var(--rule-soft)' }}
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
@@ -787,7 +812,7 @@ function AgentCard({ agent, session, project, task, onClose }: {
           <button
             onClick={() => navigate(`/agents/${agent.id}`)}
             className="flex-1 text-xs py-2 rounded-lg border text-[var(--muted)] hover:text-[var(--ink)] transition-colors"
-            style={{ border: '1px solid rgba(255,255,255,0.09)', background: 'transparent' }}
+            style={{ border: '1px solid var(--rule)', background: 'transparent' }}
           >
             View agent
           </button>
@@ -863,10 +888,11 @@ function OfficeHud({ agentList, sessionList }: {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function OfficeBg({ active, freeCamera, setFreeCamera }: {
+export default function OfficeBg({ active, freeCamera, setFreeCamera, theme }: {
   active: boolean
   freeCamera: boolean
   setFreeCamera: (v: boolean | ((prev: boolean) => boolean)) => void
+  theme: 'light' | 'dark'
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const followRef = useRef<THREE.Vector3 | null>(null)
@@ -995,6 +1021,7 @@ export default function OfficeBg({ active, freeCamera, setFreeCamera }: {
               walkSpeed={walkSpeed}
               wanderSpeed={wanderSpeed}
               bounds={bounds}
+              theme={theme}
             />
           </Suspense>
           <LabCamera followRef={followRef} panRef={panRef} freeCamera={freeCamera} />
