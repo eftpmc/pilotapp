@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useLocation, useNavigate, Link } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { sessions, agents, projects, tasks, me } from '../api/client'
 import { Button } from '@/components/ui/button'
@@ -11,12 +11,11 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import {
-  BookOpen, Camera, FolderOpen, Home, LogOut,
+  BookOpen, FolderOpen, LogOut,
   Moon, Plus, Search, Settings, Sun, Users, Wrench,
 } from 'lucide-react'
-import OfficeBg from '../pages/OfficeLabPage'
 
 // ── Theme ──────────────────────────────────────────────────────────────────────
 function getTheme(): 'light' | 'dark' {
@@ -95,12 +94,8 @@ function CommandPalette({ open, initialMode, onClose }: {
 
             <CommandSeparator />
             <CommandGroup heading="Go to">
-              <CommandItem onSelect={() => go('/office')} keywords={['office', 'home', '3d']}>
-                <Home size={14} className="text-[var(--muted)]" />
-                <span>Office</span>
-              </CommandItem>
-              <CommandItem onSelect={() => go('/today')} keywords={['home', 'overview']}>
-                <Home size={14} className="text-[var(--muted)]" />
+              <CommandItem onSelect={() => go('/')} keywords={['home', 'overview', 'today']}>
+                <FolderOpen size={14} className="text-[var(--muted)]" />
                 <span>Today</span>
               </CommandItem>
               <CommandItem onSelect={() => go('/projects')} keywords={['repos', 'code']}>
@@ -243,18 +238,11 @@ function CompanyOnboarding({ onDone }: { onDone: () => void }) {
 export default function Layout() {
   const navigate = useNavigate()
   const location = useLocation()
-  const isOffice = location.pathname === '/office'
 
   const [theme, setTheme]               = useState<'light' | 'dark'>(getTheme)
   const [paletteOpen, setPalette]       = useState(false)
   const [paletteMode, setPaletteMode]   = useState<PaletteMode>('search')
   const [onboardingDone, setOnboarding] = useState(false)
-  const [freeCamera, setFreeCamera]     = useState(false)
-
-  // Panel enter/exit animation
-  const [panelMounted, setPanelMounted]   = useState(!isOffice)
-  const [panelExiting, setPanelExiting]   = useState(false)
-  const prevIsOffice                      = useRef(isOffice)
 
   function toggleTheme() {
     const next = theme === 'dark' ? 'light' : 'dark'
@@ -277,24 +265,6 @@ export default function Layout() {
   }, [])
 
   useEffect(() => { applyTheme(theme) }, []) // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (isOffice && !prevIsOffice.current) {
-      // Navigating TO office — animate panel out then unmount
-      setPanelExiting(true)
-      const t = setTimeout(() => {
-        setPanelMounted(false)
-        setPanelExiting(false)
-      }, 280)
-      prevIsOffice.current = true
-      return () => clearTimeout(t)
-    } else if (!isOffice && prevIsOffice.current) {
-      // Navigating FROM office — mount panel (enter animation plays via CSS)
-      setPanelMounted(true)
-      setFreeCamera(false)
-      prevIsOffice.current = false
-    }
-  }, [isOffice])
 
   const { data: userProfile } = useQuery({ queryKey: ['me'], queryFn: () => me.profile() })
   const { data: projectList = [] } = useQuery({ queryKey: ['projects'], queryFn: () => projects.list() })
@@ -322,113 +292,92 @@ export default function Layout() {
   const userInitial   = (userProfile?.name || userProfile?.email || '?')[0].toUpperCase()
 
   return (
-    <div className="h-screen overflow-hidden office-shell">
-      {/* 3D office — always in background */}
-      <OfficeBg active={isOffice} freeCamera={freeCamera} setFreeCamera={setFreeCamera} />
-
-      {/* Fixed left — logo + title, always visible, toggles office ↔ today */}
-      <div className="hud-left">
+    <div className="h-screen overflow-hidden flex flex-col">
+      {/* Top bar — single unified row */}
+      <nav className="app-nav">
         <button
           type="button"
-          onClick={() => navigate(isOffice ? '/today' : '/office')}
-          className="hud-pill flex items-center gap-2.5"
+          onClick={() => navigate('/')}
+          className="app-nav-logo"
         >
           <span className="pilot-mark-lg">p</span>
           <span className="hud-title">{workspaceName || 'pilot'}</span>
         </button>
-      </div>
 
-      {/* Camera button — below hud-right, office only */}
-      {isOffice && (
-        <div className="fixed right-0 z-30 flex flex-col items-center pr-[16px]" style={{ top: 56 }}>
+        <div className="app-nav-links">
+          <NavLink to="/" end className={({ isActive }) => cn('navlink', isActive && 'active')}>
+            Today
+            {reviewCount > 0 && <span className="badge">{reviewCount}</span>}
+            {reviewCount === 0 && runningCount > 0 && (
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--green-dot)] animate-pulse" />
+            )}
+          </NavLink>
+          <NavLink to="/projects" className={({ isActive }) => cn('navlink', isActive && 'active')}>
+            Projects
+          </NavLink>
+          <NavLink to="/agents" className={({ isActive }) => cn('navlink', isActive && 'active')}>
+            Agents
+          </NavLink>
+        </div>
+
+        <div className="flex-1" />
+
+        <div className="flex items-center gap-1.5">
+          <Button size="sm" onClick={handleNewTask} className="h-8 gap-1.5 hidden sm:flex">
+            <Plus size={13} />
+            New task
+          </Button>
+
           <button
             type="button"
-            onClick={() => setFreeCamera(v => !v)}
-            className={cn('hud-pill !p-0 w-8 h-8 flex items-center justify-center', !freeCamera && 'text-[var(--muted)]')}
-            aria-label={freeCamera ? 'Free camera' : 'Guided camera'}
-            title={freeCamera ? 'Free camera' : 'Guided camera'}
+            onClick={openPalette}
+            className="hud-pill flex items-center gap-2 px-3 h-8 text-[var(--muted)] hover:text-[var(--ink)] transition-colors"
+            aria-label="Search"
           >
-            <Camera size={15} />
+            <Search size={13} className="shrink-0" />
+            <span className="text-xs hidden sm:block">Search</span>
+            <kbd className="hidden sm:flex items-center gap-0.5 text-[10px] text-[var(--faint)] ml-1 font-sans">
+              <span>⌘</span><span>K</span>
+            </kbd>
           </button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button type="button" className="hud-pill !p-0 w-8 h-8 flex items-center justify-center text-xs font-bold" style={{ color: 'var(--ember)', borderColor: 'rgba(255,107,53,0.25)' }} title={workspaceName || 'pilot'}>
+                {userInitial}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="bottom" align="end" className="w-52 mt-1">
+              <DropdownMenuItem asChild>
+                <NavLink to="/knowledge"><BookOpen size={14} /><span>Knowledge</span></NavLink>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <NavLink to="/tools"><Wrench size={14} /><span>Tools</span></NavLink>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild>
+                <NavLink to="/settings"><Settings size={14} /><span>Settings</span></NavLink>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={toggleTheme}>
+                {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+                <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={signOut} className="destructive">
+                <LogOut size={14} /><span>Sign out</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-      )}
+      </nav>
 
-      {/* Fixed right — controls, always visible */}
-      <div className="hud-right">
-        <Button size="sm" onClick={handleNewTask} className="h-8 gap-1.5 hidden sm:flex">
-          <Plus size={13} />
-          New task
-        </Button>
-
-        <button
-          type="button"
-          onClick={openPalette}
-          className="hud-pill flex items-center gap-2 px-3 h-8 text-[var(--muted)] hover:text-[var(--ink)] transition-colors"
-          aria-label="Search"
-        >
-          <Search size={13} className="shrink-0" />
-          <span className="text-xs hidden sm:block">Search</span>
-          <kbd className="hidden sm:flex items-center gap-0.5 text-[10px] text-[var(--faint)] ml-1 font-sans">
-            <span>⌘</span><span>K</span>
-          </kbd>
-        </button>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button type="button" className="hud-pill !p-0 w-8 h-8 flex items-center justify-center text-xs font-bold" style={{ color: 'var(--ember)', borderColor: 'rgba(255,107,53,0.25)' }} title={workspaceName || 'pilot'}>
-              {userInitial}
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent side="bottom" align="end" className="w-52 mt-1">
-            <DropdownMenuItem asChild>
-              <NavLink to="/knowledge"><BookOpen size={14} /><span>Knowledge</span></NavLink>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <NavLink to="/tools"><Wrench size={14} /><span>Tools</span></NavLink>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <NavLink to="/settings"><Settings size={14} /><span>Settings</span></NavLink>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={toggleTheme}>
-              {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
-              <span>{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={signOut} className="destructive">
-              <LogOut size={14} /><span>Sign out</span>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-
-      {/* Panel — slides in/out, nav links centered at top */}
-      {(panelMounted || panelExiting) && (
-        <div className={cn('office-panel fixed inset-0 z-10 flex flex-col', panelExiting && 'office-panel--exit')}>
-          <nav className="panel-nav">
-            <NavLink to="/today" className={({ isActive }) => cn('navlink', isActive && 'active')}>
-              Today
-              {reviewCount > 0 && <span className="badge">{reviewCount}</span>}
-              {reviewCount === 0 && runningCount > 0 && (
-                <span className="w-1.5 h-1.5 rounded-full bg-[var(--green-dot)] animate-pulse" />
-              )}
-            </NavLink>
-            <NavLink to="/projects" className={({ isActive }) => cn('navlink', isActive && 'active')}>
-              Projects
-            </NavLink>
-            <NavLink to="/agents" className={({ isActive }) => cn('navlink', isActive && 'active')}>
-              Agents
-            </NavLink>
-          </nav>
-
-          <main
-            key={location.pathname.split('/')[1]}
-            className="flex-1 min-h-0 flex flex-col overflow-y-auto panel-page-enter"
-          >
-            <Outlet />
-          </main>
-        </div>
-      )}
+      {/* Page content */}
+      <main
+        key={location.pathname.split('/')[1]}
+        className="flex-1 min-h-0 flex flex-col overflow-y-auto panel-page-enter"
+      >
+        <Outlet />
+      </main>
 
       <CommandPalette open={paletteOpen} initialMode={paletteMode} onClose={closePalette} />
     </div>

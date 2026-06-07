@@ -92,7 +92,7 @@
 }
 
 /* ── Office shell ──────────────────────────────────────────────────────────── */
-.office-shell {
+.dark, :root {
   --bg: #111110;
   --panel: #1a1917;
   --panel-2: #222120;
@@ -111,57 +111,41 @@
   --shadow-dialog: 0 24px 80px rgba(0,0,0,.65);
 }
 
-/* ── HUD — fixed left/right elements, always above everything ──────────────── */
-.hud-left {
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: 30;
+/* ── App nav — single top bar ───────────────────────────────────────────────── */
+.app-nav {
   display: flex;
   align-items: center;
+  gap: 2px;
   height: 52px;
+  flex-shrink: 0;
   padding: 0 12px;
+  border-bottom: 1px solid var(--rule-soft);
 }
 
-.hud-wordmark {
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: 30;
+.app-nav-logo {
   display: flex;
   align-items: center;
-  gap: 9px;
-  height: 52px;
-  padding: 0 16px;
-  border-radius: 10px;
-  transition: opacity .12s;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  margin-right: 6px;
+  transition: background .12s;
 }
-.hud-wordmark:hover { opacity: 0.75; }
+.app-nav-logo:hover { background: var(--panel); }
 
-.hud-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--ink);
-  letter-spacing: -0.01em;
-  line-height: 1;
-}
-
-.hud-right {
-  position: fixed;
-  top: 0;
-  right: 0;
-  z-index: 30;
+.app-nav-links {
   display: flex;
   align-items: center;
-  gap: 6px;
-  height: 52px;
-  padding: 0 16px;
+  gap: 2px;
 }
 
-/* Shared pill background for HUD elements */
+/* Shared pill style still used for search/user buttons */
 .hud-pill {
-  background: var(--panel);
-  border: 1px solid var(--rule);
+  background: transparent;
+  border: 1px solid transparent;
   border-radius: 10px;
   padding: 5px 8px;
   cursor: pointer;
@@ -169,13 +153,13 @@
   font-family: inherit;
   transition: background .12s, border-color .12s;
 }
-.hud-pill:hover { background: var(--panel-2); border-color: rgba(255,255,255,0.13); }
+.hud-pill:hover { background: var(--panel); border-color: var(--rule); }
 
-/* ── Pilot mark for the HUD ────────────────────────────────────────────────── */
+/* ── Pilot mark ─────────────────────────────────────────────────────────────── */
 .pilot-mark-lg {
-  width: 26px;
-  height: 26px;
-  border-radius: 7px;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
   display: grid;
   place-items: center;
   color: var(--on-ember);
@@ -186,47 +170,15 @@
   flex-shrink: 0;
 }
 
-/* ── Office panel (frosted glass sheet over 3D background) ─────────────────── */
-.office-panel {
-  background: color-mix(in oklch, var(--bg) 90%, transparent);
-  backdrop-filter: blur(32px) saturate(1.15);
-  animation: office-panel-in 0.28s cubic-bezier(0.22, 0.61, 0.36, 1) both;
-}
-.office-panel--exit {
-  animation: office-panel-out 0.26s cubic-bezier(0.4, 0, 0.9, 0.5) both;
+.hud-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  line-height: 1;
 }
 
-@keyframes office-panel-in {
-  from { opacity: 0; transform: translateY(14px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@keyframes office-panel-out {
-  from { opacity: 1; transform: translateY(0); }
-  to   { opacity: 0; transform: translateY(14px); }
-}
-
-/* ── Panel nav — centered nav links at top of panel ───────────────────────── */
-.panel-nav {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 52px;
-  flex-shrink: 0;
-  gap: 2px;
-}
-
-/* Scrollbar inside panel — thin, blends with frosted glass */
-.office-panel main::-webkit-scrollbar { width: 5px; }
-.office-panel main::-webkit-scrollbar-track { background: transparent; }
-.office-panel main::-webkit-scrollbar-thumb {
-  background: var(--rule);
-  border-radius: 99px;
-}
-.office-panel main::-webkit-scrollbar-thumb:hover {
-  background: rgba(255,255,255,0.15);
-}
-
-/* Page transition within the panel */
+/* ── Page transition ────────────────────────────────────────────────────────── */
 .panel-page-enter {
   animation: panel-page-in 0.18s ease both;
 }
@@ -234,6 +186,12 @@
   from { opacity: 0.6; transform: translateY(6px); }
   to   { opacity: 1;   transform: translateY(0); }
 }
+
+/* Scrollbar */
+main::-webkit-scrollbar { width: 5px; }
+main::-webkit-scrollbar-track { background: transparent; }
+main::-webkit-scrollbar-thumb { background: var(--rule); border-radius: 99px; }
+main::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
 
 /* ── Pilot logo mark ───────────────────────────────────────────────────────── */
 .pilot-mark {

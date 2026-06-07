@@ -59,9 +59,8 @@ export default function App() {
 
           {/* User shell */}
           <Route path="/" element={<RequireUser><Layout /></RequireUser>}>
-            <Route index                element={<Navigate to="/office" replace />} />
-            <Route path="office"        element={null} />
-            <Route path="today"         element={<OverviewPage />} />
+            <Route index                element={<OverviewPage />} />
+            <Route path="today"         element={<Navigate to="/" replace />} />
             <Route path="agents"              element={<AgentsPage />} />
             <Route path="agents/new"          element={<NewAgentPage />} />
             <Route path="agents/hire"         element={<HireRosterPage />} />
