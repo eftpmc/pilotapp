@@ -1,4 +1,4 @@
-import { useElapsed, fmtSecs } from '@/lib/time'
+import { useElapsed, fmtSecs } from '@pilot/shared'
 
 export function LiveTimer({ createdAt }: { createdAt: string }) {
   const secs = useElapsed(createdAt, true)

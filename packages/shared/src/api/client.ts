@@ -1,4 +1,12 @@
 // ---------------------------------------------------------------------------
+// Base URL configuration (for use in Electron / non-web contexts)
+// ---------------------------------------------------------------------------
+
+let _baseUrl = ''
+export function setBaseUrl(url: string) { _baseUrl = url.replace(/\/$/, '') }
+export function getBaseUrl(): string { return _baseUrl }
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -169,7 +177,7 @@ export const tools = {
 
 async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem('token');
-  const res = await fetch(path, {
+  const res = await fetch(`${_baseUrl}${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -195,7 +203,7 @@ async function req<T>(path: string, options: RequestInit = {}): Promise<T> {
 // ---------------------------------------------------------------------------
 
 async function authReq<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(path, {
+  const res = await fetch(`${_baseUrl}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -275,7 +283,7 @@ export const tasks = {
     const token = localStorage.getItem('token');
     const form = new FormData();
     files.forEach(f => form.append('files', f));
-    return fetch(`/tasks/${id}/files`, {
+    return fetch(`${_baseUrl}/tasks/${id}/files`, {
       method: 'POST',
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: form,

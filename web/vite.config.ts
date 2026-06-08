@@ -15,7 +15,10 @@ function spaBypass(req: { method?: string; headers: Record<string, string | stri
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
-    alias: { '@': path.resolve(__dirname, './src') },
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+      '@pilot/shared': path.resolve(__dirname, '../packages/shared/src'),
+    },
   },
   build: {
     outDir: path.resolve(__dirname, '../server/public'),

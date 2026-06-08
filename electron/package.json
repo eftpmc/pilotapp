@@ -1,0 +1,31 @@
+{
+  "name": "pilot-electron",
+  "version": "0.1.0",
+  "description": "Pilot desktop client",
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "NODE_ENV=development concurrently \"tsc -w --preserveWatchOutput\" \"electronmon .\"",
+    "build": "tsc",
+    "package": "tsc && electron-builder"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "concurrently": "^9.0.0",
+    "electron": "^34.0.0",
+    "electron-builder": "^25.0.0",
+    "electronmon": "^2.0.3",
+    "typescript": "^5.3.3"
+  },
+  "build": {
+    "appId": "com.pilotapp.pilot",
+    "productName": "Pilot",
+    "files": ["dist/**/*", "assets/**/*"],
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": "dmg"
+    }
+  },
+  "electronmon": {
+    "patterns": ["dist/**/*"]
+  }
+}

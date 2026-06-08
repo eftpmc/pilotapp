@@ -1,8 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { admin } from '../api/client'
-import { SpinePartPreview } from '@/components/SpineAvatar'
-import { cn } from '@/lib/utils'
+import { admin, SpinePartPreview, cn } from '@pilot/shared'
 
 // ---------------------------------------------------------------------------
 // Part definitions

@@ -1,6 +1,7 @@
 {
   "name": "pilotapp",
   "private": true,
+  "workspaces": ["packages/*", "web", "electron", "electron/renderer"],
   "scripts": {
     "tokens":     "node design/build.mjs",
     "dev":        "npm run tokens && concurrently -n server,web -c cyan,magenta \"cd server && npm run dev\" \"cd web && npm run dev\"",

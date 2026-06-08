@@ -1,17 +1,16 @@
 import React, { Suspense, useRef, useMemo, useEffect, useState, useCallback } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { useGLTF, OrbitControls, Html, useAnimations, Grid, Environment } from '@react-three/drei'
+import { useGLTF, OrbitControls, Html, useAnimations, Grid } from '@react-three/drei'
 import { SkeletonUtils, type OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { cn } from '@/lib/utils'
-import { getOfficeSettings } from '@/lib/officeSettings'
-import { agents as agentsApi, projects as projectsApi, sessions as sessionsApi, tasks as tasksApi } from '@/api/client'
-import type { Agent, Project, Session, Task } from '@/api/client'
+import { cn } from '../lib/utils'
+import { getOfficeSettings } from '../lib/officeSettings'
+import { agents as agentsApi, projects as projectsApi, sessions as sessionsApi, tasks as tasksApi, getBaseUrl } from '../api/client'
+import type { Agent, Project, Session, Task } from '../api/client'
 import * as THREE from 'three'
 import { X, Clock, GitBranch, FolderOpen, ArrowRight } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
-import { AgentAvatar } from '@/components/AgentAvatar'
+import { AgentAvatar } from '../components/AgentAvatar'
 
 // ─── Assets ──────────────────────────────────────────────────────────────────
 
@@ -559,7 +558,6 @@ function SceneLighting({ isDay }: { isDay: boolean }) {
       <pointLight position={[-6, 5, -4]} intensity={1.4} color="#fff4e0" distance={22} decay={2} />
       <pointLight position={[ 6, 5, -4]} intensity={1.4} color="#fff4e0" distance={22} decay={2} />
       <pointLight position={[ 0, 5,  5]} intensity={0.9} color="#ffe8d0" distance={18} decay={2} />
-      <Environment preset="night" />
     </>
   )
 }
@@ -720,10 +718,12 @@ function LabCamera({ followRef, panRef, freeCamera }: {
 
 // ─── Agent card (bottom-center) ──────────────────────────────────────────────
 
-function AgentCard({ agent, session, project, task, onClose }: {
+function AgentCard({ agent, session, project, task, onClose, onNavigate }: {
   agent: Agent; session?: Session; project?: Project; task?: Task; onClose: () => void
+  onNavigate?: (path: string) => void
 }) {
   const navigate = useNavigate()
+  const go = (path: string) => onNavigate ? onNavigate(path) : navigate(path)
   const status = session?.status ?? 'idle'
   const color  = STATUS_COLOR[status]
 
@@ -746,7 +746,7 @@ function AgentCard({ agent, session, project, task, onClose }: {
           <AgentAvatar agent={agent} size={40} running={status === 'running'} />
           <div className="flex-1 min-w-0">
             <div className="text-sm font-semibold text-[var(--ink)] leading-tight">{agent.name}</div>
-            <div className="text-xs text-[var(--muted)] mt-0.5">{agent.model ?? agent.provider}</div>
+            <div className="text-xs text-[var(--muted)] mt-0.5">{(agent as any).model ?? agent.provider}</div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <span
@@ -772,7 +772,7 @@ function AgentCard({ agent, session, project, task, onClose }: {
           {task ? (
             <button
               type="button"
-              onClick={() => navigate(`/sessions/${session?.id ?? ''}`)}
+              onClick={() => go(`/sessions/${session?.id ?? ''}`)}
               className="w-full text-left rounded-xl px-3 py-2.5 transition-colors hover:bg-[var(--panel-2)] group"
               style={{ background: 'var(--panel-2)', border: '1px solid var(--rule-soft)' }}
             >
@@ -807,7 +807,7 @@ function AgentCard({ agent, session, project, task, onClose }: {
         {/* Footer actions */}
         <div className="flex items-center gap-2 px-4 pb-4">
           <button
-            onClick={() => navigate(`/agents/${agent.id}`)}
+            onClick={() => go(`/agents/${agent.id}`)}
             className="flex-1 text-xs py-2 rounded-lg border text-[var(--muted)] hover:text-[var(--ink)] transition-colors"
             style={{ border: '1px solid var(--rule)', background: 'transparent' }}
           >
@@ -815,7 +815,7 @@ function AgentCard({ agent, session, project, task, onClose }: {
           </button>
           {session && (
             <button
-              onClick={() => navigate(`/sessions/${session.id}`)}
+              onClick={() => go(`/sessions/${session.id}`)}
               className="flex-1 text-xs py-2 rounded-lg font-medium transition-opacity hover:opacity-85"
               style={{ background: color, color: '#0e0c0a' }}
             >
@@ -836,6 +836,24 @@ const STATUS_BADGE_VARIANT: Record<string, 'success' | 'warning' | 'destructive'
   done:    'secondary',
   error:   'destructive',
   idle:    'secondary',
+}
+
+// Badge component inline to avoid dependency on @/components/ui/badge
+function Badge({ variant, children }: { variant: string; children: React.ReactNode }) {
+  const colors: Record<string, string> = {
+    success:     'background: #35bb7822; color: #35bb78; border: 1px solid #35bb7833',
+    warning:     'background: #d49e4022; color: #d49e40; border: 1px solid #d49e4033',
+    destructive: 'background: #ec6b5c22; color: #ec6b5c; border: 1px solid #ec6b5c33',
+    secondary:   'background: var(--panel-2); color: var(--muted); border: 1px solid var(--rule)',
+  }
+  return (
+    <span
+      className="text-[11px] px-2 py-0.5 rounded-full font-medium"
+      style={{ ...(colors[variant] ? Object.fromEntries(colors[variant].split(';').map(s => { const [k, v] = s.split(':'); return [k.trim().replace(/-([a-z])/g, (_, c) => c.toUpperCase()), v?.trim()] }).filter(([k]) => k)) : {}) }}
+    >
+      {children}
+    </span>
+  )
 }
 
 function OfficeHud({ agentList, sessionList }: {
@@ -885,9 +903,10 @@ function OfficeHud({ agentList, sessionList }: {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function OfficeBg({ active, theme }: {
+export default function OfficeBg({ active, theme, onNavigate }: {
   active: boolean
   theme: 'light' | 'dark'
+  onNavigate?: (path: string) => void
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const followRef = useRef<THREE.Vector3 | null>(null)
@@ -917,8 +936,11 @@ export default function OfficeBg({ active, theme }: {
       if (dead) return
       const token = localStorage.getItem('token')
       if (!token) return
-      const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-      ws = new WebSocket(`${proto}://${location.host}/ws?token=${token}`)
+      const base = getBaseUrl()
+      const origin = base || `${location.protocol}//${location.host}`
+      const proto = origin.startsWith('https') ? 'wss' : 'ws'
+      const host = origin.replace(/^https?:\/\//, '')
+      ws = new WebSocket(`${proto}://${host}/ws?token=${token}`)
       ws.onopen  = () => { delay = 1000; ws!.send(JSON.stringify({ type: 'subscribe-global' })) }
       ws.onmessage = (e) => {
         try { if (JSON.parse(e.data).type === 'global-event') qc.invalidateQueries({ queryKey: ['sessions', 'lab'] }) }
@@ -1038,6 +1060,7 @@ export default function OfficeBg({ active, theme }: {
               project={selectedProject}
               task={selectedTask}
               onClose={() => selectAgent(null)}
+              onNavigate={onNavigate}
             />
           )}
         </>

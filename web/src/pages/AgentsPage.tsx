@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { agents, departments, sessions, tasks } from '../api/client'
-import type { Agent, Department, Session } from '../api/client'
+import { agents, departments, sessions, tasks, AgentAvatar, PERSONALITY_PRESETS, DEPT_COLORS, cn } from '@pilot/shared'
+import type { Agent, Department, Session } from '@pilot/shared'
 import { Button } from '@/components/ui/button'
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
 import { Field, FieldLabel } from '@/components/ui/field'
@@ -12,10 +12,7 @@ import { Separator } from '@/components/ui/separator'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item'
 import { Spinner } from '@/components/ui/spinner'
-import { AgentAvatar } from '@/components/AgentAvatar'
 import { LiveTimer } from '@/components/LiveTimer'
-import { PERSONALITY_PRESETS, DEPT_COLORS } from '@/lib/agent-constants'
-import { cn } from '@/lib/utils'
 
 // ---------------------------------------------------------------------------
 // Department dialog

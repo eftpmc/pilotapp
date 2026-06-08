@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { projects, sessions } from '../api/client'
+import { projects, sessions } from '@pilot/shared'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { ArrowLeft } from 'lucide-react'

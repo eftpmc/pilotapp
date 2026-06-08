@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { auth } from '../api/client'
+import { auth } from '@pilot/shared'
 import { Button } from '@/components/ui/button'
 
 export default function AdminLoginPage() {

@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useLocation, useNavigate, Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { sessions, agents, projects, tasks, me } from '../api/client'
+import { sessions, agents, projects, tasks, me } from '@pilot/shared'
 import { Button } from '@/components/ui/button'
 import {
   CommandDialog, CommandInput, CommandList, CommandEmpty,
@@ -11,13 +11,11 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import {
   BookOpen, FolderOpen, Home, LogOut,
-  Moon, Plus, Search, Settings, Sun, Users, Wrench,
+  Monitor, Moon, Plus, Search, Settings, Sun, Users, Wrench,
 } from 'lucide-react'
-import OfficeBg from '../pages/OfficeLabPage'
-
 // ── Theme ──────────────────────────────────────────────────────────────────────
 function getTheme(): 'light' | 'dark' {
   const stored = localStorage.getItem('pilot.theme')
@@ -76,7 +74,6 @@ function CommandPalette({ open, initialMode, onClose }: {
               <CommandItem key={p.id} onSelect={() => go(`/projects/${p.id}?new=1`)}>
                 <FolderOpen size={14} className="text-[var(--muted)]" />
                 <span>{p.name}</span>
-                {p.repoPath && <span className="text-[var(--faint)] text-xs ml-1">{p.repoPath.split('/').pop()}</span>}
               </CommandItem>
             ))}
             <CommandItem onSelect={() => setMode('search')}>
@@ -250,11 +247,6 @@ export default function Layout() {
   const [paletteMode, setPaletteMode]   = useState<PaletteMode>('search')
   const [onboardingDone, setOnboarding] = useState(false)
 
-  // Panel enter/exit animation
-  const [panelMounted, setPanelMounted]   = useState(!isOffice)
-  const [panelExiting, setPanelExiting]   = useState(false)
-  const prevIsOffice                      = useRef(isOffice)
-
   function toggleTheme() {
     const next = theme === 'dark' ? 'light' : 'dark'
     setTheme(next)
@@ -283,23 +275,6 @@ export default function Layout() {
     return () => window.removeEventListener('pilot-theme', onTheme)
   }, [])
 
-  useEffect(() => {
-    if (isOffice && !prevIsOffice.current) {
-      // Navigating TO office — animate panel out then unmount
-      setPanelExiting(true)
-      const t = setTimeout(() => {
-        setPanelMounted(false)
-        setPanelExiting(false)
-      }, 280)
-      prevIsOffice.current = true
-      return () => clearTimeout(t)
-    } else if (!isOffice && prevIsOffice.current) {
-      // Navigating FROM office — mount panel (enter animation plays via CSS)
-      setPanelMounted(true)
-      prevIsOffice.current = false
-    }
-  }, [isOffice])
-
   const { data: userProfile } = useQuery({ queryKey: ['me'], queryFn: () => me.profile() })
   const { data: projectList = [] } = useQuery({ queryKey: ['projects'], queryFn: () => projects.list() })
   const { data: sessionList = [] } = useQuery({
@@ -327,28 +302,39 @@ export default function Layout() {
 
   return (
     <div className="h-screen overflow-hidden office-shell">
-      {/* 3D office — always in background */}
-      <OfficeBg active={isOffice} theme={theme} />
+      {/* Fixed left — logo + title (hidden on office) */}
+      {!isOffice && (
+        <div className="hud-left">
+          <button
+            type="button"
+            onClick={() => navigate('/today')}
+            className="hud-pill flex items-center gap-2.5"
+          >
+            <span className="pilot-mark-lg">p</span>
+            <span className="hud-title">{workspaceName || 'pilot'}</span>
+          </button>
+        </div>
+      )}
 
-      {/* Fixed left — logo + title, always visible, toggles office ↔ today */}
-      <div className="hud-left">
-        <button
-          type="button"
-          onClick={() => navigate(isOffice ? '/today' : '/office')}
-          className="hud-pill flex items-center gap-2.5"
-        >
-          <span className="pilot-mark-lg">p</span>
-          <span className="hud-title">{workspaceName || 'pilot'}</span>
-        </button>
-      </div>
-
-
-      {/* Fixed right — controls, always visible */}
-      <div className="hud-right">
+      {/* Fixed right — controls (hidden on office) */}
+      {!isOffice && <div className="hud-right">
         <Button size="sm" onClick={handleNewTask} className="h-8 gap-1.5 hidden sm:flex">
           <Plus size={13} />
           New task
         </Button>
+
+        {!isOffice && (
+          <a
+            href="/office"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hud-pill flex items-center gap-2 px-3 h-8 text-[var(--muted)] hover:text-[var(--ink)] transition-colors hidden sm:flex"
+            title="Open Office"
+          >
+            <Monitor size={13} className="shrink-0" />
+            <span className="text-xs">Office</span>
+          </a>
+        )}
 
         <button
           type="button"
@@ -390,11 +376,14 @@ export default function Layout() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-      </div>
+      </div>}
 
-      {/* Panel — slides in/out, nav links centered at top */}
-      {(panelMounted || panelExiting) && (
-        <div className={cn('office-panel fixed inset-0 z-10 flex flex-col', panelExiting && 'office-panel--exit')}>
+      {/* Office route — fullscreen, no panel */}
+      {isOffice && <Outlet />}
+
+      {/* Panel — nav links centered at top */}
+      {!isOffice && (
+        <div className="office-panel fixed inset-0 z-10 flex flex-col">
           <nav className="panel-nav">
             <NavLink to="/today" className={({ isActive }) => cn('navlink', isActive && 'active')}>
               Today

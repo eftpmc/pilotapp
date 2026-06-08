@@ -1,15 +1,13 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { agents, connections, departments } from '../api/client'
-import { AgentAvatar } from '@/components/AgentAvatar'
+import { agents, connections, departments, AgentAvatar, ROSTER, PERSONALITY_PRESETS } from '@pilot/shared'
 import { PersonalityPicker } from '@/components/PersonalityPicker'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { ROSTER, PERSONALITY_PRESETS } from '@/lib/agent-constants'
 import { Dices } from 'lucide-react'
 
 function randomSeed() { return Math.random().toString(36).slice(2, 10) }

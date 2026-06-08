@@ -1,9 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { agents } from '../api/client'
-import { AgentAvatar } from '@/components/AgentAvatar'
+import { agents, AgentAvatar, ROSTER } from '@pilot/shared'
 import { Button } from '@/components/ui/button'
-import { ROSTER } from '@/lib/agent-constants'
 import { ArrowLeft } from 'lucide-react'
 
 export default function HireRosterPage() {

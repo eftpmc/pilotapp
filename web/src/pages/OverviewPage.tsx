@@ -1,13 +1,10 @@
 import { useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { sessions, tasks, agents, projects, events } from '../api/client'
-import type { Task, Session, Agent, CompanyEvent } from '../api/client'
-import { AgentAvatar } from '@/components/AgentAvatar'
+import { sessions, tasks, agents, projects, events, AgentAvatar, useElapsed, fmtSecs, timeAgo, cn } from '@pilot/shared'
+import type { Task, Session, Agent, CompanyEvent } from '@pilot/shared'
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item'
-import { useElapsed, fmtSecs, timeAgo } from '@/lib/time'
-import { cn } from '@/lib/utils'
 
 const EVENT_VERB: Record<string, [string, string]> = {
   'session.completed': ['finished',  'text-[var(--green)]'],
@@ -72,7 +69,9 @@ function TaskItem({
         </ItemContent>
         <ItemActions>
           {running && activeSession && <ElapsedTimer createdAt={activeSession.createdAt} />}
-          {!running && hasError && <span className="text-xs text-destructive/70 shrink-0">error</span>}
+          {!running && hasError && <span className="text-xs text-destructive/70 shrink-0">Error</span>}
+          {!running && !hasError && task.status === 'done' && <span className="text-xs text-muted-foreground/50 shrink-0">Accepted</span>}
+          {!running && !hasError && task.status === 'failed' && <span className="text-xs text-destructive/70 shrink-0">Failed</span>}
         </ItemActions>
       </button>
     </Item>

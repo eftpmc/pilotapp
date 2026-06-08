@@ -5,6 +5,7 @@ import LoginPage from './pages/LoginPage'
 import Layout from './components/Layout'
 import AdminLayout from './components/AdminLayout'
 import ProjectLayout from './components/ProjectLayout'
+import { OfficeBg } from '@pilot/shared'
 import OverviewPage from './pages/OverviewPage'
 import AgentsPage from './pages/AgentsPage'
 import AgentPage from './pages/AgentPage'
@@ -41,6 +42,13 @@ function RequireUser({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+function OfficePage() {
+  const stored = localStorage.getItem('pilot.theme')
+  const theme = (stored === 'light' || stored === 'dark') ? stored
+    : window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  return <OfficeBg active={true} theme={theme} />
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={qc}>
@@ -59,8 +67,8 @@ export default function App() {
 
           {/* User shell */}
           <Route path="/" element={<RequireUser><Layout /></RequireUser>}>
-            <Route index                element={<Navigate to="/office" replace />} />
-            <Route path="office"        element={null} />
+            <Route index                element={<Navigate to="/today" replace />} />
+            <Route path="office"        element={<OfficePage />} />
             <Route path="today"         element={<OverviewPage />} />
             <Route path="agents"              element={<AgentsPage />} />
             <Route path="agents/new"          element={<NewAgentPage />} />

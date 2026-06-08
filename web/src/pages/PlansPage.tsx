@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams } from 'react-router-dom'
-import { specs, agents, sessions } from '../api/client'
-import type { Spec, Agent } from '../api/client'
+import { specs, agents, sessions, cn } from '@pilot/shared'
+import type { Spec, Agent } from '@pilot/shared'
 import { Button } from '@/components/ui/button'
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
 import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui/field'
@@ -11,7 +11,6 @@ import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
-import { cn } from '@/lib/utils'
 import { ChevronRight, Play, Trash2 } from 'lucide-react'
 
 // ---------------------------------------------------------------------------

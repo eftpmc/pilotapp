@@ -1,14 +1,12 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { knowledge, agents, departments } from '../api/client'
-import type { KnowledgeDoc, KnowledgeScope, Agent, Department } from '../api/client'
+import { knowledge, agents, departments, AgentAvatar, cn } from '@pilot/shared'
+import type { KnowledgeDoc, KnowledgeScope, Agent, Department } from '@pilot/shared'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemTitle } from '@/components/ui/item'
-import { AgentAvatar } from '@/components/AgentAvatar'
 import { KnowledgeDocDialog } from '@/components/KnowledgeDocDialog'
-import { cn } from '@/lib/utils'
 
 // ---------------------------------------------------------------------------
 // Doc row

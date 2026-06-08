@@ -1,16 +1,13 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { departments, agents, tools, sessions } from '../api/client'
-import { AgentAvatar } from '@/components/AgentAvatar'
+import { departments, agents, tools, sessions, AgentAvatar, DEPT_COLORS, cn } from '@pilot/shared'
 import { Button } from '@/components/ui/button'
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item'
 import { LiveTimer } from '@/components/LiveTimer'
-import { DEPT_COLORS } from '@/lib/agent-constants'
-import { cn } from '@/lib/utils'
 import { ArrowLeft, Pencil } from 'lucide-react'
 
 export default function DepartmentPage() {

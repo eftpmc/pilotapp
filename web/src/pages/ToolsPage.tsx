@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { tools, departments } from '../api/client'
-import type { Tool, Department } from '../api/client'
+import { tools, departments, cn } from '@pilot/shared'
+import type { Tool, Department } from '@pilot/shared'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -11,7 +11,6 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/u
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Item, ItemActions, ItemContent, ItemDescription, ItemGroup, ItemMedia, ItemTitle } from '@/components/ui/item'
 import { Spinner } from '@/components/ui/spinner'
-import { cn } from '@/lib/utils'
 import {
   Globe, Brain, Wrench, Plus, Pencil, Trash2, Users,
   BookMarked, Server,

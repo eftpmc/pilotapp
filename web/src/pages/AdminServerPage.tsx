@@ -1,6 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { admin } from '../api/client'
-import { cn } from '@/lib/utils'
+import { admin, cn } from '@pilot/shared'
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`

@@ -1,12 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
-import { sessions, agents, tasks } from '../api/client'
-import type { Session, Agent, Task } from '../api/client'
-import { AgentAvatar } from '@/components/AgentAvatar'
+import { sessions, agents, tasks, AgentAvatar, timeAgo, cn } from '@pilot/shared'
+import type { Session, Agent, Task } from '@pilot/shared'
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
 import { Spinner } from '@/components/ui/spinner'
-import { timeAgo } from '@/lib/time'
-import { cn } from '@/lib/utils'
 import { ChevronRight } from 'lucide-react'
 
 // ---------------------------------------------------------------------------

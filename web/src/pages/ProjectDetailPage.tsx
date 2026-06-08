@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
-import { tasks, agents, sessions, projects, connections } from '../api/client'
+import { tasks, agents, sessions, projects, connections, AgentAvatar, useElapsed, fmtSecs, cn } from '@pilot/shared'
 import { FileDropzone } from '@/components/FileDropzone'
-import type { Task, Agent, Session, TaskSize } from '../api/client'
+import type { Task, Agent, Session, TaskSize } from '@pilot/shared'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
@@ -13,10 +13,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
 import { Field, FieldDescription, FieldLabel } from '@/components/ui/field'
 import { Spinner } from '@/components/ui/spinner'
-import { AgentAvatar } from '@/components/AgentAvatar'
 import { AvatarGroup } from '@/components/ui/avatar'
-import { useElapsed, fmtSecs } from '@/lib/time'
-import { cn } from '@/lib/utils'
 import { ChevronRight, Upload } from 'lucide-react'
 
 // ---------------------------------------------------------------------------
@@ -635,17 +632,22 @@ function NewTaskDialog({ projectId, idleAgents, onClose, onDone }: {
             <FileDropzone files={pendingFiles.map(f => f.name)} onAdd={addFiles}
               onRemove={name => setPending(prev => prev.filter(f => f.name !== name))} disabled={loading} />
           </Field>
-          {idleAgents.length === 0 && (
-            <FieldDescription>No idle agents right now. You can still queue the task.</FieldDescription>
-          )}
           <div className="flex gap-2 pt-1">
             <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button className="flex-1 justify-center" disabled={!isValid || loading} onClick={() => void submit(false)}>
-              {loading ? <Spinner /> : 'Queue'}
-            </Button>
-            <Button variant="primary" className="flex-1 justify-center" disabled={!isValid || loading || idleAgents.length === 0} onClick={() => void submit(true)}>
-              {loading ? <Spinner /> : 'Dispatch'}
-            </Button>
+            {idleAgents.length > 0 ? (
+              <>
+                <Button className="justify-center" disabled={!isValid || loading} title="Save to queue — assign to an agent later" onClick={() => void submit(false)}>
+                  {loading ? <Spinner /> : 'Queue'}
+                </Button>
+                <Button variant="primary" className="flex-1 justify-center" disabled={!isValid || loading} title="Assign to an available agent now" onClick={() => void submit(true)}>
+                  {loading ? <Spinner /> : 'Dispatch'}
+                </Button>
+              </>
+            ) : (
+              <Button variant="primary" className="flex-1 justify-center" disabled={!isValid || loading} title="No agents free — task will run when one becomes available" onClick={() => void submit(false)}>
+                {loading ? <Spinner /> : 'Add to queue'}
+              </Button>
+            )}
           </div>
         </div>
       </DialogContent>

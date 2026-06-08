@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { projects, tasks, sessions } from '../api/client'
+import { projects, tasks, sessions, timeAgo, cn } from '@pilot/shared'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
@@ -9,8 +9,6 @@ import { Field, FieldDescription, FieldGroup, FieldLabel } from '@/components/ui
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { timeAgo } from '@/lib/time'
-import { cn } from '@/lib/utils'
 
 type GitSource = 'none' | 'github' | 'local' | 'empty'
 
@@ -213,8 +211,8 @@ function NewProjectDialog({ open, onClose, onCreate, loading, error }: {
 
             {source === 'github' && (
               <FieldGroup className="gap-3">
-                <Field><FieldLabel>Clone URL</FieldLabel><Input value={githubUrl} onChange={e => setGithubUrl(e.target.value)} placeholder="https://github.com/org/repo.git" /></Field>
-                <Field><FieldLabel>Access token</FieldLabel><Input type="password" value={githubToken} onChange={e => setToken(e.target.value)} placeholder="ghp_..." /></Field>
+                <Field><FieldLabel>Clone URL</FieldLabel><Input value={githubUrl} onChange={e => setGithubUrl(e.target.value)} placeholder="https://github.com/org/repo.git" autoComplete="off" /></Field>
+                <Field><FieldLabel>Access token</FieldLabel><Input type="password" value={githubToken} onChange={e => setToken(e.target.value)} placeholder="ghp_..." autoComplete="new-password" /></Field>
               </FieldGroup>
             )}
             {source === 'local' && (
