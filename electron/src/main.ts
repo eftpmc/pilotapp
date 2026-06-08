@@ -7,6 +7,42 @@ const DEV_URL = 'http://localhost:5174'
 
 let win: BrowserWindow | null = null
 let tray: Tray | null = null
+let pendingPair: { serverUrl: string; pairToken: string } | null = null
+
+// Register pilot:// URL scheme so the web UI can launch the app
+if (!app.isDefaultProtocolClient('pilot')) app.setAsDefaultProtocolClient('pilot')
+
+function handleDeepLink(url: string) {
+  try {
+    const parsed = new URL(url)
+    if (parsed.hostname === 'pair') {
+      const serverUrl = parsed.searchParams.get('url')
+      const pairToken = parsed.searchParams.get('token')
+      if (serverUrl && pairToken) {
+        pendingPair = { serverUrl, pairToken }
+        if (win) {
+          win.show(); win.focus()
+          win.webContents.send('deep-link-pair', { serverUrl, pairToken })
+        }
+      }
+    }
+  } catch {}
+}
+
+// macOS: app already running, new URL opened
+app.on('open-url', (event, url) => { event.preventDefault(); handleDeepLink(url) })
+
+// Windows/Linux: enforce single instance so deep links reach the running app
+const gotLock = app.requestSingleInstanceLock()
+if (!gotLock) {
+  app.quit()
+} else {
+  app.on('second-instance', (_e, argv) => {
+    const url = argv.find(a => a.startsWith('pilot://'))
+    if (url) handleDeepLink(url)
+    if (win) { win.show(); win.focus() }
+  })
+}
 
 // ─── Settings ────────────────────────────────────────────────────────────────
 const SETTINGS_PATH = join(app.getPath('userData'), 'settings.json')
@@ -125,6 +161,10 @@ ipcMain.on('status', (_e, status: string) => {
 ipcMain.handle('settings:get', (_e, key: string) => readSettings()[key] ?? null)
 ipcMain.handle('settings:set', (_e, key: string, value: string) => {
   const s = readSettings(); s[key] = value; writeSettings(s)
+})
+
+ipcMain.handle('pair:pending', () => {
+  const p = pendingPair; pendingPair = null; return p
 })
 
 ipcMain.on('open-external', (_e, url: string) => { shell.openExternal(url) })

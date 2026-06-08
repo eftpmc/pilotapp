@@ -220,6 +220,12 @@ export const auth = {
     authReq<{ token: string; role: string }>('/auth/login',    { email, password }),
   register: (email: string, password: string) =>
     authReq<{ token: string; role: string }>('/auth/register', { email, password }),
+  pair: (serverUrl: string, pairToken: string, deviceName: string) =>
+    fetch(`${serverUrl}/auth/pair`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pairToken, deviceName, deviceType: 'desktop' }),
+    }).then(r => r.ok ? r.json() as Promise<{ token: string }> : r.json().then(e => Promise.reject(new Error(e.error ?? 'Pairing failed')))),
 };
 
 // ---------------------------------------------------------------------------
@@ -293,6 +299,8 @@ export const tasks = {
   delete: (id: string) => req<void>(`/tasks/${id}`, { method: 'DELETE' }),
   assign: (taskId: string, agentId: string) =>
     req<{ task: Task; session: Session }>(`/tasks/${taskId}/assign`, { method: 'POST', body: JSON.stringify({ agentId }) }),
+  retry: (taskId: string, agentId: string) =>
+    req<{ task: Task; session: Session }>(`/tasks/${taskId}/retry`, { method: 'POST', body: JSON.stringify({ agentId }) }),
   runQueue: () => req<{ dispatched: { task: Task; session: Session }[] }>('/tasks/queue/run', { method: 'POST', body: '{}' }),
 };
 

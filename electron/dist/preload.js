@@ -9,6 +9,10 @@ electron_1.contextBridge.exposeInMainWorld('electron', {
     },
     navigate: (path) => electron_1.ipcRenderer.send('navigate', path),
     openExternal: (url) => electron_1.ipcRenderer.send('open-external', url),
+    onDeepLinkPair: (cb) => {
+        electron_1.ipcRenderer.on('deep-link-pair', (_e, data) => cb(data));
+    },
+    getPendingPair: () => electron_1.ipcRenderer.invoke('pair:pending'),
     notify: (title, body) => electron_1.ipcRenderer.send('notify', title, body),
     badge: (count) => electron_1.ipcRenderer.send('badge', count),
     settings: {

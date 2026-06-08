@@ -379,6 +379,18 @@ export default function SettingsPage() {
   const [showAddConnection, setShowAddBrain]   = useState(false)
   const [showPairing,       setShowPairing]    = useState(false)
   const [confirmRevokeAll,  setConfirmRevokeAll] = useState(false)
+  const [desktopPairing,    setDesktopPairing]  = useState(false)
+
+  async function connectDesktop() {
+    setDesktopPairing(true)
+    try {
+      const { token } = await me.pairToken()
+      const url = `pilot://pair?url=${encodeURIComponent(window.location.origin)}&token=${encodeURIComponent(token)}`
+      window.location.href = url
+    } finally {
+      setDesktopPairing(false)
+    }
+  }
 
   // Profile edit state
   const [editingProfile,   setEditingProfile]   = useState(false)
@@ -680,7 +692,10 @@ export default function SettingsPage() {
                   <Button size="sm" variant="destructive" className="h-7 px-2 text-xs" onClick={() => revokeAll.mutate()}>Confirm</Button>
                 </>
               )}
-              <Button size="sm" onClick={() => setShowPairing(true)}>Connect</Button>
+              <Button size="sm" variant="outline" onClick={connectDesktop} disabled={desktopPairing}>
+                {desktopPairing ? 'Opening…' : 'Connect desktop'}
+              </Button>
+              <Button size="sm" onClick={() => setShowPairing(true)}>Connect mobile</Button>
             </div>
           </div>
           <p className="text-xs text-[var(--muted)] -mt-1">Mobile and desktop apps connected to this server.</p>
@@ -688,7 +703,7 @@ export default function SettingsPage() {
             {deviceList.length === 0 ? (
               <div className="px-4 py-6 text-center">
                 <p className="text-sm text-[var(--muted)]">No devices connected.</p>
-                <p className="text-xs text-[var(--faint)] mt-1">Use the Pilot app and scan the QR code to pair.</p>
+                <p className="text-xs text-[var(--faint)] mt-1">Use "Connect desktop" to pair the desktop app, or scan the QR code for mobile.</p>
               </div>
             ) : (
               deviceList.map((device, i) => (

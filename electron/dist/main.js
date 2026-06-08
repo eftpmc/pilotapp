@@ -10,6 +10,46 @@ const isDev = process.env.NODE_ENV === 'development' || !electron_1.app.isPackag
 const DEV_URL = 'http://localhost:5174';
 let win = null;
 let tray = null;
+let pendingPair = null;
+// Register pilot:// URL scheme so the web UI can launch the app
+if (!electron_1.app.isDefaultProtocolClient('pilot'))
+    electron_1.app.setAsDefaultProtocolClient('pilot');
+function handleDeepLink(url) {
+    try {
+        const parsed = new URL(url);
+        if (parsed.hostname === 'pair') {
+            const serverUrl = parsed.searchParams.get('url');
+            const pairToken = parsed.searchParams.get('token');
+            if (serverUrl && pairToken) {
+                pendingPair = { serverUrl, pairToken };
+                if (win) {
+                    win.show();
+                    win.focus();
+                    win.webContents.send('deep-link-pair', { serverUrl, pairToken });
+                }
+            }
+        }
+    }
+    catch { }
+}
+// macOS: app already running, new URL opened
+electron_1.app.on('open-url', (event, url) => { event.preventDefault(); handleDeepLink(url); });
+// Windows/Linux: enforce single instance so deep links reach the running app
+const gotLock = electron_1.app.requestSingleInstanceLock();
+if (!gotLock) {
+    electron_1.app.quit();
+}
+else {
+    electron_1.app.on('second-instance', (_e, argv) => {
+        const url = argv.find(a => a.startsWith('pilot://'));
+        if (url)
+            handleDeepLink(url);
+        if (win) {
+            win.show();
+            win.focus();
+        }
+    });
+}
 // ─── Settings ────────────────────────────────────────────────────────────────
 const SETTINGS_PATH = (0, path_1.join)(electron_1.app.getPath('userData'), 'settings.json');
 function readSettings() {
@@ -132,6 +172,11 @@ electron_1.ipcMain.handle('settings:set', (_e, key, value) => {
     const s = readSettings();
     s[key] = value;
     writeSettings(s);
+});
+electron_1.ipcMain.handle('pair:pending', () => {
+    const p = pendingPair;
+    pendingPair = null;
+    return p;
 });
 electron_1.ipcMain.on('open-external', (_e, url) => { electron_1.shell.openExternal(url); });
 electron_1.ipcMain.on('notify', (_e, title, body) => {

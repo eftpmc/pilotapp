@@ -352,7 +352,7 @@ function ReviewCard({ session, agent, onView }: { session: Session; agent?: Agen
 
 function WorkSessionCard({
   session, agent, project, isMerging, agentList, reviewSession,
-  onMerge, onMergePush, onRequestReview, onDiscard, onView,
+  onMerge, onMergePush, onRequestReview, onDiscard, onView, onContinue,
 }: {
   session: Session; agent?: Agent
   project?: { workspaceMode: string; remoteUrl?: string }
@@ -361,6 +361,7 @@ function WorkSessionCard({
   onRequestReview: (sessionId: string, agentId: string) => void
   onDiscard: (id: string) => void
   onView: () => void
+  onContinue?: (agentId: string) => void
 }) {
   const isActive = session.status === 'running' || session.status === 'waiting' || session.status === 'idle'
   const isDone   = session.status === 'done'
@@ -392,19 +393,38 @@ function WorkSessionCard({
       </div>
 
       {(isDone || isError) && (
-        <div className="px-4 py-2.5 border-t border-border/30 bg-muted/10">
-          <MergeBar
-            session={session}
-            project={project}
-            isMerging={isMerging}
-            agentList={agentList}
-            hasReview={!!reviewSession}
-            isError={isError}
-            onMerge={onMerge}
-            onMergePush={onMergePush}
-            onRequestReview={onRequestReview}
-            onDiscard={onDiscard}
-          />
+        <div className="px-4 py-2.5 border-t border-border/30 bg-muted/10 flex items-center gap-2">
+          <div className="flex-1">
+            <MergeBar
+              session={session}
+              project={project}
+              isMerging={isMerging}
+              agentList={agentList}
+              hasReview={!!reviewSession}
+              isError={isError}
+              onMerge={onMerge}
+              onMergePush={onMergePush}
+              onRequestReview={onRequestReview}
+              onDiscard={onDiscard}
+            />
+          </div>
+          {onContinue && agentList.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="outline" className="shrink-0">
+                  Continue <ChevronDown size={11} className="ml-1 opacity-60" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {agentList.map(a => (
+                  <DropdownMenuItem key={a.id} onSelect={() => onContinue(a.id)} className="flex items-center gap-2">
+                    <AgentAvatar agent={a} size={20} animated={false} />
+                    {a.name}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       )}
     </div>
@@ -483,6 +503,10 @@ export default function TaskPage() {
   })
   const discardSession = useMutation({
     mutationFn: (id: string) => sessions.delete(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['sessions', projectId] }); qc.invalidateQueries({ queryKey: ['tasks', projectId] }) },
+  })
+  const retryTask = useMutation({
+    mutationFn: (agentId: string) => tasks.retry(taskId!, agentId),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['sessions', projectId] }); qc.invalidateQueries({ queryKey: ['tasks', projectId] }) },
   })
 
@@ -641,6 +665,7 @@ export default function TaskPage() {
                   onRequestReview={(sid, agentId) => requestReview.mutate({ sessionId: sid, agentId })}
                   onDiscard={id => discardSession.mutate(id)}
                   onView={() => navigate(`/sessions/${workSession.id}`)}
+                  onContinue={agentId => retryTask.mutate(agentId)}
                 />
               ) : (
                 <p className="text-sm text-muted-foreground/50 py-2">

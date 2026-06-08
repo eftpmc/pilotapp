@@ -278,6 +278,43 @@ router.post('/:id/assign', async (req: Request, res: Response) => {
 });
 
 // ---------------------------------------------------------------------------
+// POST /tasks/:id/retry — re-queue a done/failed task and assign to an agent
+// ---------------------------------------------------------------------------
+
+router.post('/:id/retry', async (req: Request, res: Response) => {
+  const parsed = AssignSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
+
+  const uid   = userId(req);
+  const task  = db.prepare('SELECT * FROM tasks WHERE id = ? AND user_id = ?').get(req.params.id, uid) as TaskRow | undefined;
+  const agent = db.prepare(`
+    SELECT a.*, COALESCE(c.type, a.provider) as provider
+    FROM agents a
+    LEFT JOIN connections c ON c.id = a.connection_id
+    WHERE a.id = ? AND a.user_id = ?
+  `).get(parsed.data.agentId, uid) as AgentRow | undefined;
+
+  if (!task)  { res.status(404).json({ error: 'Task not found' }); return; }
+  if (!agent) { res.status(404).json({ error: 'Agent not found' }); return; }
+  if (task.status !== 'done' && task.status !== 'failed') {
+    res.status(400).json({ error: 'Only done or failed tasks can be retried' }); return;
+  }
+
+  const project = db.prepare('SELECT * FROM projects WHERE id = ? AND user_id = ?').get(task.project_id, uid) as ProjectRow | undefined;
+  if (!project) { res.status(404).json({ error: 'Project not found' }); return; }
+
+  db.prepare("UPDATE tasks SET status = 'pending' WHERE id = ?").run(task.id);
+
+  const result = await createSessionForTask(task.id, task.prompt, task.base_branch, agent, project, uid);
+  if (!result) { res.status(409).json({ error: 'Task was claimed by another agent' }); return; }
+
+  const updatedTask    = db.prepare('SELECT * FROM tasks WHERE id = ?').get(task.id) as TaskRow;
+  const updatedSession = db.prepare('SELECT * FROM sessions WHERE id = ?').get(result.sessionId) as SessionRow;
+
+  res.status(201).json({ task: toTask(updatedTask), session: toSession(updatedSession) });
+});
+
+// ---------------------------------------------------------------------------
 // GET /tasks/:id/files
 // ---------------------------------------------------------------------------
 

@@ -903,10 +903,11 @@ function OfficeHud({ agentList, sessionList }: {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function OfficeBg({ active, theme, onNavigate }: {
+export default function OfficeBg({ active, theme, onNavigate, onSelect }: {
   active: boolean
   theme: 'light' | 'dark'
   onNavigate?: (path: string) => void
+  onSelect?: (agent: Agent, session: Session | undefined) => void
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const followRef = useRef<THREE.Vector3 | null>(null)
@@ -966,6 +967,14 @@ export default function OfficeBg({ active, theme, onNavigate }: {
     : undefined
 
   function selectAgent(id: string | null) {
+    if (id && onSelect) {
+      const agent = agentList.find(a => a.id === id)
+      const session = agent
+        ? sessionList.find(s => s.agentId === id &&
+            (s.status === 'running' || s.status === 'waiting' || s.status === 'done' || s.status === 'error'))
+        : undefined
+      if (agent) { onSelect(agent, session); return }
+    }
     setSelectedId(id)
     selectedIdRef.current = id
     if (!id) followRef.current = null

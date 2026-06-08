@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { auth } from '@pilot/shared'
-import OnboardShell from '@/components/OnboardShell'
+import { getServerUrl } from '@/api'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -9,6 +9,13 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
+
+  const serverUrl = getServerUrl()
+  const server = serverUrl.replace(/^https?:\/\//, '')
+
+  function quickConnect() {
+    window.electron?.openExternal?.(serverUrl.replace(/\/$/, '') + '/settings')
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
@@ -26,68 +33,40 @@ export default function LoginPage() {
   }
 
   return (
-    <OnboardShell>
-      <h1 style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.03em', marginBottom: 6, textAlign: 'center' }}>
-        Sign in
-      </h1>
-      <p style={{ fontSize: 14, color: 'var(--muted)', marginBottom: 40, textAlign: 'center' }}>
-        Sign in to your pilot account.
-      </p>
+    <div className="ob-shell">
+      <div className="ob-block">
+        {server && <span className="ob-eyebrow">{server}</span>}
+        <h1 className="ob-heading">Sign in</h1>
 
-      <form onSubmit={submit} style={{ width: '100%', maxWidth: 380, display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <div style={{ background: 'var(--card)', border: '1.5px solid var(--rule)', borderRadius: 16, overflow: 'hidden' }}>
-          <input
-            type="email" value={email} onChange={e => setEmail(e.target.value)}
-            placeholder="Email" autoFocus required
-            style={{
-              width: '100%', padding: '18px 20px', fontSize: 16,
-              background: 'transparent', border: 'none',
-              borderBottom: '1px solid var(--rule)',
-              color: 'var(--ink)', outline: 'none', textAlign: 'center',
-            }}
-          />
-          <input
-            type="password" value={password} onChange={e => setPassword(e.target.value)}
-            placeholder="Password" required
-            style={{
-              width: '100%', padding: '18px 20px', fontSize: 16,
-              background: 'transparent', border: 'none',
-              color: 'var(--ink)', outline: 'none', textAlign: 'center',
-            }}
-          />
-        </div>
+        <form className="ob-form" onSubmit={submit}>
+          <div className="ob-fields">
+            <input
+              type="email" value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="Email" autoFocus required
+              className="ob-input"
+            />
+            <input
+              type="password" value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="Password" required
+              className="ob-input"
+            />
+          </div>
+          {error && <p className="ob-error">{error}</p>}
+          <button type="submit" disabled={loading} className="ob-btn">
+            {loading ? 'Signing in…' : 'Sign in →'}
+          </button>
+        </form>
 
-        {error && (
-          <p style={{ fontSize: 13, color: 'var(--red)', textAlign: 'center', margin: '-2px 0' }}>{error}</p>
-        )}
-
-        <button
-          type="submit" disabled={loading}
-          style={{
-            width: '100%', padding: '18px', fontSize: 16, fontWeight: 700,
-            background: loading ? 'var(--elevated)' : 'var(--ember)',
-            border: 'none', borderRadius: 16, color: '#fff',
-            boxShadow: loading ? 'none' : '0 4px 20px rgba(255,107,53,0.3)',
-            opacity: loading ? 0.7 : 1, transition: 'opacity 120ms, background 120ms',
-          }}
-          onMouseEnter={e => { if (!loading) e.currentTarget.style.opacity = '0.9' }}
-          onMouseLeave={e => { e.currentTarget.style.opacity = loading ? '0.7' : '1' }}
-        >
-          {loading ? 'Signing in…' : 'Sign in →'}
+        <button className="ob-quick" onClick={quickConnect}>
+          Quick connect via browser
         </button>
 
-        <button
-          type="button" onClick={() => navigate('/servers')}
-          style={{
-            fontSize: 13, color: 'var(--muted)', background: 'none',
-            border: 'none', cursor: 'pointer', padding: '8px', transition: 'color 120ms',
-          }}
-          onMouseEnter={e => e.currentTarget.style.color = 'var(--ink)'}
-          onMouseLeave={e => e.currentTarget.style.color = 'var(--muted)'}
-        >
-          ← Back to servers
+        <button className="ob-back" onClick={() => navigate('/servers')}>
+          ← change server
         </button>
-      </form>
-    </OnboardShell>
+      </div>
+    </div>
   )
 }
