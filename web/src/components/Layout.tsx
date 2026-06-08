@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useLocation, useNavigate, Link } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { sessions, agents, projects, tasks, me } from '@pilot/shared'
 import { Button } from '@/components/ui/button'

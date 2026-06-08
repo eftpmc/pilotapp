@@ -46,7 +46,11 @@ function OfficePage() {
   const stored = localStorage.getItem('pilot.theme')
   const theme = (stored === 'light' || stored === 'dark') ? stored
     : window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-  return <OfficeBg active={true} theme={theme} />
+  return (
+    <div style={{ position: 'relative', height: '100vh', overflow: 'hidden' }}>
+      <OfficeBg active={true} theme={theme} mode="watch" />
+    </div>
+  )
 }
 
 export default function App() {

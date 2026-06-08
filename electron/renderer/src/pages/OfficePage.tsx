@@ -1,9 +1,202 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { OfficeBg, sessions, getBaseUrl } from '@pilot/shared'
-import type { Agent, Session } from '@pilot/shared'
+import type { Agent, OfficeMode, Session } from '@pilot/shared'
 import { getServerUrl } from '@/api'
+import { AlertCircle, CheckCircle2, Eye, Hammer, Radio, Wifi } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import SessionPanel from '@/components/SessionPanel'
+
+const MODES: { id: OfficeMode; label: string; icon: LucideIcon; disabled?: boolean }[] = [
+  { id: 'live',  label: 'Live',  icon: Radio   },
+  { id: 'watch', label: 'Watch', icon: Eye     },
+  { id: 'build', label: 'Build', icon: Hammer, disabled: true },
+]
+const MAC_WINDOW_CONTROLS_INSET = 88
+
+function ModeSwitcher({ mode, onChange }: {
+  mode: OfficeMode
+  onChange: (mode: OfficeMode) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const current = MODES.find(m => m.id === mode)!
+  const Icon = current.icon
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '0 12px 0 10px', height: 34,
+          borderRadius: 9,
+          background: open ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.06)',
+          border: '1px solid rgba(255,255,255,0.1)',
+          color: '#fff',
+          cursor: 'pointer',
+          transition: 'background 120ms',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.12)' }}
+        onMouseLeave={e => { if (!open) e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+      >
+        <Icon size={15} strokeWidth={1.8} color="rgba(255,255,255,0.68)" />
+        <span style={{ fontSize: 12, fontWeight: 650, letterSpacing: '-0.01em' }}>{current.label}</span>
+        <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.3)', marginLeft: 2 }}>▾</span>
+      </button>
+
+      {open && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: -1 }} onClick={() => setOpen(false)} />
+          <div style={{
+            position: 'absolute', top: 'calc(100% + 6px)', left: 0,
+            minWidth: 160,
+            borderRadius: 12,
+            background: 'oklch(0.15 0.009 265 / 0.97)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            backdropFilter: 'blur(20px)',
+            boxShadow: '0 12px 32px rgba(0,0,0,0.5)',
+            padding: '4px',
+          }}>
+            {MODES.map(({ id, label, icon: ModeIcon, disabled }) => {
+              const active = mode === id
+              return (
+                <button
+                  key={id}
+                  disabled={disabled}
+                  onClick={() => { if (!disabled) onChange(id); setOpen(false) }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10,
+                    width: '100%', padding: '9px 12px',
+                    borderRadius: 8,
+                    fontSize: 13, fontWeight: active ? 600 : 400,
+                    color: disabled ? 'rgba(255,255,255,0.22)' : active ? '#fff' : 'rgba(255,255,255,0.45)',
+                    background: active ? 'rgba(255,255,255,0.08)' : 'transparent',
+                    cursor: disabled ? 'default' : 'pointer',
+                    transition: 'background 100ms, color 100ms',
+                  }}
+                  onMouseEnter={e => { if (!active && !disabled) { e.currentTarget.style.background = 'rgba(255,255,255,0.05)'; e.currentTarget.style.color = 'rgba(255,255,255,0.8)' } }}
+                  onMouseLeave={e => { if (!active && !disabled) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.45)' } }}
+                >
+                  <ModeIcon size={15} strokeWidth={active ? 2 : 1.6} />
+                  <span style={{ flex: 1, textAlign: 'left' }}>{label}</span>
+                  {disabled && <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)' }}>Soon</span>}
+                </button>
+              )
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function OfficeTopHud({
+  mode, onModeChange, serverUrl, workingCount, reviewCount, errorCount, onReviewNext,
+}: {
+  mode: OfficeMode
+  onModeChange: (mode: OfficeMode) => void
+  serverUrl: string
+  workingCount: number
+  reviewCount: number
+  errorCount: number
+  onReviewNext: () => void
+}) {
+  const host = serverUrl ? serverUrl.replace(/^https?:\/\//, '') : 'No server'
+  const watch = mode === 'watch'
+
+  return (
+    <div style={{
+      position: 'fixed',
+      top: 14,
+      left: watch ? '50%' : MAC_WINDOW_CONTROLS_INSET,
+      right: watch ? 'auto' : 16,
+      transform: watch ? 'translateX(-50%)' : 'none',
+      zIndex: 60,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+      minWidth: watch ? 0 : 560,
+      maxWidth: watch ? 'none' : 920,
+      padding: watch ? 4 : '6px 8px 6px 12px',
+      borderRadius: 14,
+      background: 'oklch(0.13 0.008 265 / 0.88)',
+      border: '1px solid rgba(255,255,255,0.11)',
+      backdropFilter: 'blur(20px)',
+      boxShadow: '0 12px 36px rgba(0,0,0,0.32)',
+    }}>
+      {!watch && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+          <div style={{
+            width: 24, height: 24, borderRadius: 8,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: 'rgba(255,107,53,0.14)', color: 'var(--ember)',
+          }}>
+            <Radio size={13} />
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 750, letterSpacing: '-0.02em' }}>Pilot Office</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 1, fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>
+              <Wifi size={10} />
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 190 }}>{host}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ModeSwitcher mode={mode} onChange={onModeChange} />
+
+      {!watch && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <StatusPill icon={CheckCircle2} label={`${workingCount} active`} tone="green" />
+          <button
+            onClick={onReviewNext}
+            disabled={reviewCount === 0}
+            style={{
+              height: 34,
+              display: 'flex', alignItems: 'center', gap: 7,
+              padding: '0 11px',
+              borderRadius: 9,
+              background: reviewCount > 0 ? 'rgba(255,107,53,0.16)' : 'rgba(255,255,255,0.04)',
+              border: `1px solid ${reviewCount > 0 ? 'rgba(255,107,53,0.28)' : 'rgba(255,255,255,0.07)'}`,
+              color: reviewCount > 0 ? '#ff9b78' : 'rgba(255,255,255,0.28)',
+              cursor: reviewCount > 0 ? 'pointer' : 'default',
+              fontSize: 12,
+              fontWeight: 650,
+            }}
+          >
+            <AlertCircle size={14} />
+            {errorCount > 0 ? `${errorCount} need attention` : reviewCount > 0 ? `${reviewCount} ready` : 'Review clear'}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function StatusPill({ icon: Icon, label, tone }: {
+  icon: LucideIcon
+  label: string
+  tone: 'green'
+}) {
+  const color = tone === 'green' ? '#3dd68c' : '#fff'
+  return (
+    <div style={{
+      height: 34,
+      display: 'flex', alignItems: 'center', gap: 6,
+      padding: '0 10px',
+      borderRadius: 9,
+      background: `${color}16`,
+      border: `1px solid ${color}28`,
+      color,
+      fontSize: 12,
+      fontWeight: 650,
+    }}>
+      <Icon size={13} />
+      {label}
+    </div>
+  )
+}
 
 type ElectronBridge = {
   openExternal: (url: string) => void
@@ -31,6 +224,7 @@ export default function OfficePage() {
 
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
   const [selectedAgentId, setSelectedAgentId]     = useState<string | null>(null)
+  const [mode, setMode] = useState<OfficeMode>('live')
   const [logLines, setLogLines] = useState<string[]>([])
   const logBufRef = useRef<string>('')
 
@@ -40,6 +234,20 @@ export default function OfficePage() {
     refetchInterval: 15_000,
     enabled: !!localStorage.getItem('token'),
   })
+  const reviewSessions = useMemo(
+    () => sessionList
+      .filter(s => !s.specId && (s.status === 'done' || s.status === 'error'))
+      .sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt)),
+    [sessionList],
+  )
+  const workingCount = useMemo(
+    () => sessionList.filter(s => s.status === 'running' || s.status === 'waiting').length,
+    [sessionList],
+  )
+  const errorCount = useMemo(
+    () => reviewSessions.filter(s => s.status === 'error').length,
+    [reviewSessions],
+  )
 
   // ── WebSocket ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -142,6 +350,16 @@ export default function OfficePage() {
     setSelectedSessionId(session?.id ?? null)
   }, [])
 
+  const openReviewNext = useCallback(() => {
+    const next = reviewSessions[0]
+    if (!next) return
+    setMode('live')
+    setLogLines([])
+    logBufRef.current = ''
+    setSelectedAgentId(next.agentId)
+    setSelectedSessionId(next.id)
+  }, [reviewSessions])
+
   // Non-agent navigation falls back to browser
   const onNavigate = useCallback((path: string) => {
     el()?.openExternal(`${getServerUrl()}${path}`)
@@ -152,15 +370,36 @@ export default function OfficePage() {
     setSelectedAgentId(null)
   }, [])
 
+  useEffect(() => {
+    if (mode === 'watch') closePanel()
+  }, [closePanel, mode])
+
   const stored = localStorage.getItem('pilot.theme')
   const theme  = (stored === 'light' || stored === 'dark') ? stored
     : window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
 
   return (
     <div style={{ position: 'relative', height: '100vh', overflow: 'hidden' }}>
-      <OfficeBg active={true} theme={theme} onNavigate={onNavigate} onSelect={onSelect} />
+      <OfficeBg
+        active={true}
+        theme={theme}
+        mode={mode}
+        showHud={false}
+        onNavigate={onNavigate}
+        onSelect={mode === 'watch' ? undefined : onSelect}
+      />
 
-      {(selectedSessionId || selectedAgentId) && (
+      <OfficeTopHud
+        mode={mode}
+        onModeChange={setMode}
+        serverUrl={getServerUrl()}
+        workingCount={workingCount}
+        reviewCount={reviewSessions.length}
+        errorCount={errorCount}
+        onReviewNext={openReviewNext}
+      />
+
+      {mode !== 'watch' && (selectedSessionId || selectedAgentId) && (
         <SessionPanel
           sessionId={selectedSessionId}
           agentId={selectedAgentId}

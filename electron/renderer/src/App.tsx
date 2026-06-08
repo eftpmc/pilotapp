@@ -27,6 +27,7 @@ function AppShell() {
   const navigate = useNavigate()
   const path = location.pathname
   const isAuth = path === '/servers' || path === '/connect' || path === '/login'
+  const isOffice = path === '/office'
 
   // Check for a pending deep link pair on startup
   useEffect(() => {
@@ -48,7 +49,7 @@ function AppShell() {
 
   return (
     <div style={{ position: 'relative', height: '100vh', overflow: 'hidden' }}>
-      {!isAuth && <HUD />}
+      {!isAuth && !isOffice && <HUD />}
       <Routes>
         <Route path="/servers" element={<ServersPage />} />
         <Route path="/connect" element={<ConnectPage />} />

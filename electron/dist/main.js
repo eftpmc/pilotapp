@@ -109,6 +109,16 @@ function createWindow() {
             nodeIntegration: false,
         },
     });
+    win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+        console.error('[pilot] renderer load failed', { errorCode, errorDescription, validatedURL });
+    });
+    win.webContents.on('render-process-gone', (_event, details) => {
+        console.error('[pilot] renderer process gone', details);
+    });
+    win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+        const tag = level >= 2 ? 'error' : 'log';
+        console[tag](`[pilot renderer] ${message} (${sourceId}:${line})`);
+    });
     if (isDev) {
         loadWithRetry(DEV_URL);
     }

@@ -1,6 +1,6 @@
 import React, { Suspense, useRef, useMemo, useEffect, useState, useCallback } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { useGLTF, OrbitControls, Html, useAnimations, Grid } from '@react-three/drei'
+import { useGLTF, OrbitControls, Html, useAnimations } from '@react-three/drei'
 import { SkeletonUtils, type OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
@@ -9,8 +9,10 @@ import { getOfficeSettings } from '../lib/officeSettings'
 import { agents as agentsApi, projects as projectsApi, sessions as sessionsApi, tasks as tasksApi, getBaseUrl } from '../api/client'
 import type { Agent, Project, Session, Task } from '../api/client'
 import * as THREE from 'three'
-import { X, Clock, GitBranch, FolderOpen, ArrowRight } from 'lucide-react'
+import { X, GitBranch, FolderOpen, ArrowRight } from 'lucide-react'
 import { AgentAvatar } from '../components/AgentAvatar'
+
+export type OfficeMode = 'live' | 'build' | 'watch'
 
 // ─── Assets ──────────────────────────────────────────────────────────────────
 
@@ -671,18 +673,41 @@ function Scene({
 
 // ─── Camera ──────────────────────────────────────────────────────────────────
 
-function LabCamera({ followRef, panRef, freeCamera }: {
+const WATCH_VIEWS = [
+  { label: 'Floor',       target: new THREE.Vector3(0, 0.8, 0),      offset: new THREE.Vector3(0, 16, 12) },
+  { label: 'Active desks', target: new THREE.Vector3(5, 0.8, -1.5),   offset: new THREE.Vector3(-7, 12, 8) },
+  { label: 'Break room',  target: new THREE.Vector3(-8, 0.8, -6.5),  offset: new THREE.Vector3(8, 10, 7) },
+  { label: 'East wing',   target: new THREE.Vector3(2, 0.8, 4),      offset: new THREE.Vector3(9, 13, -7) },
+]
+
+function LabCamera({ followRef, panRef, freeCamera, watch, watchFocus }: {
   followRef: React.MutableRefObject<THREE.Vector3 | null>
   panRef: React.MutableRefObject<THREE.Vector3>
   freeCamera: boolean
+  watch: boolean
+  watchFocus?: THREE.Vector3
 }) {
   const controlsRef = useRef<OrbitControlsImpl | null>(null)
   const { camera } = useThree()
   const defaultTarget = useMemo(() => new THREE.Vector3(0, 0.5, 0), [])
 
-  useFrame((_, dt) => {
+  useFrame(({ clock }, dt) => {
     const controls = controlsRef.current
     if (!controls) return
+
+    if (watch) {
+      const cycleSeconds = 9
+      const viewIndex = Math.floor(clock.elapsedTime / cycleSeconds) % WATCH_VIEWS.length
+      const view = WATCH_VIEWS[viewIndex]
+      const target = watchFocus && viewIndex === 1 ? watchFocus : view.target
+      const desiredPosition = target.clone().add(view.offset)
+      const t = 1 - Math.pow(0.01, dt)
+
+      camera.position.lerp(desiredPosition, t)
+      controls.target.lerp(target, t)
+      controls.update()
+      return
+    }
 
     if (freeCamera) { controls.update(); return }
 
@@ -903,9 +928,11 @@ function OfficeHud({ agentList, sessionList }: {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function OfficeBg({ active, theme, onNavigate, onSelect }: {
+export default function OfficeBg({ active, theme, mode = 'live', showHud = true, onNavigate, onSelect }: {
   active: boolean
   theme: 'light' | 'dark'
+  mode?: OfficeMode
+  showHud?: boolean
   onNavigate?: (path: string) => void
   onSelect?: (agent: Agent, session: Session | undefined) => void
 }) {
@@ -929,6 +956,35 @@ export default function OfficeBg({ active, theme, onNavigate, onSelect }: {
     return () => window.removeEventListener('pilot-office', h)
   }, [])
   const { walkSpeed, wanderSpeed, bounds, freeCamera } = officeSt
+  const isWatch = mode === 'watch'
+  const effectiveFreeCamera = !isWatch && freeCamera
+  const [watchViewIndex, setWatchViewIndex] = useState(0)
+  const watchFocus = useMemo(() => {
+    const live = sessionList.find(s => s.status === 'running' || s.status === 'waiting')
+    if (!live) return undefined
+    const index = agentList.findIndex(a => a.id === live.agentId)
+    return index >= 0 ? deskPosition(index, agentList.length).clone().add(new THREE.Vector3(0, 0.8, 0)) : undefined
+  }, [agentList, sessionList])
+  const watchLabel = useMemo(() => {
+    if (!isWatch) return ''
+    const hasLive = sessionList.some(s => s.status === 'running' || s.status === 'waiting')
+    return hasLive ? 'Active desks' : WATCH_VIEWS[watchViewIndex % WATCH_VIEWS.length].label
+  }, [isWatch, sessionList, watchViewIndex])
+
+  useEffect(() => {
+    if (!isWatch) return
+    setSelectedId(null)
+    selectedIdRef.current = null
+    followRef.current = null
+  }, [isWatch])
+
+  useEffect(() => {
+    if (!isWatch) return
+    const id = window.setInterval(() => {
+      setWatchViewIndex(Math.floor(performance.now() / 9000) % WATCH_VIEWS.length)
+    }, 500)
+    return () => window.clearInterval(id)
+  }, [isWatch])
 
   // WebSocket live updates
   useEffect(() => {
@@ -967,6 +1023,7 @@ export default function OfficeBg({ active, theme, onNavigate, onSelect }: {
     : undefined
 
   function selectAgent(id: string | null) {
+    if (isWatch) return
     if (id && onSelect) {
       const agent = agentList.find(a => a.id === id)
       const session = agent
@@ -981,7 +1038,7 @@ export default function OfficeBg({ active, theme, onNavigate, onSelect }: {
   }
 
   function startFloorPan(x: number, y: number) {
-    if (!active || freeCamera) return
+    if (!active || effectiveFreeCamera || isWatch) return
     dragRef.current = { active: true, moved: false, x, y }
     setIsPanning(true)
     selectAgent(null)
@@ -989,7 +1046,7 @@ export default function OfficeBg({ active, theme, onNavigate, onSelect }: {
 
   function handlePanMove(e: React.PointerEvent<HTMLDivElement>) {
     const drag = dragRef.current
-    if (!drag.active || freeCamera) return
+    if (!drag.active || effectiveFreeCamera || isWatch) return
 
     const dx = e.clientX - drag.x
     const dy = e.clientY - drag.y
@@ -1020,7 +1077,7 @@ export default function OfficeBg({ active, theme, onNavigate, onSelect }: {
       <div
         className={cn(
           'absolute inset-0',
-          active && !freeCamera && (isPanning ? 'cursor-grabbing' : 'cursor-grab'),
+          active && !effectiveFreeCamera && !isWatch && (isPanning ? 'cursor-grabbing' : 'cursor-grab'),
         )}
         onPointerMove={handlePanMove}
         onPointerUp={handlePanEnd}
@@ -1030,6 +1087,7 @@ export default function OfficeBg({ active, theme, onNavigate, onSelect }: {
           camera={{ position: [0, 15, 11], fov: 45 }}
           gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.15 }}
           onClick={() => {
+            if (isWatch) return
             if (dragRef.current.moved) return
             selectAgent(null)
           }}
@@ -1050,15 +1108,46 @@ export default function OfficeBg({ active, theme, onNavigate, onSelect }: {
               theme={theme}
             />
           </Suspense>
-          <LabCamera followRef={followRef} panRef={panRef} freeCamera={freeCamera} />
+          <LabCamera
+            followRef={followRef}
+            panRef={panRef}
+            freeCamera={effectiveFreeCamera}
+            watch={isWatch}
+            watchFocus={watchFocus}
+          />
         </Canvas>
       </div>
 
       {/* Dim overlay when backgrounded */}
       {!active && <div className="absolute inset-0 bg-black/50" />}
 
-      {/* Active office UI */}
-      {active && (
+      {/* Active management UI */}
+      {active && isWatch && watchLabel && (
+        <div
+          className="absolute pointer-events-none"
+          style={{ left: '50%', bottom: 20, transform: 'translateX(-50%)' }}
+        >
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              height: 24,
+              padding: '0 12px',
+              borderRadius: 999,
+              border: '1px solid rgba(255,255,255,0.1)',
+              background: 'rgba(0,0,0,0.35)',
+              color: 'rgba(255,255,255,0.55)',
+              backdropFilter: 'blur(12px)',
+              fontSize: 11,
+              fontWeight: 500,
+            }}
+          >
+            {watchLabel}
+          </span>
+        </div>
+      )}
+
+      {active && !isWatch && showHud && (
         <>
           <OfficeHud agentList={agentList} sessionList={sessionList} />
 
